@@ -10,6 +10,19 @@ La escena original no cambia. Cada ordenador abre la misma URL HTTPS de Vercel; 
 
 No se necesitan Redis, bases de datos ni cuentas para los visitantes. Usa una sola instancia de Render en esta prueba: las salas estan en memoria y se pierden al reiniciar o desplegar el backend.
 
+## Direcciones de esta prueba
+
+- Web para ambos ordenadores: https://sdp-web1.vercel.app
+- Estado del backend: https://sdp-web1-multiplayer.onrender.com/health
+- Panel de Render: https://dashboard.render.com/web/srv-db5qnavlk1mc73atptjg
+- Servidor publico de voz: `wss://sdp-web1-a9j8gglz.livekit.cloud`.
+
+Las credenciales de este proyecto de LiveKit estan configuradas exclusivamente en las variables privadas del backend de Render. No hacen falta claves en el navegador ni certificados locales para esta prueba online.
+
+Entra en la exposicion, manten V y autoriza el microfono cuando Chrome lo solicite. Al soltar V se detienen las pistas del microfono. Usa auriculares y acerca los dos jugadores a menos de 15 metros.
+
+Se ha comprobado la conexion real con LiveKit Cloud utilizando navegadores automatizados y microfonos simulados: recepcion de audio WebRTC, apagado al soltar V e identidades y salas ligadas a Colyseus. Esta comprobacion no sustituye una prueba con dos ordenadores y microfonos fisicos.
+
 ## 1. GitHub
 
 Repositorio previsto: https://github.com/RomerySpace/sdp-web1
