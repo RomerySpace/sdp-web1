@@ -43,12 +43,14 @@ export class App {
       enter: () => this.enter(), resume: () => this.resume(), submit: (text) => this.submitChat(text),
       toggleAudio: () => this.audio.toggleMute(), volume: (value) => this.audio.setVolume(value),
       fullscreen: () => this.toggleFullscreen(),
+      inspect: () => this.inspect(), closeInspection: () => this.closeInspection(),
     }, this.limited, this.audio.muted);
     this.unsubscribers.push(
       this.state.subscribe((state) => {
         this.player.setEnabled(state === 'EXPLORING' && !this.limited);
         if (state !== 'EXPLORING') this.inputs.stop();
-        if (state !== 'EXPLORING') this.voice.release();
+        if (state !== 'EXPLORING' && state !== 'INSPECTING') this.voice.release();
+        if (state !== 'INSPECTING') this.scene.inspection.close();
         this.ui.setState(state);
       }),
       this.chat.subscribe((message) => this.ui.chat.add(message)),
@@ -66,16 +68,25 @@ export class App {
       Object.assign(window, { sdpMultiplayer: { connection: this.network, remotes: this.scene.remotePlayers, player: this.player,
         voice: this.voice, voiceTransport: this.voiceTransport, chat: this.chat } });
     }
+    if (import.meta.env.DEV && new URLSearchParams(location.search).has('inspectionDebug')) {
+      Object.assign(window, { sdpInspection: { sculpture: this.scene.sculpture, inspection: this.scene.inspection,
+        player: this.player, state: this.state } });
+    }
     this.frame = requestAnimationFrame(this.tick);
   }
 
   private async initialize(): Promise<void> {
-    const loaded = await this.scene.lighting.loadEnvironment(this.scene.renderer);
+    const [loaded, sculptureLoaded] = await Promise.all([
+      this.scene.lighting.loadEnvironment(this.scene.renderer),
+      this.scene.sculpture.loadModel('/SDP/SDPv1.glb').then(() => true).catch(() => false),
+    ]);
     if (this.disposed) return;
     this.ready = true;
     this.ui.element.dataset.hdr = loaded ? 'loaded' : 'fallback';
+    this.ui.element.dataset.sculpture = sculptureLoaded ? 'loaded' : 'fallback';
     this.ui.intro.ready(this.limited);
     if (!loaded) this.ui.notify('The environment light could not load. Diffuse viewing is still available.');
+    if (!sculptureLoaded) this.ui.notify('The sculpture could not load. The exhibition is still available.');
   }
 
   private bindEvents(): void {
@@ -119,10 +130,19 @@ export class App {
       if (event.code === 'Escape') { event.preventDefault(); this.closeChat(); }
       return; // Form owns all input, including Enter; movement and voice are disabled.
     }
+    if (this.state.value === 'INSPECTING') {
+      if (event.repeat) return;
+      if (event.code === 'KeyE' || event.code === 'Escape') { event.preventDefault(); this.closeInspection(); }
+      else if (event.code === 'KeyV') { event.preventDefault(); this.voiceTransport.unlock(); void this.voice.press(); }
+      else if (event.code === 'Enter') { event.preventDefault(); this.state.set('CHATTING'); }
+      return;
+    }
     const target = event.target;
     if (target instanceof HTMLElement && target.closest('input, button')) return;
     if (event.repeat) return;
-    if (event.code === 'Enter' && ['EXPLORING', 'PAUSED'].includes(this.state.value) && !this.limited) {
+    if (event.code === 'KeyE' && this.state.value === 'EXPLORING') {
+      event.preventDefault(); this.inspect();
+    } else if (event.code === 'Enter' && ['EXPLORING', 'PAUSED'].includes(this.state.value) && !this.limited) {
       event.preventDefault();
       this.state.set('CHATTING');
       this.player.releaseLock();
@@ -155,8 +175,24 @@ export class App {
 
   private pause(): void {
     this.voice.release(); this.player.input.clear();
-    if (this.state.value === 'EXPLORING' || this.state.value === 'CHATTING') this.state.set('PAUSED');
+    if (['EXPLORING', 'CHATTING', 'INSPECTING'].includes(this.state.value)) this.state.set('PAUSED');
     this.player.releaseLock();
+  }
+
+  private inspect(): void {
+    if (!['EXPLORING', 'PAUSED'].includes(this.state.value)) return;
+    if (!this.limited && !this.scene.sculpture.inRange(this.player.camera.position)) return;
+    if (!this.scene.inspection.open(this.scene.sculpture)) return;
+    this.voice.release();
+    this.state.set('INSPECTING');
+    this.player.releaseLock();
+  }
+
+  private closeInspection(): void {
+    if (this.state.value !== 'INSPECTING') return;
+    this.state.set('PAUSED');
+    if (this.limited) this.state.set('EXPLORING');
+    else this.player.requestLock(this.pointerDenied);
   }
 
   private submitChat(text: string): void {
@@ -197,6 +233,11 @@ export class App {
     }
     if (!this.contextLost) {
       this.player.update(dt);
+      this.ui.inspection.update(
+        ['EXPLORING', 'PAUSED'].includes(this.state.value) &&
+          (this.limited ? this.scene.sculpture.loaded : this.scene.sculpture.inRange(this.player.camera.position)),
+        this.state.value === 'INSPECTING',
+      );
       this.voiceTransport.update(this.scene.camera);
       this.scene.render(dt, this.elapsed, this.reveal);
     }

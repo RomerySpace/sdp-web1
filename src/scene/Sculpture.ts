@@ -5,10 +5,12 @@ import {
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import type { Atmosphere } from './Atmosphere';
 
-/** Replaceable exhibit: a model is normalized to 1.4m tall, then placed at the
- * same floating baseline. Its own materials and authored orientation survive. */
+export const SCULPTURE_COLOR = 0x080808;
+
+/** Keep the exhibit at the original floating baseline and world scale. */
 export class Sculpture {
   readonly root = new Group();
+  loaded = false;
   private disposed = false;
 
   constructor(scene: Scene, private readonly atmosphere: Atmosphere) {
@@ -28,6 +30,19 @@ export class Sculpture {
 
   update(dt: number): void { this.root.rotation.y = (this.root.rotation.y + dt * Math.PI * 2 / 54) % (Math.PI * 2); }
 
+  inRange(position: Vector3): boolean {
+    return this.loaded && Math.hypot(position.x - this.root.position.x, position.z - this.root.position.z) <= 3.6;
+  }
+
+  inspectionCopy(): Group | undefined {
+    if (!this.loaded) return;
+    const copy = this.root.clone(true);
+    copy.position.set(0, 0, 0);
+    copy.rotation.set(0, Math.PI / 2 - 0.3, 0);
+    copy.position.sub(new Box3().setFromObject(copy).getCenter(new Vector3()));
+    return copy;
+  }
+
   async loadModel(url: string): Promise<void> {
     const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
     const { scene: model } = await new GLTFLoader().loadAsync(url);
@@ -39,17 +54,21 @@ export class Sculpture {
     const scale = 1.4 / size.y;
     model.scale.multiplyScalar(scale);
     model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+    const material = new MeshStandardMaterial({ color: SCULPTURE_COLOR, metalness: 0, roughness: 1, envMapIntensity: 0.25 });
+    this.atmosphere.apply(material);
+    const authoredMaterials = new Set<Material>();
     model.traverse((object) => {
       if (object instanceof Mesh) {
         object.castShadow = object.receiveShadow = true;
         const materials = Array.isArray(object.material) ? object.material : [object.material];
-        materials.forEach((material) => {
-          if (material instanceof MeshStandardMaterial) this.atmosphere.apply(material);
-        });
+        materials.forEach((material) => authoredMaterials.add(material));
+        object.material = material;
       }
     });
+    this.disposeMaterials(authoredMaterials);
     for (const child of [...this.root.children]) { this.root.remove(child); this.disposeObject(child); }
     this.root.add(model);
+    this.loaded = true;
   }
 
   private disposeObject(object: Object3D): void {
@@ -59,6 +78,10 @@ export class Sculpture {
       child.geometry.dispose();
       (Array.isArray(child.material) ? child.material : [child.material]).forEach((material) => materials.add(material));
     });
+    this.disposeMaterials(materials);
+  }
+
+  private disposeMaterials(materials: Set<Material>): void {
     for (const material of materials) {
       for (const value of Object.values(material)) {
         if (value && typeof value === 'object' && 'isTexture' in value && value.isTexture) value.dispose();

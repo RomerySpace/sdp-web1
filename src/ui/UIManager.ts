@@ -3,6 +3,7 @@ import { ChatInterface } from './ChatInterface';
 import { ControlsOverlay } from './ControlsOverlay';
 import { IntroScreen } from './IntroScreen';
 import { ConnectionIndicator } from './ConnectionIndicator';
+import { InspectionControls } from './InspectionControls';
 
 const soundIcon = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path class="sound-waves" d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/><path class="sound-mute" d="m16 9 5 6m0-6-5 6"/></svg>`;
 const fullscreenIcon = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path class="fullscreen-expand" d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/><path class="fullscreen-contract" d="M3 8h5V3m8 0v5h5M8 21v-5H3m13 5v-5h5"/></svg>`;
@@ -14,6 +15,8 @@ interface UIActions {
   toggleAudio(): boolean;
   volume(value: number): void;
   fullscreen(): void;
+  inspect(): void;
+  closeInspection(): void;
 }
 
 export class UIManager {
@@ -22,6 +25,7 @@ export class UIManager {
   readonly chat: ChatInterface;
   readonly controls: ControlsOverlay;
   readonly connection: ConnectionIndicator;
+  readonly inspection: InspectionControls;
   private readonly pause: HTMLElement;
   private readonly audioButton: HTMLButtonElement;
   private readonly fullscreenButton: HTMLButtonElement;
@@ -55,6 +59,7 @@ export class UIManager {
     this.pause = this.element.querySelector('.pause-prompt')!;
     this.notice = this.element.querySelector('.ui-notice')!;
     this.connection = new ConnectionIndicator(this.element.querySelector('.top-controls')!);
+    this.inspection = new InspectionControls(this.element, actions.inspect, actions.closeInspection);
     this.audioButton.addEventListener('click', () => this.setMuted(actions.toggleAudio()));
     this.element.querySelector<HTMLInputElement>('input[type="range"]')!.addEventListener('input', (event) => {
       actions.volume(Number((event.target as HTMLInputElement).value));

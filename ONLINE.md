@@ -1,6 +1,6 @@
 # SDP Web1: prueba online
 
-La escena original no cambia. Cada ordenador abre la misma URL HTTPS de Vercel; no hace falta estar en la misma Wi-Fi ni instalar certificados locales.
+Se conservan el entorno blanco, la atmosfera, el pedestal y los controles originales. Cada ordenador abre la misma URL HTTPS de Vercel; no hace falta estar en la misma Wi-Fi ni instalar certificados locales.
 
 ## Servicios
 
@@ -22,6 +22,8 @@ Las credenciales de este proyecto de LiveKit estan configuradas exclusivamente e
 Entra en la exposicion, manten V y autoriza el microfono cuando Chrome lo solicite. Al soltar V se detienen las pistas del microfono. Usa auriculares y acerca los dos jugadores a menos de 15 metros.
 
 Se ha comprobado la conexion real con LiveKit Cloud utilizando navegadores automatizados y microfonos simulados: recepcion de audio WebRTC, apagado al soltar V e identidades y salas ligadas a Colyseus. Esta comprobacion no sustituye una prueba con dos ordenadores y microfonos fisicos.
+
+La escultura es `public/SDP/SDPv1.glb`, con material negro mate y rotacion continua sobre el pedestal. Acercate al pedestal y pulsa E para inspeccionarla: arrastra con el raton para girarla y usa la rueda para acercar o alejar dentro de los limites. Pulsa E otra vez para volver. La inspeccion no desplaza a tu jugador en la sala; puedes seguir hablando con V. En movil, la lupa abre la inspeccion y la X la cierra.
 
 ## 1. GitHub
 

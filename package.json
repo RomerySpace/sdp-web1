@@ -23,6 +23,7 @@
   "dependencies": {
     "@colyseus/sdk": "^0.17.43",
     "livekit-client": "^2.15.0",
+    "lucide": "^1.55.0",
     "three": "^0.180.0"
   },
   "devDependencies": {

@@ -36,18 +36,22 @@ npm run preview
 | Enter | Open room chat; Enter again sends non-empty text |
 | Esc | Close chat, or release the cursor using browser behavior |
 | Hold V | Authorize microphone access and transmit proximity voice while held |
+| E near the pedestal | Inspect SDPv1; press E again to return to exploration |
+| Drag / mouse wheel during inspection | Rotate the sculpture / zoom within fixed limits |
 | Top-right speaker | Toggle ambience; hover or focus for volume |
 | Top-right fullscreen | Enter or exit fullscreen |
 
 Release the cursor with Esc to access settings. Click the resume prompt to return to navigation. Chat disables movement and voice shortcuts. Microphone tracks stop and are unpublished on release, blur, pause, page exit and disposal; delayed permission results are discarded if V is no longer held. Voice is transmitted only to the corresponding LiveKit room, never recorded or played back to its sender. Spatial playback is full at 0-3m, smoothly attenuated at 3-15m, and silent beyond 15m; the listener follows the camera. AMBIENCE controls remain independent.
 
-Touch devices and browsers without pointer lock receive a limited viewing mode with the reveal, rotating exhibit and settings. Desktop with a mouse is required for exploration. If WebGL 2 is unavailable, the page displays a readable fallback.
+Touch devices and browsers without pointer lock receive a limited viewing mode with the reveal, rotating exhibit and settings. The magnifying-glass button opens inspection in this mode; drag or pinch to rotate and zoom, then close with the X button. Desktop with a mouse is required for exploration. If WebGL 2 is unavailable, the page displays a readable fallback.
+
+Inspection is available within 3.6m of the pedestal on desktop. It renders a centered copy of the sculpture using Three.js OrbitControls and a separate camera, sharing geometry without moving the visitor or changing their multiplayer position. Walking is stopped, but push-to-talk remains available; Enter opens chat. E, Esc, the close button or focus loss leave inspection. The camera distance is clamped, pan is disabled and portrait viewports are reframed. The original exhibition sculpture keeps rotating.
 
 ## Assets
 
 - **`public/hdr/puresky.exr`** — the supplied asset is preserved and loaded with `EXRLoader`, prefiltered with `PMREMGenerator`, and used for material lighting/reflections. The visible background is a separate atmospheric shader. Diffuse lights remain available if loading fails.
 - **`public/audio/ambient.mp3`** — optional and intentionally not supplied. Add your own licensed, loop-ready ambient track and **restart Vite**, or rebuild for production. Missing audio produces one development warning and no failing request or broken UI. The sound system decodes and loops the asset, filters it, adds a restrained convolution reverb and fades it in. A clean musical loop depends on the supplied recording's loop boundaries. Mute preference persists in localStorage; playback never starts before entry.
-- **`public/models/`** — reserved for a future sculpture. `Sculpture.loadModel('/models/sculpture.glb')` uses a dynamically imported `GLTFLoader`, retains the existing placeholder until loading succeeds, normalizes the model to 1.4m high and places its baseline 0.13m above the pedestal. Integrate that call in `App` with an error handler when a model is provided. No replacement model is loaded in this version.
+- **`public/SDP/SDPv1.glb`** — the supplied sculpture replaces the rectangular placeholder. `GLTFLoader` loads it during initialization; its height is normalized to 1.4m and its baseline remains 0.13m above the original pedestal. All meshes use a uniform matte-black material without texture maps. If loading fails, the exhibition remains usable and inspection stays unavailable.
 
 All asset paths are relative to the site root; the current configuration assumes root-path hosting.
 
@@ -55,8 +59,8 @@ All asset paths are relative to the site root; the current configuration assumes
 
 | Directory | Responsibility |
 | --- | --- |
-| `src/core` | App lifecycle, animation loop and explicit INTRO / ENTERING / EXPLORING / CHATTING / PAUSED states |
-| `src/scene` | Renderer, EXR lighting, white atmosphere, floor/pedestal and replaceable rotating sculpture |
+| `src/core` | App lifecycle, animation loop and explicit INTRO / ENTERING / EXPLORING / CHATTING / INSPECTING / PAUSED states |
+| `src/scene` | Renderer, EXR lighting, white atmosphere, floor/pedestal, rotating sculpture and isolated inspection camera |
 | `src/player` | Keyboard input, yaw/pitch camera and circle-versus-AABB collision with sliding |
 | `src/ui` | HTML intro, HUD, accessible settings, chat and pause prompt |
 | `src/chat` | Bounded server-echoed room history, independent of distance |
@@ -83,7 +87,7 @@ SDP_PREVIEW=1 npm test -- --grep 'HDR, reveal'
 
 The Playwright suite launches the local Vite server and installed **Google Chrome**. Test-only Chrome flags provide a synthetic microphone; no real microphone or remote service is needed. Tests cover EXR loading, reveal states, pointer lock/recovery, chat sanitation and input isolation, microphone release/permission races/denial, mute persistence, fullscreen, mobile viewing, delta-time movement, collision sliding/tunnelling and state consistency. Screenshots are saved under `test-results/` and failure traces are retained. The optional audio test runs only when `ambient.mp3` is present.
 
-Frontend runtime dependencies: Three.js and the official Colyseus SDK (0.17 series). The separate backend uses compatible Colyseus core/WebSocket packages, schema synchronization and Express routing. TypeScript, Vite, Playwright, concurrently and Sharp are development tools. Visual performance should be measured on the intended visitors' GPUs; 60 FPS is a target, not a guarantee established by headless browser tests.
+Frontend runtime dependencies: Three.js, the official Colyseus SDK (0.17 series), LiveKit client and Lucide icons. The separate backend uses compatible Colyseus core/WebSocket packages, schema synchronization and Express routing. TypeScript, Vite, Playwright, concurrently and Sharp are development tools. Visual performance should be measured on the intended visitors' GPUs; 60 FPS is a target, not a guarantee established by headless browser tests.
 
 ## Digital memory fragments
 

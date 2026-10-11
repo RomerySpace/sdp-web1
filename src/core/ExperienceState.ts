@@ -1,11 +1,12 @@
-export type ExperienceState = 'INTRO' | 'ENTERING' | 'EXPLORING' | 'CHATTING' | 'PAUSED';
+export type ExperienceState = 'INTRO' | 'ENTERING' | 'EXPLORING' | 'CHATTING' | 'INSPECTING' | 'PAUSED';
 
 const transitions: Record<ExperienceState, readonly ExperienceState[]> = {
   INTRO: ['ENTERING'],
   ENTERING: ['EXPLORING', 'PAUSED'],
-  EXPLORING: ['CHATTING', 'PAUSED'],
+  EXPLORING: ['CHATTING', 'INSPECTING', 'PAUSED'],
   CHATTING: ['EXPLORING', 'PAUSED'],
-  PAUSED: ['EXPLORING', 'CHATTING'],
+  INSPECTING: ['EXPLORING', 'CHATTING', 'PAUSED'],
+  PAUSED: ['EXPLORING', 'CHATTING', 'INSPECTING'],
 };
 
 export class ExperienceStateMachine {

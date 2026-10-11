@@ -149,6 +149,8 @@ test.describe('secure local voice and shared chat', () => {
       await first.keyboard.press('Enter'); await first.keyboard.type('V en el texto');
       expect(await first.evaluate(() => window.sdpMultiplayer.voiceTransport.transmitting)).toBe(false);
       await first.keyboard.press('Escape');
+      await expect(first.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
+      await first.waitForFunction(() => !!document.pointerLockElement && document.hasFocus());
       await focus(first);
       await first.keyboard.down('KeyV');
       await expect.poll(() => first.evaluate(() => window.sdpMultiplayer.voiceTransport.transmitting)).toBe(true);
