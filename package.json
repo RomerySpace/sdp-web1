@@ -1,0 +1,40 @@
+{
+  "name": "sdp-infinite-exhibition",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "dev:server": "npm --prefix server run dev",
+    "dev:all": "concurrently --kill-others -n SERVER,WEB \"npm run dev:server\" \"npm run dev\"",
+    "dev:lan": "node scripts/dev-lan.mjs",
+    "setup:lan": "node scripts/setup-lan.mjs",
+    "trust:lan": "node scripts/setup-lan.mjs --trust",
+    "install:all": "npm install && npm --prefix server install",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "typecheck:all": "npm run typecheck && npm --prefix server run typecheck",
+    "test:server": "npm --prefix server test",
+    "test": "playwright test",
+    "process:graphics": "node scripts/process-graphics.mjs",
+    "test:graphics": "node --test scripts/process-graphics.test.mjs"
+  },
+  "dependencies": {
+    "@colyseus/sdk": "^0.17.43",
+    "livekit-client": "^2.15.0",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "@types/node": "^24.0.0",
+    "@types/three": "^0.180.0",
+    "concurrently": "^10.0.6",
+    "sharp": "^0.35.5",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.9"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

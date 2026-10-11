@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: sdp-web1-multiplayer
+    runtime: node
+    region: frankfurt
+    plan: free
+    buildCommand: npm ci --prefix server --include=dev && npm --prefix server run typecheck
+    startCommand: npm --prefix server start
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_PUBLIC_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false

@@ -1,0 +1,27 @@
+{
+  "name": "sdp-local-multiplayer-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
+    "start": "node --env-file-if-exists=.env --import tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "@colyseus/core": "~0.17.0",
+    "@colyseus/schema": "^4.0.0",
+    "@colyseus/ws-transport": "~0.17.0",
+    "express": "^5.3.0",
+    "livekit-server-sdk": "^2.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "~5.9.3"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

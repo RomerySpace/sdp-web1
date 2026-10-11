@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "graphics": [
+    {
+      "id": "a6766a73c9c0",
+      "source": "EE54SIASHJB23DL7WU3KAIF2BQ.jpg",
+      "file": "a6766a73c9c0.json",
+      "sha256": "caefc28f3c4c92557eebe7c8c0a8d3be29340fc3d42c61963e2277786b2e79a1",
+      "technique": "hybrid-relief",
+      "segments": 1998,
+      "points": 1500,
+      "bytes": 138613
+    },
+    {
+      "id": "de8b9feaa869",
+      "source": "mrbeast-swag.png",
+      "file": "de8b9feaa869.json",
+      "sha256": "0fd37d241a6443adf5575fbca8026c2d459220a3afa9b395dcaad046353bdbd8",
+      "technique": "hybrid-relief",
+      "segments": 2128,
+      "points": 1500,
+      "bytes": 140794
+    },
+    {
+      "id": "be760e7abafd",
+      "source": "TCAORTLP.png",
+      "file": "be760e7abafd.json",
+      "sha256": "4b310bdb6875ef80fc15ce30dd31c1fa2f95bca4646f0e17af8b3cafeb1dffae",
+      "technique": "contour-relief",
+      "segments": 609,
+      "points": 1050,
+      "bytes": 56793
+    }
+  ],
+  "errors": [],
+  "skipped": []
+}

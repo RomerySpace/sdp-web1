@@ -1,0 +1,11 @@
+.local/
+.git/
+.env
+.env.*
+!.env.example
+server/
+test-results/
+playwright-report/
+tests/
+LAN.md
+MULTIJUGADOR.md

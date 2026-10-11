@@ -1,0 +1,220 @@
+import { Client, type Room } from '@colyseus/sdk';
+import {
+  LOBBY_NAME, MAX_PLAYERS, type ConnectionStatus, type LobbySnapshot,
+  type MovementInput, type NetworkPlayer,
+} from '../../shared/MultiplayerProtocol';
+import type { MultiplayerConnection } from './MultiplayerConnection';
+import { validateChatText, type RoomChatMessage, type VoiceAccess } from '../../shared/CommunicationProtocol';
+
+function serverEndpoint(): string {
+  const configured = import.meta.env.VITE_SDP_SERVER_URL;
+  if (configured) {
+    const url = new URL(configured, location.origin);
+    if (location.protocol === 'https:' && ['http:', 'ws:'].includes(url.protocol)) {
+      console.warn('[SDP] Ignoring an insecure server URL on HTTPS; using the same-origin secure proxy.');
+    } else return url.toString();
+  }
+  return `${location.origin}/multiplayer`;
+}
+
+interface DecodedLobby {
+  players: { forEach(callback: (player: Omit<NetworkPlayer, 'playerId'>, id: string) => void): void };
+  online: number;
+  capacity: number;
+  tick: number;
+}
+type LobbyRoom = Room<{ state: DecodedLobby }, DecodedLobby>;
+
+export class ColyseusNetworkAdapter implements MultiplayerConnection {
+  private readonly client: Client;
+  private room: LobbyRoom | undefined;
+  private readonly states = new Set<(snapshot: LobbySnapshot) => void>();
+  private readonly statuses = new Set<(status: ConnectionStatus) => void>();
+  private readonly spawns = new Set<(player: NetworkPlayer) => void>();
+  private currentStatus: ConnectionStatus = { state: 'disconnected', online: 0, capacity: MAX_PLAYERS, roomId: '' };
+  private disposed = false;
+  private joining = false;
+  private needsSpawn = true;
+  private retryTimer = 0;
+  private retries = 0;
+  private latestSnapshot: LobbySnapshot | undefined;
+  private readonly messages = new Set<(message: RoomChatMessage) => void>();
+  private readonly notices = new Set<(message: string) => void>();
+  private readonly accessRequests = new Map<string, { resolve: (access: VoiceAccess) => void; reject: (error: Error) => void; timer: number }>();
+
+  constructor(endpoint = serverEndpoint()) {
+    this.client = new Client(endpoint);
+  }
+
+  get status(): ConnectionStatus { return this.currentStatus; }
+  get snapshot(): LobbySnapshot | undefined { return this.latestSnapshot; }
+
+  async connect(): Promise<void> {
+    if (this.disposed || this.joining || this.room) return;
+    this.joining = true;
+    this.setStatus('connecting');
+    try {
+      const preferredRoom = import.meta.env.DEV ? new URLSearchParams(location.search).get('room') : null;
+      const room = preferredRoom
+        ? await this.client.joinById<{ state: DecodedLobby }>(preferredRoom)
+        : await this.client.joinOrCreate<{ state: DecodedLobby }>(LOBBY_NAME);
+      if (this.disposed) { await room.leave(); return; }
+      this.room = room;
+      this.needsSpawn = true;
+      this.retries = 0;
+      room.reconnection.minUptime = 0;
+      room.reconnection.maxRetries = 6;
+      room.reconnection.minDelay = 250;
+      room.reconnection.maxDelay = 1000;
+      room.reconnection.maxEnqueuedMessages = 0;
+      room.onMessage<RoomChatMessage>('chat:message', (message) => {
+        if (this.room !== room || message.roomId !== room.roomId) return;
+        for (const callback of this.messages) callback(message);
+      });
+      room.onMessage<string>('chat:error', (message) => { for (const callback of this.notices) callback(message); });
+      room.onMessage<VoiceAccess>('voice:access', (access) => {
+        const pending = this.accessRequests.get(access.requestId);
+        if (!pending) return;
+        window.clearTimeout(pending.timer); this.accessRequests.delete(access.requestId);
+        if (access.error) pending.reject(new Error(access.error));
+        else if (access.identity !== room.sessionId || access.room !== `sdp-${room.roomId}` || !access.token || !access.url) pending.reject(new Error('Invalid voice session.'));
+        else pending.resolve(access);
+      });
+      room.onStateChange((state) => this.receive(room, state));
+      room.onDrop(() => {
+        if (this.room !== room || this.disposed) return;
+        this.rejectVoiceRequests();
+        this.needsSpawn = true;
+        this.setStatus('connecting');
+        this.clearRemoteState();
+      });
+      room.onReconnect(() => {
+        if (this.room === room && !this.disposed) this.receive(room, room.state);
+      });
+      room.onError(() => {
+        if (this.room === room && !this.disposed) this.setStatus('disconnected');
+      });
+      room.onLeave(() => {
+        if (this.room !== room) return;
+        this.rejectVoiceRequests();
+        this.room = undefined;
+        this.setStatus('disconnected');
+        this.clearRemoteState();
+        this.scheduleRetry();
+      });
+      // Initial state can arrive before joinOrCreate resolves.
+      if (room.state?.players) this.receive(room, room.state);
+    } catch {
+      if (!this.disposed) { this.setStatus('disconnected'); this.scheduleRetry(); }
+    } finally { this.joining = false; }
+  }
+
+  private receive(room: LobbyRoom, state: DecodedLobby): void {
+    if (this.room !== room || this.disposed || room.reconnection.isReconnecting || !state?.players) return;
+    const players: NetworkPlayer[] = [];
+    state.players.forEach((player, id) => players.push({
+      playerId: id, x: player.x, y: player.y, z: player.z,
+      yaw: player.yaw, pitch: player.pitch, connected: player.connected,
+      lastProcessedInput: player.lastProcessedInput,
+    }));
+    const local = players.find((player) => player.playerId === room.sessionId);
+    if (this.needsSpawn && local?.connected) {
+      this.needsSpawn = false;
+      for (const callback of this.spawns) callback(local);
+    }
+    this.setStatus('connected', state.online, state.capacity, room.roomId);
+    const snapshot: LobbySnapshot = {
+      roomId: room.roomId, localPlayerId: room.sessionId,
+      tick: state.tick, receivedAt: performance.now(), players,
+    };
+    this.latestSnapshot = snapshot;
+    for (const callback of this.states) callback(snapshot);
+  }
+
+  private setStatus(state: ConnectionStatus['state'], online = 0, capacity = MAX_PLAYERS, roomId = ''): void {
+    if (this.disposed || (this.currentStatus.state === state && this.currentStatus.online === online && this.currentStatus.roomId === roomId)) return;
+    this.currentStatus = { state, online, capacity, roomId };
+    for (const callback of this.statuses) callback(this.currentStatus);
+  }
+
+  private clearRemoteState(): void {
+    this.latestSnapshot = {
+      roomId: '', localPlayerId: '', tick: 0, receivedAt: performance.now(), players: [],
+    };
+    for (const callback of this.states) callback(this.latestSnapshot);
+  }
+
+  private scheduleRetry(): void {
+    if (this.disposed || this.retryTimer) return;
+    const delay = Math.min(8000, 1000 * 2 ** Math.min(this.retries++, 3));
+    this.retryTimer = window.setTimeout(() => {
+      this.retryTimer = 0;
+      void this.connect();
+    }, delay);
+  }
+
+  sendInput(input: MovementInput): void {
+    if (this.currentStatus.state === 'connected' && this.room?.connection.isOpen) this.room.send('input', input);
+  }
+
+  sendChat(text: string): boolean {
+    const message = validateChatText(text);
+    if (!message || this.currentStatus.state !== 'connected' || !this.room?.connection.isOpen) return false;
+    this.room.send('chat:send', message);
+    return true;
+  }
+
+  requestVoiceAccess(): Promise<VoiceAccess> {
+    const room = this.room;
+    if (!room?.connection.isOpen || this.status.state !== 'connected') return Promise.reject(new Error('Multiplayer is disconnected.'));
+    const requestId = crypto.randomUUID();
+    return new Promise((resolve, reject) => {
+      const timer = window.setTimeout(() => { this.accessRequests.delete(requestId); reject(new Error('Voice server did not respond.')); }, 8000);
+      this.accessRequests.set(requestId, { resolve, reject, timer });
+      room.send('voice:request', { requestId });
+    });
+  }
+
+  private rejectVoiceRequests(): void {
+    for (const request of this.accessRequests.values()) { window.clearTimeout(request.timer); request.reject(new Error('Multiplayer disconnected.')); }
+    this.accessRequests.clear();
+  }
+
+  subscribeToChat(callback: (message: RoomChatMessage) => void): () => void {
+    this.messages.add(callback); return () => this.messages.delete(callback);
+  }
+
+  subscribeToNotice(callback: (message: string) => void): () => void {
+    this.notices.add(callback); return () => this.notices.delete(callback);
+  }
+
+  subscribeToState(callback: (snapshot: LobbySnapshot) => void): () => void {
+    this.states.add(callback);
+    return () => this.states.delete(callback);
+  }
+
+  subscribeToStatus(callback: (status: ConnectionStatus) => void): () => void {
+    this.statuses.add(callback);
+    callback(this.currentStatus);
+    return () => this.statuses.delete(callback);
+  }
+
+  subscribeToSpawn(callback: (player: NetworkPlayer) => void): () => void {
+    this.spawns.add(callback);
+    return () => this.spawns.delete(callback);
+  }
+
+  disconnect(): void {
+    if (this.disposed) return;
+    this.setStatus('disconnected');
+    this.clearRemoteState();
+    this.disposed = true;
+    this.rejectVoiceRequests();
+    window.clearTimeout(this.retryTimer);
+    const room = this.room;
+    this.room = undefined;
+    if (room) { room.reconnection.enabled = false; void room.leave().catch(() => {}); }
+    this.states.clear(); this.statuses.clear(); this.spawns.clear();
+    this.messages.clear(); this.notices.clear();
+  }
+}

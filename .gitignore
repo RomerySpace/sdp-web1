@@ -1,0 +1,17 @@
+node_modules
+dist/
+test-results/
+playwright-report/
+.DS_Store
+*.local
+.local/
+.env
+.env.*
+!.env.example
+server/.env
+.vercel/
+.render/
+*.pem
+*.key
+*.crt
+*.log
