@@ -23,7 +23,7 @@ Entra en la exposicion, manten V y autoriza el microfono cuando Chrome lo solici
 
 Se ha comprobado la conexion real con LiveKit Cloud utilizando navegadores automatizados y microfonos simulados: recepcion de audio WebRTC, apagado al soltar V e identidades y salas ligadas a Colyseus. Esta comprobacion no sustituye una prueba con dos ordenadores y microfonos fisicos.
 
-La escultura es `public/SDP/SDPv1.glb`, con material negro mate y rotacion continua sobre el pedestal. Acercate al pedestal y pulsa E para inspeccionarla: arrastra con el raton para girarla y usa la rueda para acercar o alejar dentro de los limites. Pulsa E otra vez para volver. La inspeccion no desplaza a tu jugador en la sala; puedes seguir hablando con V. En movil, la lupa abre la inspeccion y la X la cierra.
+La escultura es `public/SDP/SDPv1.glb`, con material negro mate, luz lateral discreta y rotacion continua sobre el pedestal. Su altura es 0.95m para que encaje sobre el altar. Acercate hasta ver E / INSPECT y pulsa E para inspeccionarla: arrastra con el raton para girarla y usa la rueda para acercar mucho mas o alejar dentro de los limites. Durante la inspeccion sigue girando lentamente y recibe iluminacion suave para revelar los detalles. Pulsa E otra vez para volver. La inspeccion no desplaza a tu jugador en la sala; puedes seguir hablando con V. En movil, INSPECT abre la inspeccion y RETURN la cierra.
 
 ## 1. GitHub
 

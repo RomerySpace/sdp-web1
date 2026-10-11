@@ -105,7 +105,8 @@ export class App {
       else { this.lastTime = 0; this.frame = requestAnimationFrame(this.tick); }
     }, { signal });
     document.addEventListener('pointerlockchange', () => {
-      if (this.player.locked && this.state.value === 'PAUSED') this.state.set('EXPLORING');
+      if (this.player.locked && this.state.value === 'INSPECTING') this.player.releaseLock();
+      else if (this.player.locked && this.state.value === 'PAUSED') this.state.set('EXPLORING');
       else if (!this.player.locked && this.state.value === 'EXPLORING' && !this.limited) this.state.set('PAUSED');
     }, { signal });
     document.addEventListener('pointerlockerror', this.pointerDenied, { signal });
@@ -140,7 +141,7 @@ export class App {
     const target = event.target;
     if (target instanceof HTMLElement && target.closest('input, button')) return;
     if (event.repeat) return;
-    if (event.code === 'KeyE' && this.state.value === 'EXPLORING') {
+    if (event.code === 'KeyE' && ['EXPLORING', 'PAUSED'].includes(this.state.value)) {
       event.preventDefault(); this.inspect();
     } else if (event.code === 'Enter' && ['EXPLORING', 'PAUSED'].includes(this.state.value) && !this.limited) {
       event.preventDefault();

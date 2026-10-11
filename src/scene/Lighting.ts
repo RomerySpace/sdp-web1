@@ -1,6 +1,6 @@
 import {
   DirectionalLight, EquirectangularReflectionMapping, HemisphereLight,
-  PMREMGenerator, type Scene, type WebGLRenderer, type WebGLRenderTarget,
+  PMREMGenerator, SpotLight, type Scene, type WebGLRenderer, type WebGLRenderTarget,
 } from 'three';
 import { EXRLoader } from 'three/addons/loaders/EXRLoader.js';
 
@@ -30,6 +30,10 @@ export class Lighting {
     const fill = new DirectionalLight(0xeaf4fa, 0.45);
     fill.position.set(6, 4, -5);
     scene.add(fill);
+    const exhibitRim = new SpotLight(0xf0f6fa, 16, 7, Math.PI / 3, 1, 2);
+    exhibitRim.position.set(2.5, 3.8, -2.5);
+    exhibitRim.target.position.set(0, 1.8, 0);
+    scene.add(exhibitRim, exhibitRim.target);
   }
 
   async loadEnvironment(renderer: WebGLRenderer): Promise<boolean> {

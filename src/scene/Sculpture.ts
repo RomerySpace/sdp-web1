@@ -6,6 +6,8 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import type { Atmosphere } from './Atmosphere';
 
 export const SCULPTURE_COLOR = 0x080808;
+export const SCULPTURE_ROUGHNESS = 0.82;
+export const SCULPTURE_HEIGHT = 0.95;
 
 /** Keep the exhibit at the original floating baseline and world scale. */
 export class Sculpture {
@@ -51,10 +53,10 @@ export class Sculpture {
     const size = box.getSize(new Vector3());
     if (size.y <= 0) { this.disposeObject(model); throw new Error('The sculpture model has no measurable height.'); }
     const center = box.getCenter(new Vector3());
-    const scale = 1.4 / size.y;
+    const scale = SCULPTURE_HEIGHT / size.y;
     model.scale.multiplyScalar(scale);
     model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
-    const material = new MeshStandardMaterial({ color: SCULPTURE_COLOR, metalness: 0, roughness: 1, envMapIntensity: 0.25 });
+    const material = new MeshStandardMaterial({ color: SCULPTURE_COLOR, metalness: 0, roughness: SCULPTURE_ROUGHNESS, envMapIntensity: 0.6 });
     this.atmosphere.apply(material);
     const authoredMaterials = new Set<Material>();
     model.traverse((object) => {

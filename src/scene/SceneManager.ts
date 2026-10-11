@@ -59,7 +59,7 @@ export class SceneManager {
     this.environment.update(reveal);
     this.graphics.update(dt, time, reveal);
     this.remotePlayers.update(performance.now(), reveal);
-    if (this.inspection.active) this.inspection.render(this.renderer, this.scene);
+    if (this.inspection.active) this.inspection.render(this.renderer, this.scene, dt);
     else this.renderer.render(this.scene, this.camera);
   }
 

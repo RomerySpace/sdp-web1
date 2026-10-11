@@ -1,23 +1,27 @@
 import {
-  Box3, Color, DirectionalLight, HemisphereLight, MathUtils, Mesh, MeshStandardMaterial,
-  PerspectiveCamera, Scene, Sphere, type Group, type WebGLRenderer,
+  Box3, Color, DirectionalLight, Group, HemisphereLight, MathUtils, Mesh, MeshStandardMaterial,
+  PerspectiveCamera, Scene, Sphere, type WebGLRenderer,
 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { SCULPTURE_COLOR, type Sculpture } from './Sculpture';
+import { SCULPTURE_COLOR, SCULPTURE_ROUGHNESS, type Sculpture } from './Sculpture';
 
 export class SculptureInspection {
   readonly scene = new Scene();
   readonly camera = new PerspectiveCamera(40, 1, 0.02, 100);
   readonly controls: OrbitControls;
-  private readonly material = new MeshStandardMaterial({ color: SCULPTURE_COLOR, metalness: 0, roughness: 1, envMapIntensity: 0.25 });
+  private readonly material = new MeshStandardMaterial({ color: SCULPTURE_COLOR, metalness: 0, roughness: SCULPTURE_ROUGHNESS, envMapIntensity: 0.6 });
   private model?: Group;
   private radius = 1;
 
   constructor(canvas: HTMLCanvasElement) {
     this.scene.background = new Color(0xf8fafb);
-    const light = new DirectionalLight(0xffffff, 3);
-    light.position.set(-3, 4, 5);
-    this.scene.add(new HemisphereLight(0xffffff, 0xc5ced4, 2), light);
+    const key = new DirectionalLight(0xfffcf7, 4);
+    key.position.set(-3, 4, 5);
+    const fill = new DirectionalLight(0xeaf4fa, 1.3);
+    fill.position.set(4, 1, 3);
+    const rim = new DirectionalLight(0xf4f8fc, 3);
+    rim.position.set(2, 3, -4);
+    this.scene.add(new HemisphereLight(0xffffff, 0xc5ced4, 1.2), key, fill, rim);
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enabled = false;
     this.controls.enablePan = false;
@@ -35,9 +39,13 @@ export class SculptureInspection {
 
   open(sculpture: Sculpture): boolean {
     if (this.active) return true;
-    const model = sculpture.inspectionCopy();
-    if (!model) return false;
-    model.traverse((object) => { if (object instanceof Mesh) object.material = this.material; });
+    const copy = sculpture.inspectionCopy();
+    if (!copy) return false;
+    copy.traverse((object) => { if (object instanceof Mesh) object.material = this.material; });
+    // Rotate around the centered exhibit, independently of the visitor and orbit camera.
+    const model = new Group();
+    model.name = 'inspection-sculpture';
+    model.add(copy);
     this.model = model;
     this.scene.add(model);
     this.radius = new Box3().setFromObject(model).getBoundingSphere(new Sphere()).radius;
@@ -60,7 +68,7 @@ export class SculptureInspection {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     const distance = this.fittedDistance();
-    this.controls.minDistance = distance * 0.88;
+    this.controls.minDistance = this.radius * 1.12;
     this.controls.maxDistance = distance * 1.5;
     if (this.active && this.camera.position.lengthSq()) {
       this.camera.position.setLength(MathUtils.clamp(this.distance, this.controls.minDistance, this.controls.maxDistance));
@@ -68,8 +76,9 @@ export class SculptureInspection {
     }
   }
 
-  render(renderer: WebGLRenderer, environment: Scene): void {
-    this.controls.update();
+  render(renderer: WebGLRenderer, environment: Scene, dt: number): void {
+    if (this.model) this.model.rotation.y = (this.model.rotation.y + dt * Math.PI * 2 / 80) % (Math.PI * 2);
+    this.controls.update(dt);
     this.scene.environment = environment.environment;
     renderer.render(this.scene, this.camera);
   }

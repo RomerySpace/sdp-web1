@@ -10,10 +10,17 @@ export class InspectionControls {
     this.close.className = 'icon-button inspection-close';
     this.inspect.setAttribute('aria-label', 'Inspect sculpture');
     this.close.setAttribute('aria-label', 'Close inspection');
-    this.inspect.title = 'Inspect sculpture';
-    this.close.title = 'Close inspection';
-    this.inspect.append(createElement(Search));
-    this.close.append(createElement(X));
+    this.inspect.title = 'Inspect sculpture (E)';
+    this.close.title = 'Close inspection (E / Esc)';
+    this.inspect.setAttribute('aria-keyshortcuts', 'E');
+    this.close.setAttribute('aria-keyshortcuts', 'E Escape');
+    for (const [button, icon, label] of [[this.inspect, Search, 'INSPECT'], [this.close, X, 'RETURN']] as const) {
+      const key = document.createElement('kbd');
+      key.textContent = 'E';
+      const caption = document.createElement('span');
+      caption.textContent = label;
+      button.append(createElement(icon), key, caption);
+    }
     this.inspect.hidden = this.close.hidden = true;
     this.inspect.addEventListener('click', onInspect);
     this.close.addEventListener('click', onClose);
