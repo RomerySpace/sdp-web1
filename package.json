@@ -4,6 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:shooter-disabled": "playwright test --config playwright.disabled.config.ts",
+    "test:unified": "playwright test --config playwright.unified.config.ts",
+    "test:regression": "playwright test --config playwright.regression.config.ts",
+    "prepare:shooter": "npm --prefix server run prepare:shooter",
+    "dev:unified": "node scripts/dev-unified.mjs",
     "dev": "vite --host 0.0.0.0",
     "dev:server": "npm --prefix server run dev",
     "dev:all": "concurrently --kill-others -n SERVER,WEB \"npm run dev:server\" \"npm run dev\"",
@@ -16,12 +21,14 @@
     "typecheck": "tsc --noEmit",
     "typecheck:all": "npm run typecheck && npm --prefix server run typecheck",
     "test:server": "npm --prefix server test",
-    "test": "playwright test",
+    "test:load": "npm --prefix server run test:load --",
+    "test": "npm run test:regression && npm run test:unified",
     "process:graphics": "node scripts/process-graphics.mjs",
     "test:graphics": "node --test scripts/process-graphics.test.mjs"
   },
   "dependencies": {
     "@colyseus/sdk": "^0.17.43",
+    "@dimforge/rapier3d-compat": "^0.12.0",
     "livekit-client": "^2.15.0",
     "lucide": "^1.55.0",
     "three": "^0.180.0"

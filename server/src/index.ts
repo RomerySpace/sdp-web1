@@ -3,6 +3,8 @@ import { createRouter, matchMaker, Server } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { LOBBY_NAME, MAX_PLAYERS, SIMULATION_HZ } from '../../shared/MultiplayerProtocol';
 import { SDPLobby } from './rooms/SDPLobby';
+import { SDPShooterRoom } from './rooms/SDPShooterRoom';
+import { SHOOTER_ROOM } from '../../shared/ShooterProtocol';
 import { OriginPolicy } from './config/OriginPolicy';
 import { liveKitURLs } from './config/LiveKitConfig';
 
@@ -31,6 +33,8 @@ const server = new Server({
   greet: false,
 });
 server.define(LOBBY_NAME, SDPLobby);
+server.define('SDPLobby', SDPLobby);
+server.define(SHOOTER_ROOM, SDPShooterRoom);
 server.router = createRouter({}, {
   onRequest: (request) => {
     if (!origins.allows(request.headers.get('origin'))) return new Response('Origin is not allowed.', { status: 403 });

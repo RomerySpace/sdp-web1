@@ -7,7 +7,7 @@ export class InputManager {
     const signal = this.events.signal;
     window.addEventListener('keydown', (event) => {
       if (!this.enabled || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
-      if (['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(event.code)) {
+      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ShiftLeft', 'ShiftRight'].includes(event.code)) {
         event.preventDefault();
         this.keys.add(event.code);
       }
@@ -18,6 +18,7 @@ export class InputManager {
 
   get forward(): number { return Number(this.keys.has('KeyW')) - Number(this.keys.has('KeyS')); }
   get sideways(): number { return Number(this.keys.has('KeyD')) - Number(this.keys.has('KeyA')); }
+  get sprinting(): boolean { return this.keys.has('ShiftLeft') || this.keys.has('ShiftRight'); }
   clear(): void { this.keys.clear(); }
   dispose(): void { this.events.abort(); this.clear(); }
 }

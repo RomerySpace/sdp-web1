@@ -4,20 +4,28 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "prepare:shooter": "node scripts/build-shooter-collisions.mjs",
     "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
     "start": "node --env-file-if-exists=.env --import tsx src/index.ts",
     "typecheck": "tsc --noEmit",
+    "test:load": "tsx ../scripts/load-multiplayer.mjs",
     "test": "node --import tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "@colyseus/core": "~0.17.0",
     "@colyseus/schema": "^4.0.0",
     "@colyseus/ws-transport": "~0.17.0",
+    "@dimforge/rapier3d-compat": "^0.12.0",
     "express": "^5.3.0",
-    "livekit-server-sdk": "^2.13.0"
+    "livekit-server-sdk": "^2.13.0",
+    "three": "^0.180.0"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/extensions": "^4.5.1",
     "@types/node": "^24.0.0",
+    "@types/three": "^0.180.0",
+    "draco3dgltf": "^1.5.7",
     "tsx": "^4.20.0",
     "typescript": "~5.9.3"
   },

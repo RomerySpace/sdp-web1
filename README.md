@@ -1,4 +1,6 @@
-# SDP — Prototype / Local Test
+# SDP — Unified Limbo / Shooter
+
+This working copy integrates both existing experiences on the local `feature/unified-sdp` branch. Start it with `npm run dev:unified` at **http://localhost:5373**. For the architecture, imported modules, actual limitations and Spanish setup/testing instructions, see [UNIFIED-SDP.md](./UNIFIED-SDP.md). Nothing has been pushed or deployed.
 
 A local, first-person sculpture exhibition in a luminous white environment. Vite, TypeScript, Three.js/WebGL 2, native pointer lock and Web Audio, with Colyseus multiplayer rooms of up to 25 people, shared room text chat and LiveKit proximity voice. For the HTTPS two-computer Wi-Fi test, run `npm run dev:lan` and follow [LAN.md](LAN.md), including certificate trust on both devices.
 
@@ -36,7 +38,8 @@ npm run preview
 | Enter | Open room chat; Enter again sends non-empty text |
 | Esc | Close chat, or release the cursor using browser behavior |
 | Hold V | Authorize microphone access and transmit proximity voice while held |
-| E near the pedestal | Inspect SDPv1; press E again to return to exploration |
+| E near the pedestal, looking at the sculpture | Inspect directly; the discreet JOIN SHOOTER TEST button loads the simulation |
+| Hold SHIFT in Limbo | Sprint smoothly at 1.5 times walking speed |
 | Drag / mouse wheel during inspection | Rotate the sculpture / zoom within fixed limits |
 | Top-right speaker | Toggle ambience; hover or focus for volume |
 | Top-right fullscreen | Enter or exit fullscreen |
@@ -45,7 +48,7 @@ Release the cursor with Esc to access settings. Click the resume prompt to retur
 
 Touch devices and browsers without pointer lock receive a limited viewing mode with the reveal, rotating exhibit and settings. The magnifying-glass button opens inspection in this mode; drag or pinch to rotate and zoom, then close with the X button. Desktop with a mouse is required for exploration. If WebGL 2 is unavailable, the page displays a readable fallback.
 
-Inspection is available within 3.6m of the pedestal on desktop, with a visible E / INSPECT prompt when in range. It renders a centered copy of the sculpture using Three.js OrbitControls and a separate camera, sharing geometry without moving the visitor or changing their multiplayer position. Walking is stopped, but push-to-talk remains available; Enter opens chat. E, Esc, the close button or focus loss leave inspection. The camera can zoom in to 1.12 times the model's bounding-sphere radius, staying outside the mesh, and out to 1.5 times its fitted distance. Pan is disabled and portrait viewports are reframed. Both sculptures keep rotating: the exhibition completes a turn in 54 seconds and inspection in 80 seconds. Soft key, fill and rim lighting reveal the matte-black details.
+On desktop, inspection opens directly after approaching within 3m and facing the sculpture (E / INTERACT). It renders a centered copy of the sculpture using Three.js OrbitControls and a separate camera, sharing geometry without moving the visitor or changing their multiplayer position. Walking is stopped, but push-to-talk remains available; Enter opens chat. E, Esc, the close button or focus loss leave inspection. The camera can zoom in to 1.12 times the model's bounding-sphere radius, staying outside the mesh, and out to 1.5 times its fitted distance. Pan is disabled and portrait viewports are reframed. Both sculptures keep rotating: the exhibition completes a turn in 54 seconds and inspection in 80 seconds. Soft key, fill and rim lighting reveal the matte-black details.
 
 ## Assets
 
@@ -74,6 +77,8 @@ The renderer caps device pixel ratio at 1.75, uses 1024px variance shadows, shar
 `MultiplayerConnection` separates room snapshots, session/status events, server-owned spawns, movement inputs, room chat and token requests from rendering. `RemotePlayerManager` retains shared capsule geometry and buffered 100ms interpolation. The server still validates sequenced inputs and simulates constant 50ms steps with a 3m/s speed limit, normalized diagonals, pedestal collisions and a 250ms stale-input stop. Short drops reserve a session for five seconds; confirmed disconnects remove avatars immediately. `ChatPolicy` validates/rate-limits text and the server fixes the sender. `VoiceSessions` issues 60-second microphone-only tokens bound to the Colyseus room/session. `LiveKitVoiceTransport` handles WebRTC and PannerNode/GainNode playback independently from rendering and microphone permission handling. Continuous movement reconciliation remains future work.
 
 ## Browser validation
+
+For staged multiplayer load tests with 25, 50 and 100 simulated clients, see [LOAD-TEST.md](./LOAD-TEST.md). Run `npm run test:load` against the local backend. Remote tests require explicit owner authorization and `--allow-remote`; they do not exercise graphics or LiveKit voice.
 
 ```sh
 npm test

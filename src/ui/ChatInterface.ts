@@ -50,6 +50,7 @@ export class ChatInterface {
   }
 
   clear(): void { this.input.value = ''; }
+  reset(): void { this.clear(); this.history.replaceChildren(); this.element.classList.remove('show-history'); }
   private scheduleFade(): void {
     window.clearTimeout(this.fadeTimer);
     this.fadeTimer = window.setTimeout(() => this.element.classList.remove('show-history'), 14000);

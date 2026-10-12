@@ -37,8 +37,8 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('three/examples/jsm/loaders/GLTFLoader.js')) return 'model-loader';
-          if (id.includes('three/examples/')) return 'three-addons';
-          if (id.includes('node_modules/three')) return 'three';
+          if (id.includes('node_modules/three') && !id.includes('/examples/')) return 'three';
+          if (id.includes('node_modules/@dimforge/rapier3d-compat')) return 'shooter-physics';
         },
       },
     },

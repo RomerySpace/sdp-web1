@@ -1,4 +1,5 @@
 const MUTE_KEY = 'sdp:muted';
+import { sharedAudioContext } from './AudioContextHub';
 
 export class AudioManager {
   private context?: AudioContext;
@@ -8,6 +9,7 @@ export class AudioManager {
   private started = false;
   private disposed = false;
   private volume = 0.5;
+  private active = true;
   muted = false;
 
   constructor() {
@@ -23,7 +25,7 @@ export class AudioManager {
       return;
     }
     try {
-      this.context = new AudioContext();
+      this.context = sharedAudioContext();
       void this.context.resume().catch(() => {});
       void this.load();
     } catch (error) { console.warn('[SDP] Web Audio is unavailable; continuing silently.', error); }
@@ -54,7 +56,7 @@ export class AudioManager {
       this.source.loop = true;
       this.source.connect(filter);
       this.source.start();
-      this.gain.gain.linearRampToValueAtTime(this.muted ? 0 : this.volume * 0.28, context.currentTime + 3.4);
+      this.gain.gain.linearRampToValueAtTime(this.muted || !this.active ? 0 : this.volume * 0.28, context.currentTime + 3.4);
     } catch (error) {
       if (!this.disposed) console.warn('[SDP] Optional ambience could not be decoded; continuing silently.', error);
     }
@@ -83,12 +85,13 @@ export class AudioManager {
   }
 
   setVolume(volume: number): void { this.volume = Math.max(0, Math.min(1, volume)); this.updateGain(); }
+  setActive(active: boolean): void { this.active = active; this.updateGain(); }
 
   private updateGain(): void {
     if (!this.context || !this.gain) return;
     const now = this.context.currentTime;
     this.gain.gain.cancelAndHoldAtTime(now);
-    this.gain.gain.setTargetAtTime(this.muted ? 0 : this.volume * 0.28, now, 0.18);
+    this.gain.gain.setTargetAtTime(this.muted || !this.active ? 0 : this.volume * 0.28, now, 0.18);
   }
 
   setVisible(visible: boolean): void {
@@ -98,6 +101,6 @@ export class AudioManager {
 
   dispose(): void {
     this.disposed = true; this.abort.abort(); this.source?.stop(); this.source?.disconnect();
-    void this.context?.close().catch(() => {});
+    this.gain?.disconnect();
   }
 }

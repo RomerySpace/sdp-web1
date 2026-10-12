@@ -1,0 +1,18 @@
+.shooter-hud { position: fixed; inset: 0; pointer-events: none; z-index: 20; color: #354049; font-size: 10px; }
+.shooter-hud[hidden] { display: none; }
+.shooter-hud header { position: absolute; top: 30px; left: 30px; display: flex; align-items: center; gap: 18px; }
+.shooter-hud header span:first-child { font-size: 25px; }
+.shooter-crosshair { position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; background: rgba(43,54,62,.65); transform: translate(-50%,-50%); }
+.shooter-movement { position: absolute; bottom: 30px; left: 30px; }
+.shooter-ammo { position: absolute; bottom: 30px; right: 30px; display: grid; grid-template-columns: auto auto; align-items: baseline; gap: 8px; text-align: right; }
+.shooter-ammo > span:first-child, .shooter-action { grid-column: 1 / -1; font-size: 9px; min-height: 11px; }
+.shooter-magazine { font-size: 28px; font-weight: 400; }
+.shooter-reserve { font-size: 12px; }
+@media(max-width: 600px) { .shooter-hud header { top: 20px; left: 18px; } .shooter-hud header span:last-child { max-width: 90px; } .shooter-ammo { right: 18px; bottom: 22px; } .shooter-movement { left: 18px; bottom: 22px; } }
+.combat-feedback { position: fixed; inset: 0; z-index: 45; pointer-events: none; }
+.damage-vignette { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; pointer-events: none; }
+.desynchronization-state { position: absolute; top: 46%; left: 50%; transform: translate(-50%, -50%); max-width: calc(100% - 40px); font-size: 12px; letter-spacing: 0; color: #687b86; text-align: center; }
+.combat-confirmation { position: absolute; top: 55%; left: 50%; transform: translateX(-50%); max-width: calc(100% - 40px); font-size: 9px; letter-spacing: 0; color: #596f7e; text-align: center; }
+.desynchronization-state[hidden], .combat-confirmation[hidden] { display: none; }
+.shooter-health { position: absolute; bottom: 50px; left: 30px; font-size: 9px; color: #627783; }
+.shooter-hud[data-dead="true"] .shooter-crosshair { display: none; }

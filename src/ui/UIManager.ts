@@ -60,6 +60,7 @@ export class UIManager {
     this.notice = this.element.querySelector('.ui-notice')!;
     this.connection = new ConnectionIndicator(this.element.querySelector('.top-controls')!);
     this.inspection = new InspectionControls(this.element, actions.inspect, actions.closeInspection);
+    if (limited) { this.inspection.inspect.setAttribute('aria-label', 'Inspect sculpture'); this.inspection.inspect.querySelector('span')!.textContent = 'INSPECT'; }
     this.audioButton.addEventListener('click', () => this.setMuted(actions.toggleAudio()));
     this.element.querySelector<HTMLInputElement>('input[type="range"]')!.addEventListener('input', (event) => {
       actions.volume(Number((event.target as HTMLInputElement).value));

@@ -1,0 +1,159 @@
+# SDP unificado: Limbo y Shooter
+
+## Copia y seguridad
+
+La carpeta de trabajo es `/Users/alvarometzker/Documents/alvarometzker/SDP/WEBSDPv1`.
+Se creo con `git worktree add -b feature/unified-sdp`, partiendo de WEB1, y se trasladaron tambien sus cambios locales sin confirmar.
+El remoto sigue siendo `https://github.com/RomerySpace/sdp-web1.git`.
+No se hizo push, merge, deploy ni cambio de plan. El worktree comparte metadatos Git, pero los archivos de los dos originales no se modificaron.
+
+Originales:
+
+- WEB1: `../WEB1v1/WEB1v1 GRAFICOS CODE`.
+- WEB2: `../WEB2v1/WEB2v1 CODE`.
+
+No se trasladaron node_modules, dist, caches, certificados, conexiones privadas de Vercel/Render ni archivos .env con credenciales.
+Las plantillas .env.example y las configuraciones de despliegue se conservaron.
+
+## Arrancar
+
+Requiere Node 22.12 o posterior. Desde esta carpeta:
+
+```sh
+npm run install:all
+npm run prepare:shooter
+npm run dev:unified
+```
+
+Abrir `http://localhost:5373/`. Backend: 2587. LiveKit local: 7980, WebRTC TCP 7981 y UDP 7982.
+Los puertos nuevos permiten conservar los servicios de WEB1. Ctrl+C detiene solo los servicios iniciados por este comando.
+El comando inicia frontend, backend y, cuando hay un ejecutable compatible, LiveKit local con credenciales aleatorias guardadas en .local, fuera de Git.
+Si la sesion de entrega ya dejo la aplicacion en segundo plano, no arrancar otra copia en los mismos puertos. Desde WEBSDPv1 puede detenerse con `kill $(cat .local/unified-dev.pid)` y volver a ejecutar npm run dev:unified.
+Vite actualiza el frontend durante el desarrollo y Node observa el backend. Un reinicio del backend reinicia sus salas: los clientes deben reconectar.
+Si faltan ejecutables intenta instalarlos mediante el instalador local ya existente. No contrata LiveKit Cloud ni instala certificados en el sistema.
+Si la voz no puede arrancar, imprime el motivo y mantiene frontend/backend disponibles. `SDP_LOCAL_VOICE=0 npm run dev:unified` permite probar sin voz.
+Si ya se han configurado credenciales y URLs de LiveKit en server/.env, reutiliza esa infraestructura.
+
+Para cambiar puertos en macOS:
+
+```sh
+SDP_WEB_PORT=5375 PORT=2589 LIVEKIT_PORT=7984 LIVEKIT_RTC_TCP_PORT=7985 LIVEKIT_RTC_UDP_PORT=7986 npm run dev:unified
+```
+
+`npm run dev`, `dev:server`, `dev:all` y `dev:lan` siguen disponibles. Para probar microfonos por Wi-Fi, usar el flujo HTTPS de LAN.md y confiar el certificado en ambos dispositivos. HTTP en localhost permite microfono; HTTP con la IP de otro ordenador no equivale a un contexto seguro.
+
+## Entrar y cambiar de modo
+
+1. Entrar en Limbo con CLICK TO ENTER.
+2. Acercarse a unos 3 metros de la escultura y mirarla. Aparece E / INTERACT.
+3. Pulsar E abre directamente la inspeccion original, sin menu. E o ESC cierran la inspeccion.
+4. Solo aparece JOIN SHOOTER TEST, centrado abajo. Al pulsarlo se carga la simulacion y se cambia de sala. Inspeccionar no descarga mapa, fisica ni codigo exclusivo del Shooter.
+5. ENTER SIMULATION obtiene el control del raton mediante un gesto nuevo, necesario cuando la carga ha agotado la autorizacion del navegador.
+6. En Shooter: WASD, raton, SPACE, SHIFT, CTRL, R, boton izquierdo y boton derecho conservan su comportamiento original.
+7. ESC abre la pausa. RESUME continua; RETURN TO LIMBO vuelve sin recargar la pagina. En Limbo, CLICK TO RESUME recupera el raton.
+
+Un fallo de carga ofrece RETRY o regreso a Limbo. Tambien puede cancelarse durante la carga.
+La inspeccion tactil sigue disponible. El FPS requiere escritorio, raton y pointer lock, como WEB2.
+
+## Probar dos navegadores
+
+Abrir dos ventanas en la misma URL. ONLINE muestra la poblacion real de la sala.
+En Limbo comprobar desplazamiento y ENTER para texto. Autorizar el microfono al mantener V; soltar V corta las pistas, no solo el indicador. La voz se atenua con la distancia.
+Entrar al Shooter en ambas ventanas. CTRL baja cabeza, torso y arma de los avatares; SHIFT corre. Apuntar al otro jugador: cada impacto valido resta 50 de 100 HP, con bordes digitales blancos y reaccion discreta de camara.
+Dos impactos eliminan al jugador. TARGET DESYNCHRONIZED confirma la baja; el otro avatar pierde geometria, emite fragmentos blancos/azules y se disuelve en 1.35 segundos. El eliminado ve DESYNCHRONIZED y no puede moverse, apuntar, disparar ni recargar.
+El servidor lo reconstruye aproximadamente a los 3 segundos en otro punto seguro, con 100 HP, municion y retroceso reiniciados. La proteccion inicial dura 1.25 segundos y termina si dispara. Las paredes reales bloquean los impactos.
+En Limbo, mantener SHIFT al moverse aumenta la velocidad a 1.5 veces, con aceleracion suave y solo 2 grados de FOV adicionales. El servidor utiliza la misma simulacion limitada.
+Mantener una tercera ventana en Limbo permite comprobar que no recibe chat ni voz del Shooter.
+Cerrar una ventana elimina su avatar. Volver a Limbo reconecta su voz correspondiente.
+
+## Desarrollo directo
+
+- `http://localhost:5373/?debugMode=limbo`: diagnosticos de modo, sala, poblacion, FPS, ping, fisica y cache.
+- `http://localhost:5373/?debugMode=shooter`: entrada directa al Shooter para desarrollo.
+
+Estos accesos no existen en el build de produccion. No son mecanismos de administracion ni autenticacion.
+
+## Modulos reutilizados de WEB2
+
+Se importaron y adaptaron en src/modes/shooter:
+
+- physics/PhysicsWorld.ts y CharacterController.ts: Rapier, capsula, gravedad, escaleras, salto y agachado.
+- player/InputManager.ts y FirstPersonCamera.ts: controles e inercia Bodycam.
+- weapon/Weapon.ts y ShootingSystem.ts: SDP, ADS, muelles, retroceso, recarga, impactos y obstruccion.
+- world/MapLoader.ts, MapColliders.ts, MarbleMaterial.ts, Environment.ts y ContactShading.ts: Dust 2 real, marmol, niebla, HDR, sombras y contacto.
+- config/gameConfig.ts, core/Spring.ts y audio/AudioManager.ts: parametros y efectos originales.
+
+El arranque Game, el bucle GameLoop y el menu de entrada de WEB2 se reemplazaron por el ciclo de vida comun. No hay una segunda web ni un segundo renderer.
+public/shooter contiene el mapa y Draco originales. El arma y el EXR utilizan los mismos public/SDP/SDPv1.glb y public/hdr/puresky.exr que Limbo: los hashes de ambos originales coinciden. No hay copias duplicadas de esos recursos; sus datos se mantienen en cache.
+
+## Arquitectura y carga diferida
+
+App conserva el unico requestAnimationFrame y WebGLRenderer. La inspeccion sigue siendo un estado del Limbo; GameModeManager controla la carga, Shooter y el regreso. No se abre el antiguo panel de interaccion.
+ShooterMode solo se importa dinamicamente al entrar al Shooter. Rapier tiene un chunk separado. Sus shaders y CSS tampoco se agrupan con los complementos iniciales de Limbo.
+AssetCache conserva buffers de modelos para repetir transiciones sin otra descarga. Cada modo posee y libera sus geometrias/materiales; no comparte recursos GPU que pueda destruir el otro.
+La escena ligera de Limbo permanece en memoria, pero no actualiza ni renderiza durante Shooter. Al volver se liberan mundo, colisiones, HUD, listeners, sombras y entidades exclusivas del Shooter.
+Los dos mundos y LiveKit utilizan AudioContextHub. El SDK puede crear y cerrar sondas breves de silencio; el mezclador de reproduccion es compartido.
+ModeConfig.ts permite ajustar alcance y direccion de la interaccion.
+
+## Backend y limites actuales
+
+- SDPLimboRoom: sincronizacion original a 20 Hz, chat de sala y LiveKit de proximidad; 25 plazas.
+- SDPShooterRoom: simulacion a 60 Hz, estados a 30 Hz, Rapier con colisiones reales del mapa, entradas validadas, estados de movimiento y acciones de arma; 25 plazas.
+- SDPLobby sigue registrado como alias de compatibilidad. Sus salas no se mezclan con las nuevas.
+
+La conexion Colyseus es una sola por visitante. Al cambiar, se espera la salida de la anterior; callbacks tardios no deben introducir entidades de otra sala.
+Las posiciones de Shooter se calculan en el servidor, no se aceptan posiciones arbitrarias. Municion, cadencia y duracion de recarga se controlan tambien en el servidor.
+El punto seguro de reaparicion tambien se asigna en el servidor y se conserva en el controlador local de cada visitante.
+Los impactos y animaciones locales siguen siendo inmediatos, pero no deciden salud ni bajas. CombatSimulation usa capsula corporal y esfera de cabeza Rapier, con la altura realmente resuelta por la fisica, incluida la transicion de agachado. El rayo parte del jugador del servidor y usa su orientacion validada; el collider fijo mas cercano del mapa limita el alcance. No se aceptan victimas, origenes, posiciones ni danos enviados por el cliente.
+El historial de objetivos compensa hasta 200 ms. La demora se calcula con sondas RTT emitidas por el servidor y los 70 ms de interpolacion, no con una fecha elegida por el cliente. No rebobina paredes estaticas ni permite golpear vidas anteriores.
+Salud, DEAD, vida, fecha de muerte/reconstruccion y proteccion se sincronizan por estado y eventos de sala. El numero de vida impide que entradas o acciones antiguas afecten a una reaparicion. El servidor retira el cuerpo muerto de la fisica y elige puntos con suelo, espacio de capsula y separacion respecto a jugadores activos.
+DigitalAvatarEffect reutiliza un lote de 48 fragmentos instanciados por avatar y materiales con disolucion por celdas y scanlines. Los recursos se liberan al salir. CombatFeedback genera una textura de borde una sola vez, dejando limpio el centro; el dano activa muelles suaves de camara. No hay sangre, rojo ni ragdolls.
+
+**Limites del prototipo:** no hay replay completo de entradas pendientes ni reconciliacion fina; la correccion de posicion aun limita desviaciones grandes. La compensacion es un rebobinado limitado de objetivos sobre el mapa estatico, no un sistema competitivo completo con validacion historica de puertas moviles. No hay equipos, rondas, anticheat avanzado ni estadisticas persistentes; match sigue siendo practice.
+Las animaciones procedimentales no se transmiten fotograma a fotograma.
+No se han implementado Redis, seleccion regional, matchmaking competitivo ni limite global/cola de 300. No se ha validado capacidad para 300 ni latencia intercontinental de 40-60 ms.
+
+## Voz solo en Limbo
+
+Al salir se paran microfono, publicaciones, pistas remotas y conexion LiveKit. SDPShooterRoom no entrega tokens de voz.
+Al regresar, el token se vincula a la nueva sesion y sala Limbo. El chat del Shooter reutiliza Colyseus y queda aislado del de Limbo.
+Para produccion se necesitan las credenciales del backend y la cuota adecuada del servicio de voz; nunca se incluyen secretos en el bundle.
+
+## Parametros y acceso temporal
+
+`shared/GameplayConfig.ts` centraliza salud, dano, cadencia, alcance, cargador, recarga, reaparicion, proteccion, compensacion, fragmentos, disolucion/reconstruccion, impulso/vineta y sprint/FOV de Limbo.
+`ENABLE_SHOOTER_TEST = false` desactiva el acceso tanto en navegador como servidor. Reconstruir y desplegar ambos para una publicacion coherente; el codigo y los assets no se borran.
+El backend admite ademas `ENABLE_SHOOTER_TEST=false` en su entorno para restringir rapidamente todos los joins: comunica la restriccion a Limbo y rechaza crear o entrar en salas Shooter, incluso con un SDK externo. Reiniciar el backend tambien desconecta las salas existentes. No basta con editar un boton del frontend.
+Los shortcuts debug solo existen en desarrollo y respetan la restriccion. En produccion no se expone sdpUnified ni se interpreta debugMode.
+
+## Construir y verificar
+
+```sh
+npm run typecheck:all
+npm run test:server
+npm run build
+npm run test:unified
+npm run test:regression
+npm run test:shooter-disabled
+```
+
+La suite unificada comprueba solicitudes reales, renderizado con pixeles/capturas, dos clientes, impactos/DEAD/reaparicion/agachado, sprint, aislamiento, controles, transiciones y audio WebRTC con una senal sintetica. Las pruebas usan puertos separados 5383/2597/7990 para no mezclar visitantes de desarrollo. No equivale a una prueba entre dos ordenadores fisicos ni a una prueba de carga masiva.
+
+Para comprobar el build compilado contra el backend aislado que inicia Playwright, abrir otra terminal:
+
+```sh
+SDP_BACKEND_PORT=2597 SDP_LIVEKIT_PORT=7990 npm run preview -- --port 5384 --strictPort
+```
+
+Y en una tercera:
+
+```sh
+SDP_PRODUCTION_URL=http://127.0.0.1:5384 npm run test:unified
+```
+
+## Vercel y Render
+
+Vercel conserva npm run build y dist. El endpoint de Colyseus sigue configurado mediante VITE_SDP_SERVER_URL, con HTTPS/WSS en publico.
+Render conserva su estructura y variables privadas. El build instala las dependencias de raiz y servidor porque la fisica se reutiliza desde el mismo modulo de WEB2, y genera el archivo de colisiones antes de arrancar.
+server/assets/dust2-colliders.json.gz es un recurso derivado, ignorado por Git y regenerable con npm run prepare:shooter. No procede de datos de un cliente.
+Una futura publicacion debe coordinar el frontend y el backend nuevos: el backend antiguo no conoce SDPShooterRoom. Usar despliegues de prueba y autorizar expresamente cualquier push/merge/cambio de produccion.

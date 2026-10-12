@@ -1,5 +1,6 @@
 import { defineTypes, MapSchema, Schema } from '@colyseus/schema';
 import { MAX_PLAYERS, PLAYER_HEIGHT } from '../../../shared/MultiplayerProtocol';
+import { shooterEnabled } from '../config/GameplayConfig';
 
 export class VisitorState extends Schema {
   x = 0;
@@ -16,11 +17,13 @@ defineTypes(VisitorState, {
 });
 
 export class LobbyState extends Schema {
+  shooterEnabled = shooterEnabled;
   players = new MapSchema<VisitorState>();
   online = 0;
   capacity = MAX_PLAYERS;
   tick = 0;
 }
 defineTypes(LobbyState, {
+  shooterEnabled: 'boolean',
   players: { map: VisitorState }, online: 'uint8', capacity: 'uint8', tick: 'uint32',
 });

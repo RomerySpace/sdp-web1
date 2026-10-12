@@ -3,6 +3,7 @@ import { simulateMovement, type MotionState } from '../../shared/Movement';
 import type { MovementInput, NetworkPlayer } from '../../shared/MultiplayerProtocol';
 import { CollisionManager } from './CollisionManager';
 import { InputManager } from './InputManager';
+import { gameplayConfig } from '../../shared/GameplayConfig';
 
 export class FirstPersonController {
   readonly input = new InputManager();
@@ -13,8 +14,10 @@ export class FirstPersonController {
   private yaw = 0;
   private pitch = 0;
   private active = false;
+  private readonly baseFov: number;
 
   constructor(readonly camera: PerspectiveCamera, private readonly canvas: HTMLCanvasElement) {
+    this.baseFov = camera.fov;
     camera.rotation.order = 'YXZ';
     camera.position.set(0, 1.7, 9);
     camera.lookAt(0, 1.78, 0);
@@ -57,12 +60,16 @@ export class FirstPersonController {
   releaseLock(): void { if (this.locked) document.exitPointerLock(); }
 
   update(dt: number): void {
+    const sprint = this.active && this.locked && this.input.sprinting && (this.input.forward || this.input.sideways);
+    const fov = MathUtils.damp(this.camera.fov, this.baseFov + (sprint ? gameplayConfig.limbo.sprintFovAdjustment : 0), 6, dt);
+    if (Math.abs(fov - this.camera.fov) > .001) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
     if (!this.active || !this.locked) return;
     this.motion.x = this.camera.position.x;
     this.motion.z = this.camera.position.z;
     this.movementInput.f = this.input.forward;
     this.movementInput.r = this.input.sideways;
     this.movementInput.y = this.yaw;
+    this.movementInput.s = this.input.sprinting;
     simulateMovement(this.motion, this.movementInput, dt, this.collision);
     this.camera.position.set(this.motion.x, 1.7, this.motion.z);
   }

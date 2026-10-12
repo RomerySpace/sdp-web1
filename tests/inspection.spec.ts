@@ -20,6 +20,10 @@ async function enter(page: Page): Promise<void> {
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
 }
 
+async function inspect(page: Page): Promise<void> {
+  await page.keyboard.press('KeyE');
+}
+
 test('SDPv1 loads in matte black, rotates, and inspection preserves the player', async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -48,14 +52,14 @@ test('SDPv1 loads in matte black, rotates, and inspection preserves the player',
   await page.screenshot({ path: testInfo.outputPath('SDPv1-exhibition.png') });
   await page.keyboard.press('KeyE');
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
-  await expect(page.getByRole('button', { name: 'Inspect sculpture', exact: true })).toBeHidden();
-  await page.evaluate(() => window.sdpInspection.player.camera.position.set(0, 1.7, 3));
-  await expect(page.getByRole('button', { name: 'Inspect sculpture', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Interact with sculpture', exact: true })).toBeHidden();
+  await page.evaluate(() => window.sdpInspection.player.camera.position.set(0, 1.7, 2.7));
+  await expect(page.getByRole('button', { name: 'Interact with sculpture', exact: true })).toBeVisible();
   await expect(page.locator('.inspect-button kbd')).toHaveText('E');
   await expect(page.locator('.inspect-button kbd')).toBeVisible();
-  await expect(page.locator('.inspect-button')).toContainText('INSPECT');
+  await expect(page.locator('.inspect-button')).toContainText('INTERACT');
   const original = await page.evaluate(() => ({ position: window.sdpInspection.player.camera.position.toArray(), rotation: window.sdpInspection.player.camera.rotation.toArray() }));
-  await page.keyboard.press('KeyE');
+  await inspect(page);
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'INSPECTING');
   expect(await page.evaluate(() => document.pointerLockElement)).toBeNull();
   await expect(page.locator('.inspection-close kbd')).toHaveText('E');
@@ -111,14 +115,16 @@ test('SDPv1 loads in matte black, rotates, and inspection preserves the player',
   await page.keyboard.press('KeyE');
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'CHATTING');
   await page.keyboard.press('Escape');
-  await page.keyboard.press('KeyE');
+  await inspect(page);
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'INSPECTING');
   await expect.poll(() => page.evaluate(() => !!document.pointerLockElement)).toBe(false);
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'PAUSED');
   expect(await page.evaluate(() => window.sdpInspection.inspection.active)).toBe(false);
-  await expect(page.locator('.inspect-button')).toBeVisible();
-  await page.keyboard.press('KeyE');
+  await expect(page.locator('.inspect-button')).toBeHidden();
+  await page.getByRole('button', { name: 'CLICK TO RESUME' }).click();
+  await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
+  await inspect(page);
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'INSPECTING');
   expect(await page.evaluate(() => document.pointerLockElement)).toBeNull();
   expect(errors).toEqual([]);
@@ -161,10 +167,10 @@ test('a missing model disables inspection without breaking the exhibition', asyn
   await expect(page.locator('.ui')).toHaveAttribute('data-sculpture', 'fallback');
   await page.getByRole('button', { name: 'CLICK TO ENTER' }).click();
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
-  await page.evaluate(() => window.sdpInspection.player.camera.position.set(0, 1.7, 3));
+  await page.evaluate(() => window.sdpInspection.player.camera.position.set(0, 1.7, 2.7));
   await page.keyboard.press('KeyE');
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
-  await expect(page.getByRole('button', { name: 'Inspect sculpture', exact: true })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Interact with sculpture', exact: true })).toBeHidden();
 });
 
 test('inspection keeps push-to-talk functional without moving the network player', async ({ browser }) => {
@@ -180,9 +186,9 @@ test('inspection keeps push-to-talk functional without moving the network player
     await first.bringToFront();
     if (await first.locator('.resume-button').isVisible()) await first.locator('.resume-button').click();
     await first.waitForFunction(() => !!document.pointerLockElement && document.hasFocus());
-    await first.evaluate(() => window.sdpInspection.player.camera.position.set(0, 1.7, 3));
+    await first.evaluate(() => window.sdpInspection.player.camera.position.set(0, 1.7, 2.7));
     const identity = await first.evaluate(() => window.sdpMultiplayer.connection.snapshot!.localPlayerId);
-    await first.keyboard.press('KeyE');
+    await inspect(first);
     await expect(first.locator('.ui')).toHaveAttribute('data-state', 'INSPECTING');
     await first.waitForTimeout(300);
     const position = await first.evaluate((identity) => {

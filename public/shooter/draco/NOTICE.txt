@@ -1,0 +1,8 @@
+Draco glTF decoder
+
+Source: https://github.com/google/draco
+Unmodified decoder files copied from the installed Three.js 0.180 distribution:
+examples/jsm/libs/draco/gltf/
+
+Draco is distributed under the Apache License, Version 2.0.
+The full license is included in LICENSE. See README.md for upstream references.

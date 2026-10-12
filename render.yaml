@@ -4,7 +4,7 @@ services:
     runtime: node
     region: frankfurt
     plan: free
-    buildCommand: npm ci --prefix server --include=dev && npm --prefix server run typecheck
+    buildCommand: npm ci --include=dev && npm ci --prefix server --include=dev && npm --prefix server run prepare:shooter && npm --prefix server run typecheck
     startCommand: npm --prefix server start
     healthCheckPath: /health
     autoDeployTrigger: commit

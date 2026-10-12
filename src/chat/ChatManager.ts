@@ -15,6 +15,7 @@ export class ChatManager {
   submit(text: string): boolean {
     return this.network.sendChat(text);
   }
+  reset(): void { this.history.length = 0; }
 
   subscribe(listener: (message: ChatMessage) => void): () => void {
     this.listeners.add(listener);

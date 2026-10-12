@@ -8,6 +8,14 @@ import { FirstPersonController } from '../player/FirstPersonController';
 import { SceneManager } from '../scene/SceneManager';
 import { UIManager } from '../ui/UIManager';
 import { ExperienceStateMachine } from './ExperienceState';
+import { GameModeManager } from '../modes/GameModeManager';
+import { disposeAudioContext } from '../audio/AudioContextHub';
+import { assetCount } from '../assets/AssetCache';
+import { LOBBY_NAME } from '../../shared/MultiplayerProtocol';
+import { Vector3 } from 'three';
+import { modeConfig } from '../modes/ModeConfig';
+import '../styles/modes.css';
+import { ENABLE_SHOOTER_TEST } from '../../shared/GameplayConfig';
 
 export class App {
   readonly state = new ExperienceStateMachine();
@@ -20,6 +28,14 @@ export class App {
   private readonly inputs: InputSynchronizer;
   private readonly chat: ChatManager;
   private readonly ui: UIManager;
+  readonly modes: GameModeManager;
+  private readonly interactionTarget = new Vector3();
+  private readonly interactionDirection = new Vector3();
+  private diagnostics?: HTMLElement;
+  private diagnosticTime = 0;
+  private pingTime = 0;
+  private latency = 0;
+  private fps = 60;
   private readonly events = new AbortController();
   private readonly unsubscribers: (() => void)[] = [];
   private readonly limited = matchMedia('(pointer: coarse)').matches || !('requestPointerLock' in HTMLElement.prototype);
@@ -41,25 +57,41 @@ export class App {
     this.chat = new ChatManager(this.network);
     this.ui = new UIManager(container, {
       enter: () => this.enter(), resume: () => this.resume(), submit: (text) => this.submitChat(text),
-      toggleAudio: () => this.audio.toggleMute(), volume: (value) => this.audio.setVolume(value),
+      toggleAudio: () => {
+        const muted = this.audio.toggleMute();
+        const effects = this.modes?.shooter?.audio;
+        if (effects && effects.muted !== muted) effects.toggleMute();
+        return muted;
+      }, volume: (value) => this.audio.setVolume(value),
       fullscreen: () => this.toggleFullscreen(),
-      inspect: () => this.inspect(), closeInspection: () => this.closeInspection(),
+      inspect: () => this.limited ? this.inspectSculpture() : this.interact(), closeInspection: () => this.closeInspection(),
     }, this.limited, this.audio.muted);
+    this.modes = new GameModeManager(container, this.scene.renderer, this.network, {
+      pauseLimbo: () => { this.pause(); this.player.setEnabled(false); },
+      suspendCommunication: () => { this.inputs.setEnabled(false); this.voice.release(); this.voiceTransport.setEnabled(false); this.audio.setActive(false); },
+      restoreCommunication: () => { this.inputs.setEnabled(true); this.voiceTransport.setEnabled(true); this.audio.setActive(true); },
+      restoreLimbo: () => { this.scene.resize(); this.state.set('PAUSED'); this.ui.setState(this.state.value); if (this.limited) this.state.set('EXPLORING'); },
+      resetChat: () => { this.chat.reset(); this.ui.chat.reset(); },
+      changed: mode => { this.ui.element.inert = mode !== 'LIMBO' && mode !== 'SHOOTER'; if (mode !== 'LIMBO') this.ui.inspection.update(false, false); },
+      inspect: () => this.inspectSculpture(),
+    });
+    container.dataset.mode = 'LIMBO';
     this.unsubscribers.push(
       this.state.subscribe((state) => {
-        this.player.setEnabled(state === 'EXPLORING' && !this.limited);
+        this.player.setEnabled(this.modes.value === 'LIMBO' && state === 'EXPLORING' && !this.limited);
         if (state !== 'EXPLORING') this.inputs.stop();
         if (state !== 'EXPLORING' && state !== 'INSPECTING') this.voice.release();
         if (state !== 'INSPECTING') this.scene.inspection.close();
         this.ui.setState(state);
+        this.modes.setInspection(state === 'INSPECTING');
       }),
       this.chat.subscribe((message) => this.ui.chat.add(message)),
       this.voice.subscribe((state) => this.ui.controls.setVoiceState(state)),
       this.voiceTransport.subscribe((state) => this.ui.controls.setVoiceConnection(state)),
       this.network.subscribeToNotice((message) => this.ui.notify(message)),
       this.network.subscribeToStatus((status) => this.ui.connection.update(status)),
-      this.network.subscribeToSpawn((player) => this.player.setSpawn(player)),
-      this.network.subscribeToState((snapshot) => this.scene.remotePlayers.receive(snapshot)),
+      this.network.subscribeToSpawn((player) => { if (this.network.roomType === LOBBY_NAME) this.player.setSpawn(player); }),
+      this.network.subscribeToState((snapshot) => { if (this.network.roomType === LOBBY_NAME || !snapshot.players.length) this.scene.remotePlayers.receive(snapshot); }),
     );
     this.bindEvents();
     void this.initialize();
@@ -71,6 +103,11 @@ export class App {
     if (import.meta.env.DEV && new URLSearchParams(location.search).has('inspectionDebug')) {
       Object.assign(window, { sdpInspection: { sculpture: this.scene.sculpture, inspection: this.scene.inspection,
         player: this.player, state: this.state } });
+    }
+    if (import.meta.env.DEV && new URLSearchParams(location.search).has('debugMode')) {
+      this.diagnostics = document.createElement('pre'); this.diagnostics.className = 'mode-diagnostics'; container.append(this.diagnostics);
+      Object.assign(window, { sdpUnified: { modes: this.modes, network: this.network, scene: this.scene, player: this.player,
+        state: this.state, voice: this.voice, voiceTransport: this.voiceTransport, chat: this.chat } });
     }
     this.frame = requestAnimationFrame(this.tick);
   }
@@ -87,11 +124,15 @@ export class App {
     this.ui.intro.ready(this.limited);
     if (!loaded) this.ui.notify('The environment light could not load. Diffuse viewing is still available.');
     if (!sculptureLoaded) this.ui.notify('The sculpture could not load. The exhibition is still available.');
+    if (import.meta.env.DEV && ENABLE_SHOOTER_TEST && new URLSearchParams(location.search).get('debugMode') === 'shooter') {
+      this.state.set('ENTERING'); this.entryProgress = 1; this.reveal = 1; this.state.set('PAUSED');
+      void this.modes.joinShooter();
+    }
   }
 
   private bindEvents(): void {
     const signal = this.events.signal;
-    window.addEventListener('resize', () => this.scene.resize(), { signal });
+    window.addEventListener('resize', () => { if (this.modes.value === 'SHOOTER') this.modes.resize(); else this.scene.resize(); }, { signal });
     window.addEventListener('keydown', this.keydown, { signal });
     window.addEventListener('keyup', (event) => { if (event.code === 'KeyV') this.voice.release(); }, { signal });
     window.addEventListener('blur', () => this.pause(), { signal });
@@ -105,6 +146,7 @@ export class App {
       else { this.lastTime = 0; this.frame = requestAnimationFrame(this.tick); }
     }, { signal });
     document.addEventListener('pointerlockchange', () => {
+      if (this.modes.value !== 'LIMBO') return;
       if (this.player.locked && this.state.value === 'INSPECTING') this.player.releaseLock();
       else if (this.player.locked && this.state.value === 'PAUSED') this.state.set('EXPLORING');
       else if (!this.player.locked && this.state.value === 'EXPLORING' && !this.limited) this.state.set('PAUSED');
@@ -112,15 +154,16 @@ export class App {
     document.addEventListener('pointerlockerror', this.pointerDenied, { signal });
     document.addEventListener('fullscreenchange', () => this.ui.setFullscreen(Boolean(document.fullscreenElement)), { signal });
     this.scene.renderer.domElement.addEventListener('click', () => {
+      if (this.modes.value !== 'LIMBO') return;
       if (this.state.value === 'INTRO') this.enter();
       else if (this.state.value === 'PAUSED') this.resume();
     }, { signal });
     this.scene.renderer.domElement.addEventListener('webglcontextlost', (event) => {
-      event.preventDefault(); this.contextLost = true; this.pause();
+      event.preventDefault(); this.contextLost = true; this.pause(); this.modes.pause();
       this.ui.notify('Graphics paused. Waiting for your browser to restore the exhibition.');
     }, { signal });
     this.scene.renderer.domElement.addEventListener('webglcontextrestored', () => {
-      this.contextLost = false; this.scene.resize();
+      this.contextLost = false; if (this.modes.value === 'SHOOTER') this.modes.resize(); else this.scene.resize();
       this.ui.notify('The exhibition is ready. Click to resume.');
     }, { signal });
   }
@@ -130,6 +173,18 @@ export class App {
     if (this.state.value === 'CHATTING') {
       if (event.code === 'Escape') { event.preventDefault(); this.closeChat(); }
       return; // Form owns all input, including Enter; movement and voice are disabled.
+    }
+    if (this.modes.value === 'SHOOTER') {
+      if (event.repeat) return;
+      if (event.code === 'Escape') { event.preventDefault(); this.modes.pause(); }
+      else if (event.code === 'Enter' && !(event.target instanceof HTMLElement && event.target.closest('button'))) {
+        event.preventDefault(); this.modes.shooter?.pause(true); this.modes.ui.hide(); this.state.set('CHATTING');
+      }
+      return;
+    }
+    if (this.modes.value !== 'LIMBO') {
+      if ((event.code === 'Escape' || event.code === 'KeyE') && !event.repeat) { event.preventDefault(); void this.modes.returnToLimbo(); }
+      return;
     }
     if (this.state.value === 'INSPECTING') {
       if (event.repeat) return;
@@ -142,7 +197,7 @@ export class App {
     if (target instanceof HTMLElement && target.closest('input, button')) return;
     if (event.repeat) return;
     if (event.code === 'KeyE' && ['EXPLORING', 'PAUSED'].includes(this.state.value)) {
-      event.preventDefault(); this.inspect();
+      event.preventDefault(); this.interact();
     } else if (event.code === 'Enter' && ['EXPLORING', 'PAUSED'].includes(this.state.value) && !this.limited) {
       event.preventDefault();
       this.state.set('CHATTING');
@@ -175,12 +230,23 @@ export class App {
   };
 
   private pause(): void {
+    if (this.modes?.value === 'SHOOTER') { this.modes.pause(); return; }
     this.voice.release(); this.player.input.clear();
     if (['EXPLORING', 'CHATTING', 'INSPECTING'].includes(this.state.value)) this.state.set('PAUSED');
     this.player.releaseLock();
   }
 
-  private inspect(): void {
+  private canInteract(): boolean {
+    if (!this.scene.sculpture.loaded || this.modes.value !== 'LIMBO' || this.state.value !== 'EXPLORING') return false;
+    this.interactionTarget.copy(this.scene.sculpture.root.position); this.interactionTarget.y += .45;
+    this.interactionTarget.sub(this.player.camera.position);
+    if (this.interactionTarget.length() > modeConfig.interactionDistance) return false;
+    this.player.camera.getWorldDirection(this.interactionDirection);
+    return this.interactionTarget.normalize().dot(this.interactionDirection) >= modeConfig.interactionFacingCosine;
+  }
+  private interact(): void { if (this.canInteract()) this.modes.interact(); }
+
+  private inspectSculpture(): void {
     if (!['EXPLORING', 'PAUSED'].includes(this.state.value)) return;
     if (!this.limited && !this.scene.sculpture.inRange(this.player.camera.position)) return;
     if (!this.scene.inspection.open(this.scene.sculpture)) return;
@@ -208,6 +274,7 @@ export class App {
 
   private closeChat(): void {
     this.state.set('PAUSED');
+    if (this.modes.value === 'SHOOTER') { this.modes.shooter?.resume(); return; }
     // Enter/Escape are trusted keyboard gestures; denied relocking leaves the
     // existing pause prompt available for a fresh click.
     this.player.requestLock(this.pointerDenied);
@@ -233,14 +300,25 @@ export class App {
       if (t >= 1) this.state.set(this.limited || this.player.locked ? 'EXPLORING' : 'PAUSED');
     }
     if (!this.contextLost) {
-      this.player.update(dt);
-      this.ui.inspection.update(
-        ['EXPLORING', 'PAUSED'].includes(this.state.value) &&
-          (this.limited ? this.scene.sculpture.loaded : this.scene.sculpture.inRange(this.player.camera.position)),
-        this.state.value === 'INSPECTING',
-      );
-      this.voiceTransport.update(this.scene.camera);
-      this.scene.render(dt, this.elapsed, this.reveal);
+      this.modes.update(dt);
+      if (this.modes.value !== 'SHOOTER' && this.modes.value !== 'RETURNING_TO_LIMBO') {
+        if (this.modes.value === 'LIMBO') this.player.update(dt);
+        this.ui.inspection.update(
+          this.limited && this.modes.value === 'LIMBO' && this.state.value === 'EXPLORING' ? this.scene.sculpture.loaded : this.canInteract(),
+          this.state.value === 'INSPECTING',
+        );
+        this.modes.setInspection(this.modes.value === 'LIMBO' && this.state.value === 'INSPECTING');
+        if (this.modes.value === 'LIMBO') this.voiceTransport.update(this.scene.camera);
+        this.scene.render(dt, this.elapsed, this.reveal);
+      }
+    }
+    if (this.diagnostics && dt > 0) {
+      this.fps += (1 / dt - this.fps) * .08;
+      if (now - this.pingTime > 2000) { this.pingTime = now; void this.network.ping().then(ms => this.latency = ms).catch(() => {}); }
+      if (now - this.diagnosticTime > 500) {
+        this.diagnosticTime = now;
+        this.diagnostics.textContent = `MODE ${this.modes.value}\nROOM ${this.network.status.roomId || '-'}\nONLINE ${this.network.status.online}/${this.network.status.capacity}\nFPS ${Math.round(this.fps)}\nPING ${Math.round(this.latency)} ms\nPHYSICS ${this.modes.shooter?.snapshot.physicsSteps ?? 'inactive'}\nMODEL CACHE ${assetCount()}\nRENDERERS 1`;
+      }
     }
     this.frame = requestAnimationFrame(this.tick);
   };
@@ -250,8 +328,10 @@ export class App {
     this.disposed = true;
     cancelAnimationFrame(this.frame); this.events.abort();
     this.unsubscribers.forEach((unsubscribe) => unsubscribe());
+    this.modes.dispose(); this.diagnostics?.remove();
     this.inputs.dispose();
     this.voice.dispose(); this.audio.dispose(); this.chat.dispose(); this.network.disconnect();
     this.player.dispose(); this.scene.dispose(); this.ui.dispose();
+    disposeAudioContext();
   }
 }

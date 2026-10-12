@@ -64,3 +64,15 @@ test('all 25 server-owned spawns are separated, face the centre and avoid the pe
     }
   }
 });
+
+test('validated sprint is capped at 1.5x, normalizes diagonals and retains pedestal collisions', () => {
+  assert.equal(validateMovementInput({ ...input, s: 2 }), null);
+  const simulation = new MovementSimulation(); simulation.add('sprint', { x: 20, z: 20 });
+  let state: MotionState | undefined;
+  for (let i = 0; i < 40; i++) state = simulation.step('sprint', { ...input, s: true, r: 1 });
+  assert.ok(Math.hypot(state!.velocityX, state!.velocityZ) <= 4.5);
+  assert.ok(Math.hypot(state!.x - 20, state!.z - 20) > 7);
+  simulation.add('pedestal', { x: 0, z: 9 });
+  for (let i = 0; i < 120; i++) state = simulation.step('pedestal', { ...input, s: true });
+  assert.ok(state!.z >= 1.48);
+});

@@ -4,6 +4,7 @@ import {
 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import type { Atmosphere } from './Atmosphere';
+import { assetBuffer } from '../assets/AssetCache';
 
 export const SCULPTURE_COLOR = 0x080808;
 export const SCULPTURE_ROUGHNESS = 0.82;
@@ -47,7 +48,7 @@ export class Sculpture {
 
   async loadModel(url: string): Promise<void> {
     const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-    const { scene: model } = await new GLTFLoader().loadAsync(url);
+    const { scene: model } = await new GLTFLoader().parseAsync(await assetBuffer(url), url.slice(0, url.lastIndexOf('/') + 1));
     if (this.disposed) { this.disposeObject(model); return; }
     const box = new Box3().setFromObject(model);
     const size = box.getSize(new Vector3());

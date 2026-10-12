@@ -1,6 +1,8 @@
-# SDP Web1: prueba online
+# SDP unificado: prueba online
 
-Se conservan el entorno blanco, la atmosfera, el pedestal y los controles originales. Cada ordenador abre la misma URL HTTPS de Vercel; no hace falta estar en la misma Wi-Fi ni instalar certificados locales.
+Se conservan el entorno blanco, la atmosfera, el pedestal y los controles originales. La integracion anade Shooter bajo carga diferida, combate autoritativo y regreso a Limbo. Cada ordenador abre la misma URL HTTPS de Vercel; no hace falta estar en la misma Wi-Fi ni instalar certificados locales.
+
+Los enlaces siguientes son los destinos de publicacion; por si solos no confirman que la integracion este desplegada. Frontend y backend deben publicar versiones compatibles. Consultar la version que figura en el despliegue y probar ambos modos antes de anunciar la actualizacion.
 
 ## Servicios
 
@@ -63,7 +65,7 @@ Si creas un Web Service manualmente:
 
 - Runtime: Node; Node version: 22.
 - Root Directory: vacio (raiz del repositorio).
-- Build Command: `npm ci --prefix server --include=dev && npm --prefix server run typecheck`.
+- Build Command: `npm ci --include=dev && npm ci --prefix server --include=dev && npm --prefix server run prepare:shooter && npm --prefix server run typecheck`.
 - Start Command: `npm --prefix server start`.
 - Health Check Path: `/health`.
 
@@ -83,6 +85,20 @@ Tambien acepta `wss://TU-BACKEND.onrender.com`. No anadas `/multiplayer`: ese pr
 
 El navegador conecta directamente con Render por HTTPS/WSS y con LiveKit por WSS/WebRTC. El proxy de desarrollo de Vite no existe en el despliegue de Vercel.
 
+## Publicar la integracion
+
+El codigo se desarrolla en `feature/unified-sdp`, dentro del mismo repositorio. Solo tras autorizacion se incorpora a `main` y se actualiza la prueba publica. No necesita otro repositorio ni otro plan.
+
+1. Actualizar el Build Command del servicio existente de Render con el comando anterior. Editar render.yaml no necesariamente cambia un servicio creado manualmente.
+2. Conservar las variables privadas de LiveKit y ALLOWED_ORIGINS. No introducir credenciales en GitHub ni Vercel.
+3. Desplegar el backend nuevo y esperar su estado Live; generar colisiones es obligatorio para crear salas Shooter.
+4. Publicar el frontend del mismo commit en Vercel con VITE_SDP_SERVER_URL apuntando al backend existente.
+5. Verificar HTTPS/WSS, Limbo, entrada al Shooter y regreso, con dos navegadores. Un reinicio del backend vacia las salas y desconecta a los visitantes.
+
+`shared/GameplayConfig.ts` habilita o deshabilita ENABLE_SHOOTER_TEST en ambos componentes. El backend puede restringir adicionalmente con `ENABLE_SHOOTER_TEST=false`; reiniciarlo aplica la restriccion y cierra las salas existentes. No se borran los modelos ni el codigo.
+
+Si hay que deshacer la publicacion, restaurar conjuntamente el ultimo despliegue compatible de frontend y backend; no mezclar el frontend nuevo con un backend que solo conoce SDPLobby.
+
 ## 6. Prueba con dos ordenadores
 
 1. Abre la misma URL de produccion de Vercel en Chrome en ambos ordenadores.
@@ -92,6 +108,9 @@ El navegador conecta directamente con Render por HTTPS/WSS y con LiveKit por WSS
 5. Usa auriculares. Mantiene V para hablar y permite el microfono cuando el navegador lo solicite. Comprueba `VOICE CONNECTED` y `TRANSMITTING`; al soltar V debe parar.
 6. Acerca ambos avatares: sus posiciones iniciales pueden estar separadas mas de 15 metros. Voz completa hasta 3 metros, disminucion hasta 15 metros y silencio mas lejos. Gira la camara para probar izquierda/derecha.
 7. Cierra una ventana: el avatar debe desaparecer. El otro deja de recibir su voz.
+8. En ambas ventanas, acercate a la escultura, pulsa E y JOIN SHOOTER TEST. Solo entonces se descargan el mapa, el codigo y la fisica del Shooter. ENTER SIMULATION recupera el raton tras la carga.
+9. En Shooter, CTRL debe verse agachado en el otro ordenador. Dos impactos validos de 50 HP eliminan al jugador de 100 HP; las paredes bloquean disparos. La muerte desintegra el avatar y DESYNCHRONIZED bloquea el control. Aproximadamente a los 3 segundos vuelve con salud y municion completas.
+10. ESC abre la pausa; RETURN TO LIMBO vuelve sin recargar. La voz solo funciona en Limbo; el chat permanece separado por sala. SHIFT permite sprint suave en Limbo.
 
 ## Diagnostico
 

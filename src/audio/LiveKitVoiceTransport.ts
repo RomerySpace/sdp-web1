@@ -4,6 +4,7 @@ import type { MultiplayerConnection } from '../network/MultiplayerConnection';
 import type { LobbySnapshot } from '../../shared/MultiplayerProtocol';
 import type { SpatialVoiceTransport } from './VoiceChatManager';
 import { proximityGain, voiceSettings } from './SpatialVoiceSettings';
+import { sharedAudioContext } from './AudioContextHub';
 
 export type VoiceConnectionState = 'disconnected' | 'connecting' | 'connected' | 'unavailable';
 interface RemoteVoice { track: RemoteAudioTrack; element: HTMLMediaElement; panner: PannerNode; gain: GainNode }
@@ -19,6 +20,7 @@ export class LiveKitVoiceTransport implements SpatialVoiceTransport {
   private local?: LocalAudioTrack;
   private speaking = false;
   private disposed = false;
+  private enabled = true;
   private snapshot?: LobbySnapshot;
   private readonly remotes = new Map<string, RemoteVoice>();
   private readonly listeners = new Set<(state: VoiceConnectionState) => void>();
@@ -28,9 +30,10 @@ export class LiveKitVoiceTransport implements SpatialVoiceTransport {
   private readonly unsubscribers: (() => void)[];
 
   constructor(private readonly network: MultiplayerConnection, private readonly onInterrupted: () => void) {
-    try { this.context = new AudioContext(); } catch { this.currentState = 'unavailable'; }
+    try { this.context = sharedAudioContext(); } catch { this.currentState = 'unavailable'; }
     this.unsubscribers = [
       network.subscribeToStatus((status) => {
+        if (!this.enabled) return;
         if (status.state !== 'connected') { this.onInterrupted(); this.leave(); return; }
         if (this.roomId && this.roomId !== status.roomId) { this.onInterrupted(); this.leave(); }
         void this.connect();
@@ -62,13 +65,14 @@ export class LiveKitVoiceTransport implements SpatialVoiceTransport {
   }
 
   unlock(): void {
+    if (!this.enabled) return;
     void this.context?.resume().catch(() => {});
     void this.room?.startAudio().catch(() => {});
     if (this.network.status.state === 'connected' && this.currentState !== 'connected') void this.connect();
   }
 
   private connect(): Promise<void> {
-    if (this.disposed || !this.context || this.network.status.state !== 'connected') return Promise.resolve();
+    if (this.disposed || !this.enabled || !this.context || this.network.status.state !== 'connected') return Promise.resolve();
     if (this.attempt) return this.attempt;
     if (this.room && this.roomId === this.network.status.roomId) return Promise.resolve();
     window.clearTimeout(this.retryTimer); this.retryTimer = 0;
@@ -120,7 +124,7 @@ export class LiveKitVoiceTransport implements SpatialVoiceTransport {
   }
 
   private retry(): void {
-    if (this.disposed || this.retryTimer || this.network.status.state !== 'connected') return;
+    if (this.disposed || !this.enabled || this.retryTimer || this.network.status.state !== 'connected') return;
     this.retryTimer = window.setTimeout(() => { this.retryTimer = 0; void this.connect(); }, 5000);
   }
 
@@ -241,6 +245,11 @@ export class LiveKitVoiceTransport implements SpatialVoiceTransport {
 
   dispose(): void {
     this.disposed = true; this.unsubscribers.forEach((unsubscribe) => unsubscribe());
-    this.leave(); this.listeners.clear(); void this.context?.close().catch(() => {});
+    this.leave(); this.listeners.clear();
+  }
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+    if (!enabled) { this.onInterrupted(); this.leave(); }
+    else if (this.network.status.state === 'connected') void this.connect();
   }
 }
