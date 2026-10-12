@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { MAX_PLAYERS } from '../../../shared/MultiplayerProtocol';
 import { SHOOTER_HZ, SHOOTER_PATCH_HZ, shooterNetworkConfig, validateShooterInput, validateWeaponAction, type ShooterInput } from '../../../shared/ShooterProtocol';
 import type { RoomChatMessage } from '../../../shared/CommunicationProtocol';
-import { ShooterState, ShooterPlayer, KillState } from '../state/ShooterState';
+import { ShooterState, ShooterPlayer, KillState, RoundScoreState } from '../state/ShooterState';
 import { ShooterWorld } from '../simulation/ShooterWorld';
 import { ChatPolicy } from '../communication/ChatPolicy';
 import { gameConfig } from '../../../src/modes/shooter/config/gameConfig';
@@ -11,6 +11,7 @@ import { gameplayConfig } from '../../../shared/GameplayConfig';
 import { shooterEnabled } from '../config/GameplayConfig';
 import { CombatSimulation, type CombatPose, type PlayerHit } from '../simulation/CombatSimulation';
 import { HealthRecovery } from '../simulation/HealthRecovery';
+import { ShooterMatch } from '../simulation/ShooterMatch';
 import { roomDisplayName, validateDisplayName } from '../../../shared/PlayerIdentity';
 import { shotRecoil } from '../../../shared/WeaponRecoil';
 interface Entry { input: ShooterInput; received: number; slot: number; lastAction: number; lastShot: number; reloadUntil: number;
@@ -27,6 +28,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
   private readonly chat = new ChatPolicy();
   private accumulator = 0;
   private readonly combat = new CombatSimulation();
+  private readonly match = new ShooterMatch();
   async onCreate(): Promise<void> {
     if (!shooterEnabled) throw new ServerError(403, 'Shooter test is disabled.');
     this.world = await ShooterWorld.create();
@@ -34,13 +36,13 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     this.onMessage('shooter:input', (client, raw: unknown) => {
       const entry = this.entries.get(client.sessionId), input = validateShooterInput(raw);
       const player = this.state.players.get(client.sessionId);
-      if (!entry || !input || input.seq <= entry.input.seq || !player?.connected || player.dead || input.life !== player.life) return;
+      if (!this.match.active(this.clock.elapsedTime) || !entry || !input || input.seq <= entry.input.seq || !player?.connected || player.dead || input.life !== player.life) return;
       entry.input = input; entry.received = this.clock.elapsedTime;
       this.world.input(client.sessionId, input);
     });
     this.onMessage('weapon:action', (client, raw: unknown) => {
       const entry = this.entries.get(client.sessionId), action = validateWeaponAction(raw), player = this.state.players.get(client.sessionId);
-      if (!entry || !action || !player?.connected || player.dead || action.life !== player.life || action.seq <= entry.lastAction) return;
+      if (!this.match.active(this.clock.elapsedTime) || !entry || !action || !player?.connected || player.dead || action.life !== player.life || action.seq <= entry.lastAction) return;
       entry.lastAction = action.seq; player.weaponSeq = action.seq;
       const now = this.clock.elapsedTime, w = gameConfig.weapon;
       if (action.action === 'fire') {
@@ -112,6 +114,8 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     this.entries.set(client.sessionId, { slot, received: this.clock.elapsedTime, lastAction: -1, lastShot: -1000, reloadUntil: 0, probe: '', probeAt: 0, rtt: 0, recovery: new HealthRecovery(), burstShots: 0,
       input: { seq: -1, life: player.life, f: 0, r: 0, y: player.yaw, p: 0, s: false, c: false, j: false, a: false, active: false } });
     this.combat.record(this.poses(this.clock.elapsedTime));
+    if (this.match.phase === 'waiting') this.startMatch(this.clock.elapsedTime, false);
+    else if (this.match.phase === 'results') this.world.freeze(client.sessionId);
   }
   onDrop(client: Client): void {
     const player = this.state.players.get(client.sessionId), entry = this.entries.get(client.sessionId);
@@ -119,13 +123,27 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     if (entry) { entry.input.active = false; this.world.input(client.sessionId, entry.input); }
     this.allowReconnection(client, 5);
   }
-  onReconnect(client: Client): void { const player = this.state.players.get(client.sessionId); if (player && !player.connected) { player.connected = true; this.state.online++; } }
+  onReconnect(client: Client): void {
+    const player = this.state.players.get(client.sessionId);
+    if (player && !player.connected) { player.connected = true; this.state.online++; }
+    if (this.match.phase === 'waiting') this.startMatch(this.clock.elapsedTime, true);
+  }
   onLeave(client: Client): void {
+    const leaving = this.state.players.get(client.sessionId);
+    if (leaving) this.match.leave({ playerId: client.sessionId, displayName: leaving.displayName, kills: leaving.kills, deaths: leaving.deaths, streak: leaving.streak });
     if (this.state.players.get(client.sessionId)?.connected) this.state.online--;
     this.world.remove(client.sessionId); this.state.players.delete(client.sessionId); this.entries.delete(client.sessionId); this.chat.remove(client.sessionId);
   }
   private step(): void {
     const now = this.clock.elapsedTime;
+    this.state.serverTime = now;
+    this.state.tick = (this.state.tick + 1) >>> 0;
+    if (this.match.phase === 'playing' && !this.match.active(now)) this.finishMatch(now);
+    if (this.match.phase === 'results' && now >= this.match.nextRoundAt) {
+      if (this.state.online) this.startMatch(now, true);
+      else { this.match.resetEmpty(); this.syncMatch(); }
+    }
+    if (this.match.phase !== 'playing') return;
     for (const [id, entry] of this.entries) {
       const player = this.state.players.get(id)!;
       if (player.dead) {
@@ -148,10 +166,31 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
       player.crouching = body.crouching; player.sprinting = body.sprinting; player.grounded = body.grounded;
       player.lastProcessedInput = Math.max(0, entry.input.seq);
     }
-    this.state.tick = (this.state.tick + 1) >>> 0;
-    this.state.serverTime = now;
     while (this.state.killFeed.length && now - this.state.killFeed[0].timestamp > gameplayConfig.combat.killFeedDuration * 1000) this.state.killFeed.shift();
     this.combat.record(this.poses(now));
+  }
+  private syncMatch(): void {
+    this.state.match = this.match.phase; this.state.round = this.match.round;
+    this.state.matchEndsAt = this.match.endsAt; this.state.nextRoundAt = this.match.nextRoundAt;
+  }
+  private startMatch(now: number, reset: boolean): void {
+    this.match.start(now); this.state.results.clear(); this.state.killFeed.clear(); this.combat.clear();
+    if (reset) for (const [id, player] of this.state.players) {
+      player.kills = player.deaths = player.streak = 0;
+      // Failed safe spawn searches leave the player frozen and retry through normal respawn handling.
+      player.dead = true; player.respawnAt = now; this.respawn(id, now);
+    }
+    this.syncMatch(); this.combat.record(this.poses(now));
+  }
+  private finishMatch(now: number): void {
+    const scores = this.match.finish(now, [...this.state.players].map(([id, p]) => ({ playerId: id, displayName: p.displayName, kills: p.kills, deaths: p.deaths, streak: p.streak })));
+    this.state.results.clear(); for (const score of scores) this.state.results.push(Object.assign(new RoundScoreState(), score));
+    for (const [id, entry] of this.entries) {
+      entry.input.active = false; entry.reloadUntil = 0; entry.recovery.interrupt();
+      const player = this.state.players.get(id)!; player.reloading = false; player.sprinting = false;
+      this.world.freeze(id);
+    }
+    this.syncMatch();
   }
   private pose(id: string, time: number): CombatPose {
     const p = this.state.players.get(id)!;

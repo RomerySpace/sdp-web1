@@ -17,6 +17,8 @@ import { modeConfig } from '../modes/ModeConfig';
 import '../styles/modes.css';
 import { ENABLE_SHOOTER_TEST } from '../../shared/GameplayConfig';
 import { PlayerSettings } from './PlayerSettings';
+import { SettingsMenu } from '../ui/SettingsMenu';
+import { toggleFullscreen } from '../ui/Fullscreen';
 
 export class App {
   readonly state = new ExperienceStateMachine();
@@ -30,6 +32,7 @@ export class App {
   private readonly inputs: InputSynchronizer;
   private readonly chat: ChatManager;
   private readonly ui: UIManager;
+  private readonly settingsMenu: SettingsMenu;
   readonly modes: GameModeManager;
   private readonly interactionTarget = new Vector3();
   private readonly interactionDirection = new Vector3();
@@ -60,24 +63,24 @@ export class App {
     this.chat = new ChatManager(this.network);
     this.ui = new UIManager(container, {
       enter: (name) => this.enter(name), resume: () => this.resume(), submit: (text) => this.submitChat(text),
-      toggleAudio: () => this.settings.toggleMute(), volume: (value) => this.settings.set('volume', value),
-      fullscreen: () => this.toggleFullscreen(),
       inspect: () => this.limited ? this.inspectSculpture() : this.interact(), closeInspection: () => this.closeInspection(),
-    }, this.limited, this.audio.muted, this.network.displayName);
+      menu: () => this.openSettings(),
+    }, this.limited, this.network.displayName);
+    this.settingsMenu = new SettingsMenu(container, this.settings, () => this.closeSettings());
     this.modes = new GameModeManager(container, this.scene.renderer, this.network, {
       pauseLimbo: () => { this.pause(); this.player.setEnabled(false); },
       suspendCommunication: () => { this.inputs.setEnabled(false); this.voice.release(); this.voiceTransport.setEnabled(false); this.audio.setActive(false); },
       restoreCommunication: () => { this.inputs.setEnabled(true); this.voiceTransport.setEnabled(true); this.audio.setActive(true); },
       restoreLimbo: () => { this.scene.resize(); this.state.set('PAUSED'); this.ui.setState(this.state.value); if (this.limited) this.state.set('EXPLORING'); },
       resetChat: () => { this.chat.reset(); this.ui.chat.reset(); },
+      pauseChat: () => { if (this.state.value === 'CHATTING') this.state.set('PAUSED'); },
       changed: mode => { this.ui.element.inert = mode !== 'LIMBO' && mode !== 'SHOOTER'; if (mode !== 'LIMBO') this.ui.inspection.update(false, false); },
       inspect: () => this.inspectSculpture(),
     }, this.settings);
     container.dataset.mode = 'LIMBO';
     this.unsubscribers.push(
       this.settings.subscribe(state => {
-        this.player.sensitivity = state.sensitivity; this.audio.setVolume(state.volume); this.audio.setMuted(state.muted);
-        this.ui.setMuted(state.muted); this.ui.setVolume(state.volume);
+        this.player.sensitivity = state.sensitivity; this.audio.setVolume(state.musicVolume); this.audio.setMuted(state.muted);
       }),
       this.state.subscribe((state) => {
         this.player.setEnabled(this.modes.value === 'LIMBO' && state === 'EXPLORING' && !this.limited);
@@ -159,7 +162,6 @@ export class App {
       else if (!this.player.locked && this.state.value === 'EXPLORING' && !this.limited) this.state.set('PAUSED');
     }, { signal });
     document.addEventListener('pointerlockerror', this.pointerDenied, { signal });
-    document.addEventListener('fullscreenchange', () => this.ui.setFullscreen(Boolean(document.fullscreenElement)), { signal });
     this.scene.renderer.domElement.addEventListener('click', () => {
       if (this.modes.value !== 'LIMBO') return;
       if (this.state.value === 'INTRO') this.enter();
@@ -177,6 +179,17 @@ export class App {
 
   private readonly keydown = (event: KeyboardEvent): void => {
     if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
+    const typing = event.target instanceof HTMLElement && (event.target.isContentEditable || event.target.closest('input:not([type="range"]):not([type="checkbox"]),textarea'));
+    if (event.code === 'KeyF' && !typing && this.state.value !== 'CHATTING') {
+      event.preventDefault(); if (!event.repeat) toggleFullscreen(() => this.ui.notify('Fullscreen is unavailable in this browser window.')); return;
+    }
+    if (this.settingsMenu.visible) {
+      if (!event.repeat && (event.code === 'KeyP' || event.code === 'Escape')) { event.preventDefault(); this.closeSettings(); }
+      return;
+    }
+    if (event.code === 'KeyP' && !typing && this.modes.value === 'LIMBO' && this.state.value !== 'CHATTING' && this.state.value !== 'ENTERING') {
+      event.preventDefault(); if (!event.repeat) this.openSettings(); return;
+    }
     if (this.state.value === 'CHATTING') {
       if (event.code === 'Escape') { event.preventDefault(); this.closeChat(); }
       return; // Form owns all input, including Enter; movement and voice are disabled.
@@ -253,6 +266,7 @@ export class App {
       this.modes.pause(); return;
     }
     this.voice.release(); this.player.input.clear();
+    if (this.settingsMenu.visible) { this.player.releaseLock(); return; }
     if (['EXPLORING', 'CHATTING', 'INSPECTING'].includes(this.state.value)) this.state.set('PAUSED');
     this.player.releaseLock();
   }
@@ -301,11 +315,16 @@ export class App {
     this.player.requestLock(this.pointerDenied);
   }
 
-  private toggleFullscreen(): void {
-    try {
-      const operation = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
-      void operation.catch(() => this.ui.notify('Fullscreen is unavailable in this browser window.'));
-    } catch { this.ui.notify('Fullscreen is unavailable in this browser window.'); }
+  private openSettings(): void {
+    if (this.modes.value !== 'LIMBO' || this.state.value === 'ENTERING' || this.settingsMenu.visible) return;
+    if (this.state.value === 'EXPLORING' || this.state.value === 'CHATTING') this.pause();
+    this.voice.release(); this.player.input.clear(); this.scene.inspection.controls.enabled = false;
+    this.ui.element.inert = true; this.ui.element.classList.add('is-settings-open'); this.settingsMenu.open(); this.modes.setInspection(false);
+  }
+  private closeSettings(): void {
+    this.settingsMenu.hide(); this.ui.element.inert = false; this.ui.element.classList.remove('is-settings-open');
+    if (this.state.value === 'INSPECTING') { this.scene.inspection.controls.enabled = true; this.modes.setInspection(true); }
+    else if (this.state.value === 'PAUSED') this.resume();
   }
 
   private readonly tick = (now: number): void => {
@@ -330,7 +349,7 @@ export class App {
           this.limited && this.modes.value === 'LIMBO' && this.state.value === 'EXPLORING' ? this.scene.sculpture.loaded : this.canInteract(),
           this.state.value === 'INSPECTING',
         );
-        this.modes.setInspection(this.modes.value === 'LIMBO' && this.state.value === 'INSPECTING');
+        this.modes.setInspection(this.modes.value === 'LIMBO' && this.state.value === 'INSPECTING' && !this.settingsMenu.visible);
         if (this.modes.value === 'LIMBO') this.voiceTransport.update(this.scene.camera);
         this.scene.render(dt, this.elapsed, this.reveal);
       }
@@ -355,7 +374,7 @@ export class App {
     this.modes.dispose(); this.diagnostics?.remove();
     this.inputs.dispose();
     this.voice.dispose(); this.audio.dispose(); this.chat.dispose(); this.network.disconnect();
-    this.player.dispose(); this.scene.dispose(); this.ui.dispose();
+    this.player.dispose(); this.scene.dispose(); this.ui.dispose(); this.settingsMenu.dispose();
     disposeAudioContext();
   }
 }

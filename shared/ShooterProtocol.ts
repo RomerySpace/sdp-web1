@@ -17,6 +17,17 @@ export interface CharacterInput {
 }
 export type HitRegion = 'arm' | 'leg' | 'torso' | 'head' | 'foot';
 export interface KillRecord { id: string; attackerId: string; victimId: string; attackerName: string; victimName: string; region: HitRegion; timestamp: number }
+export interface RoundScore { playerId: string; displayName: string; kills: number; deaths: number; streak: number }
+export interface ShooterMatchSnapshot {
+  phase: 'waiting' | 'playing' | 'results'; round: number; endsAt: number; nextRoundAt: number; results: readonly RoundScore[];
+}
+export function rankRound(scores: readonly RoundScore[]): RoundScore[] {
+  return [...scores].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || a.playerId.localeCompare(b.playerId));
+}
+export function roundWinners(scores: readonly RoundScore[]): RoundScore[] {
+  const ranked = rankRound(scores), first = ranked[0];
+  return first ? ranked.filter(p => p.kills === first.kills && p.deaths === first.deaths) : [];
+}
 export interface WeaponAction { seq: number; life: number; action: 'fire' | 'reload' | 'mode' }
 export interface WeaponEvent extends WeaponAction { playerId: string; roomId: string; timestamp: number }
 export interface CombatEvent { type: 'damage' | 'death' | 'respawn'; roomId: string; playerId: string;

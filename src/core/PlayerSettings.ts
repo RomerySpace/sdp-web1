@@ -1,11 +1,11 @@
-export interface SettingsState { sensitivity: number; volume: number; muted: boolean }
-export const settingsLimits = { sensitivity: { min: .25, max: 2.5, step: .05 }, volume: { min: 0, max: 1, step: .05 } };
+export interface SettingsState { sensitivity: number; volume: number; musicVolume: number; muted: boolean }
+export const settingsLimits = { sensitivity: { min: .25, max: 2.5, step: .05 }, volume: { min: 0, max: 1, step: .05 }, musicVolume: { min: 0, max: 1, step: .05 } };
 export class PlayerSettings {
-  private current: SettingsState = { sensitivity: 1, volume: .5, muted: false };
+  private current: SettingsState = { sensitivity: 1, volume: .5, musicVolume: .5, muted: false };
   private readonly listeners = new Set<(state: Readonly<SettingsState>) => void>();
   constructor() {
     try {
-      for (const key of ['sensitivity', 'volume'] as const) {
+      for (const key of ['sensitivity', 'volume', 'musicVolume'] as const) {
         const raw = localStorage.getItem(`sdp:${key}`), value = raw === null ? NaN : Number(raw), limit = settingsLimits[key];
         if (Number.isFinite(value)) this.current[key] = Math.max(limit.min, Math.min(limit.max, value));
       }
@@ -13,7 +13,7 @@ export class PlayerSettings {
     } catch { /* Preferences are optional in storage-restricted browsers. */ }
   }
   get value(): Readonly<SettingsState> { return this.current; }
-  set(key: 'sensitivity' | 'volume', value: number): void {
+  set(key: 'sensitivity' | 'volume' | 'musicVolume', value: number): void {
     if (!Number.isFinite(value)) return;
     const limit = settingsLimits[key]; this.change(key, Math.max(limit.min, Math.min(limit.max, value)));
   }

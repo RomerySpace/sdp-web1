@@ -4,11 +4,10 @@
 #app[data-mode="SHOOTER"] .ui .inspection-close,
 #app[data-mode="SHOOTER"] .ui .inspect-button,
 #app[data-mode="SHOOTER"] .ui .crosshair,
-#app[data-mode="SHOOTER"] .ui .volume-control,
 #app:not([data-mode="LIMBO"]) .ui .pause-prompt { display: none; }
 #app:not([data-mode="LIMBO"]):not([data-mode="SHOOTER"]) .ui .inspect-button { display: none; }
-.mode-overlay { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; background: rgba(248, 251, 253, .82); }
-.mode-overlay[hidden] { display: none; }
+:is(.mode-overlay, .settings-overlay) { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; background: rgba(248, 251, 253, .82); }
+:is(.mode-overlay, .settings-overlay)[hidden] { display: none; }
 .protocol-content { width: min(360px, calc(100% - 40px)); text-align: center; color: #283039; }
 .protocol-mark { font-size: 32px; font-weight: 500; }
 .protocol-content h1 { font-size: 12px; font-weight: 500; margin: 16px 0 20px; letter-spacing: 0; }
@@ -18,6 +17,21 @@
 .protocol-content .protocol-back { border-color: transparent; background: transparent; }
 .protocol-content button:hover { background: #fff; }
 .protocol-content button:focus-visible { outline: 2px solid #5c7c8c; outline-offset: 3px; }
+.ui.is-settings-open { display: none; }
+.settings-overlay .protocol-content { width: min(352px, calc(100% - 40px)); padding: 6px; max-height: calc(100dvh - 40px); overflow-y: auto; }
+.settings-overlay .session-settings { margin: 28px 0; text-align: left; }
+.session-settings h2 { margin: 0 0 14px; font-size: 10px; font-weight: 500; color: #506674; }
+.session-settings label { display: flex; justify-content: space-between; gap: 8px; margin: 14px 0 5px; font-size: 9px; color: #637986; }
+.session-settings output { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.session-settings input { width: 100%; min-width: 0; min-height: 32px; margin: 0; accent-color: #728995; cursor: pointer; }
+.session-tools { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.protocol-content .session-mute { flex: 0 0 44px; width: 44px; height: 44px; margin: 0; padding: 12px; border: 0; background: transparent; }
+.protocol-content .session-fullscreen { display: flex; align-items: center; justify-content: center; gap: 10px; width: auto; min-width: 0; flex: 1; margin: 0; padding: 10px; border-color: transparent; background: transparent; font-size: 9px; }
+.session-tools svg { flex: 0 0 18px; width: 18px; height: 18px; stroke-width: 1.2; }
+.session-fullscreen kbd { margin-left: auto; font: inherit; color: #758995; }
+.settings-status { font-size: 10px; line-height: 1.5; }
+.settings-close kbd { margin-left: 12px; font: inherit; color: #758995; }
+.settings-overlay:not([hidden]) ~ .mode-diagnostics { display: none; }
 .protocol-content progress { width: 100%; height: 2px; margin: 20px 0; accent-color: #637d89; }
 .mode-haze { position: fixed; inset: 0; z-index: 60; pointer-events: none; background: #f8fbfd; opacity: 0; }
 .mode-diagnostics { position: fixed; left: 12px; top: 68px; z-index: 90; font: 10px/1.7 monospace; white-space: pre; color: #283039; background: rgba(255,255,255,.85); padding: 8px; pointer-events: none; }

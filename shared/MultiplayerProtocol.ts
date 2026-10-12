@@ -57,6 +57,7 @@ export interface LobbySnapshot {
   serverTime?: number;
   shooterEnabled?: boolean;
   killFeed?: readonly KillRecord[];
+  match?: ShooterMatchSnapshot;
 }
 
 export interface ConnectionStatus {
@@ -84,4 +85,4 @@ export function validateMovementInput(value: unknown): MovementInput | null {
     ...('s' in data ? { s: data.s as boolean } : {}),
   };
 }
-import type { KillRecord } from './ShooterProtocol';
+import type { KillRecord, ShooterMatchSnapshot } from './ShooterProtocol';

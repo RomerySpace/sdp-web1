@@ -33,14 +33,15 @@ test('a supplied ambient asset starts only on entry, loops, fades and responds t
   await expect.poll(level).toBeGreaterThan(0.0001);
   await page.evaluate(() => document.exitPointerLock());
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'PAUSED');
-  await page.getByRole('button', { name: 'Mute ambient sound' }).click();
+  await page.keyboard.press('KeyP');
+  await page.getByRole('button', { name: 'Mute audio', exact: true }).click();
   await expect.poll(level).toBeLessThan(0.00001);
-  await page.getByRole('button', { name: 'Unmute ambient sound' }).click();
+  await page.getByRole('button', { name: 'Unmute audio', exact: true }).click();
   await expect.poll(level).toBeGreaterThan(0.0001);
   // Range change goes through the visible HTML control's normal input event.
-  await page.getByRole('slider', { name: 'Ambient volume' }).press('Home');
+  await page.getByRole('slider', { name: 'Music volume' }).press('Home');
   await expect.poll(level).toBeLessThan(0.00001);
-  await page.getByRole('slider', { name: 'Ambient volume' }).press('End');
+  await page.getByRole('slider', { name: 'Music volume' }).press('End');
   await expect.poll(level).toBeGreaterThan(0.0001);
   // The fixture is one second long: playback after this delay verifies looping.
   await page.waitForTimeout(1600);

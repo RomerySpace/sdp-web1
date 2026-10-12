@@ -10,6 +10,7 @@ export type GameMode = 'LIMBO' | 'SHOOTER_LOADING' | 'SHOOTER' | 'RETURNING_TO_L
 interface Hooks {
   pauseLimbo(): void; restoreLimbo(): void; suspendCommunication(): void; restoreCommunication(): void;
   resetChat(): void; changed(mode: GameMode): void; inspect(): void;
+  pauseChat(): void;
 }
 export class GameModeManager {
   value: GameMode = 'LIMBO';
@@ -48,14 +49,17 @@ export class GameModeManager {
       // Inspection never reaches this import; only an explicit join does.
       const { ShooterMode } = await import('./shooter/ShooterMode');
       abort.signal.throwIfAborted();
-      candidate = new ShooterMode(this.container, this.renderer, this.network, () => this.ui.pause(), () => this.ui.hide(), this.settings);
+      candidate = new ShooterMode(this.container, this.renderer, this.network, () => {
+        this.hooks.pauseChat(); this.showShooterMenu();
+      }, () => this.ui.hide(), this.settings);
       await candidate.initialize(text => { if (generation === this.generation) this.ui.loading(text); }, abort.signal);
       abort.signal.throwIfAborted();
       this.ui.loading('Joining Shooter room');
       await this.network.switchRoom(SHOOTER_ROOM);
       abort.signal.throwIfAborted();
       this.hooks.resetChat(); this.shooter = candidate; this.set('SHOOTER');
-      candidate.enter(); this.ui.attachSession(candidate.menu.element); this.ui.pause(true);
+      candidate.enter(); this.ui.attachSession(candidate.menu.element);
+      if (candidate.roundComplete) this.showShooterMenu(); else this.ui.pause(true);
     } catch (error) {
       candidate?.dispose();
       if (generation !== this.generation || this.disposed) return;
@@ -89,7 +93,17 @@ export class GameModeManager {
     const target = this.value === 'SHOOTER_LOADING' || this.value === 'RETURNING_TO_LIMBO' ? 0.86 : 0;
     this.haze += (target - this.haze) * Math.min(1, dt * 5);
     this.ui.setHaze(this.haze);
-    if (this.value === 'SHOOTER') this.shooter?.update(dt);
+    if (this.value === 'SHOOTER') {
+      this.shooter?.update(dt);
+      if (this.shooter?.roundComplete) this.showShooterMenu();
+    }
+  }
+  private showShooterMenu(): void {
+    const snapshot = this.network.snapshot;
+    if (snapshot?.match?.phase === 'results') {
+      const seconds = Math.max(0, Math.ceil((snapshot.match.nextRoundAt - (snapshot.serverTime ?? 0)) / 1000));
+      this.ui.results(`NEXT ROUND IN ${seconds}s`);
+    } else this.ui.pause();
   }
   pause(): void { if (this.value === 'SHOOTER') this.shooter?.pause(); }
   toggleMenu(): void {

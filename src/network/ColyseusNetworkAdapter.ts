@@ -7,7 +7,7 @@ import type { MultiplayerConnection } from './MultiplayerConnection';
 import type { ShooterInput, WeaponAction, WeaponEvent, CombatEvent } from '../../shared/ShooterProtocol';
 import { validateChatText, type RoomChatMessage, type VoiceAccess } from '../../shared/CommunicationProtocol';
 import { validateDisplayName } from '../../shared/PlayerIdentity';
-import type { KillRecord } from '../../shared/ShooterProtocol';
+import type { KillRecord, RoundScore, ShooterMatchSnapshot } from '../../shared/ShooterProtocol';
 
 function serverEndpoint(): string {
   const configured = import.meta.env.VITE_SDP_SERVER_URL;
@@ -28,6 +28,7 @@ interface DecodedLobby {
   tick: number;
   serverTime?: number;
   shooterEnabled?: boolean;
+  match?: ShooterMatchSnapshot['phase']; round?: number; matchEndsAt?: number; nextRoundAt?: number; results?: Iterable<RoundScore>;
 }
 interface LobbyRoomType { state: DecodedLobby; onJoin(client: unknown, options?: { displayName?: string }): void }
 type LobbyRoom = Room<LobbyRoomType, DecodedLobby>;
@@ -170,6 +171,8 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
       roomId: room.roomId, localPlayerId: room.sessionId,
       tick: state.tick, receivedAt: performance.now(), players,
       serverTime: state.serverTime, shooterEnabled: state.shooterEnabled,
+      match: state.match ? { phase: state.match, round: state.round ?? 0, endsAt: state.matchEndsAt ?? 0, nextRoundAt: state.nextRoundAt ?? 0,
+        results: Array.from(state.results ?? [], score => ({ playerId: score.playerId, displayName: score.displayName, kills: score.kills, deaths: score.deaths, streak: score.streak })) } : undefined,
       killFeed: Array.from(state.killFeed ?? [], entry => ({ id: entry.id, attackerId: entry.attackerId, victimId: entry.victimId,
         attackerName: entry.attackerName, victimName: entry.victimName, region: entry.region, timestamp: entry.timestamp })),
     };

@@ -33,6 +33,7 @@ export class ShooterMode {
   health = gameplayConfig.combat.maxHealth; dead = false; life = 0;
   physics?: PhysicsWorld; player?: CharacterController; shooting?: ShootingSystem;
   paused = true; active = false; colliderCount = 0; fixedSteps = 0;
+  roundComplete = false;
   private accumulator = 0; private sequence = 0; private actionSequence = 0; private stepDistance = 0;
   private disposed = false; private readonly events = new AbortController(); private readonly unsubscribers: (() => void)[] = [];
   private suppressPauseMenu = false;
@@ -60,7 +61,7 @@ export class ShooterMode {
     const signal = this.events.signal;
     document.addEventListener('pointerlockchange', () => {
       if (!this.active) return;
-      if (this.input.locked) { this.paused = false; this.suppressPauseMenu = false; this.input.enabled = !this.dead; this.accumulator = 0; this.onResumed(); }
+      if (this.input.locked && !this.roundComplete) { this.paused = false; this.suppressPauseMenu = false; this.input.enabled = !this.dead; this.accumulator = 0; this.onResumed(); }
       else this.pause(this.suppressPauseMenu);
     }, { signal });
     renderer.domElement.addEventListener('click', () => { if (this.active && this.paused) this.resume(); }, { signal });
@@ -69,6 +70,8 @@ export class ShooterMode {
         if (network.roomType !== SHOOTER_ROOM) return;
         this.remotes.receive(snapshot);
         this.hud.receive(snapshot);
+        const finished = snapshot.match?.phase === 'results';
+        if (finished !== this.roundComplete) { this.roundComplete = finished; if (this.active) this.pause(); }
         const local = snapshot.players.find(player => player.playerId === snapshot.localPlayerId);
         if (!local || !this.player) return;
         if (local.life !== this.life) this.spawn(local);
@@ -118,7 +121,7 @@ export class ShooterMode {
     this.accumulator = this.stepDistance = 0;
     this.player?.correct(player); this.input.yaw = player.yaw; this.input.pitch = player.pitch; this.input.clear();
     this.sequence = Math.max(this.sequence, player.lastProcessedInput + 1); this.actionSequence = player.weaponSeq ?? 0;
-    this.input.enabled = this.active && !this.paused && this.input.locked;
+    this.input.enabled = this.active && !this.paused && !this.roundComplete && this.input.locked;
     if (player.dead) this.die();
   }
   private applyHealth(health: number): void {
@@ -138,10 +141,11 @@ export class ShooterMode {
     r.autoClear = false; r.info.autoReset = false;
     this.resize(); this.hud.element.hidden = false;
     const local = this.network.snapshot?.players.find(p => p.playerId === this.network.snapshot?.localPlayerId);
+    this.roundComplete = this.network.snapshot?.match?.phase === 'results';
     if (local) this.spawn(local);
   }
   resume(): void {
-    if (!this.active || this.disposed || this.network.status.state !== 'connected') return;
+    if (!this.active || this.disposed || this.roundComplete || this.network.status.state !== 'connected') return;
     this.audio.enter(); this.audio.setVisible(true);
     this.input.requestLock(this.onPaused);
   }

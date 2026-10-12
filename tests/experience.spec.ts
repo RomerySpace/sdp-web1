@@ -54,16 +54,18 @@ test('HDR, reveal, navigation, chat, pause, audio preference and fullscreen', as
   await expect(page.getByRole('textbox', { name: 'Chat message' })).toBeHidden();
   await page.evaluate(() => document.exitPointerLock());
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'PAUSED');
-  await page.getByRole('button', { name: 'Mute ambient sound' }).click();
-  await expect(page.getByRole('button', { name: 'Unmute ambient sound' })).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('KeyP');
+  await page.getByRole('button', { name: 'Mute audio', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Unmute audio' })).toHaveAttribute('aria-pressed', 'true');
   expect(await page.evaluate(() => localStorage.getItem('sdp:muted'))).toBe('true');
   await page.getByRole('button', { name: 'Enter fullscreen' }).click();
   await expect(page.getByRole('button', { name: 'Exit fullscreen' })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Exit fullscreen' }).click();
-  await page.getByRole('button', { name: 'CLICK TO RESUME' }).click();
+  await page.getByRole('button', { name: 'RETURN P', exact: true }).click();
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Unmute ambient sound' })).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('KeyP');
+  await expect(page.getByRole('button', { name: 'Unmute audio' })).toHaveAttribute('aria-pressed', 'true');
   expect(errors).toEqual([]);
 });
 

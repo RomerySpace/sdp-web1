@@ -40,7 +40,7 @@ export class ModeInterface {
     this.haze.className = 'mode-haze'; this.haze.setAttribute('aria-hidden', 'true');
     container.append(this.haze, this.element, this.testJoin);
   }
-  private show(title: string, text: string, state: 'loading' | 'paused' | 'error'): void {
+  private show(title: string, text: string, state: 'loading' | 'paused' | 'error' | 'results'): void {
     this.title.textContent = title; this.message.textContent = text;
     this.element.hidden = false; this.element.dataset.phase = state;
     this.element.classList.remove('has-session'); if (this.session) this.session.hidden = true;
@@ -56,6 +56,15 @@ export class ModeInterface {
     this.show(ready ? 'SHOOTER PROTOCOL' : 'SESSION', '', 'paused');
     if (this.session && !ready) { this.session.hidden = false; this.element.classList.add('has-session'); }
     this.resume.textContent = ready ? 'ENTER SIMULATION' : 'RESUME'; this.resume.focus();
+  }
+  results(text: string): void {
+    if (!this.element.hidden && this.element.dataset.phase === 'results') {
+      if (this.message.textContent !== text) this.message.textContent = text;
+      return;
+    }
+    this.show('ROUND COMPLETE', text, 'results');
+    if (this.session) { this.session.hidden = false; this.element.classList.add('has-session'); }
+    this.back.focus();
   }
   error(text: string): void { this.show('SIMULATION UNAVAILABLE', text, 'error'); this.join.focus(); }
   hide(): void {

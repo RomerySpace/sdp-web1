@@ -8,10 +8,12 @@ export class ShooterHUD {
   private readonly score: HTMLElement;
   private readonly feed: HTMLElement;
   private readonly fireMode: HTMLElement;
+  private readonly timer: HTMLElement;
   private feedIds = '';
   constructor(container: HTMLElement, onMenu: () => void) {
     this.element.className = 'shooter-hud'; this.element.hidden = true;
     this.element.innerHTML = `<header><span>SDP</span><span>DE_DUST2 / 01</span></header>
+      <div class="shooter-round" aria-label="Round time"></div>
       <div class="shooter-score"><span class="shooter-strike">STRIKE 00</span><span class="shooter-record">0 K / 0 D</span></div>
       <ol class="shooter-kill-feed" aria-label="Eliminations" aria-live="polite"></ol>
       <div class="shooter-crosshair" aria-hidden="true"></div>
@@ -21,10 +23,13 @@ export class ShooterHUD {
     container.append(this.element);
     this.strike = this.element.querySelector('.shooter-strike')!; this.score = this.element.querySelector('.shooter-record')!;
     this.feed = this.element.querySelector('.shooter-kill-feed')!; this.fireMode = this.element.querySelector('.shooter-fire-mode')!;
+    this.timer = this.element.querySelector('.shooter-round')!;
     const menu = this.element.querySelector<HTMLButtonElement>('.shooter-menu-button')!;
     menu.prepend(createElement(ListOrdered)); menu.addEventListener('click', onMenu);
   }
   receive(snapshot: LobbySnapshot): void {
+    const seconds = Math.max(0, Math.ceil(((snapshot.match?.endsAt ?? 0) - (snapshot.serverTime ?? 0)) / 1000));
+    this.timer.textContent = snapshot.match?.phase === 'playing' ? `FFA / ${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}` : '';
     const local = snapshot.players.find(p => p.playerId === snapshot.localPlayerId);
     this.strike.textContent = `STRIKE ${String(local?.streak ?? 0).padStart(2, '0')}`;
     this.score.textContent = `${local?.kills ?? 0} K / ${local?.deaths ?? 0} D`;

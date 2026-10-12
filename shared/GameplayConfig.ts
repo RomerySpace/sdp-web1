@@ -1,6 +1,7 @@
 // Shared by browser and server. Disabling this also rejects direct room joins.
 export const ENABLE_SHOOTER_TEST: boolean = true;
 export const gameplayConfig = {
+  match: { duration: 300, resultsDuration: 8 },
   combat: { maxHealth: 100, damage: 50, fireInterval: .14, range: 220,
     regionDamage: { arm: 25, leg: 25, torso: 50, head: 100, foot: 12 },
     regenerationDelay: 7, regenerationRate: 10, automaticFireInterval: .1,

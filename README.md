@@ -41,10 +41,10 @@ npm run preview
 | E near the pedestal, looking at the sculpture | Inspect directly; the discreet JOIN SHOOTER TEST button loads the simulation |
 | Hold SHIFT in Limbo | Sprint smoothly at 1.5 times walking speed |
 | Drag / mouse wheel during inspection | Rotate the sculpture / zoom within fixed limits |
-| Top-right speaker | Toggle ambience; hover or focus for volume |
-| Top-right fullscreen | Enter or exit fullscreen |
+| P | Open/close settings in Limbo, or the ranking/settings menu in Shooter |
+| F | Toggle fullscreen throughout the experience, except while typing |
 
-Release the cursor with Esc to access settings. Click the resume prompt to return to navigation. Chat disables movement and voice shortcuts. Microphone tracks stop and are unpublished on release, blur, pause, page exit and disposal; delayed permission results are discarded if V is no longer held. Voice is transmitted only to the corresponding LiveKit room, never recorded or played back to its sender. Spatial playback is full at 0-3m, smoothly attenuated at 3-15m, and silent beyond 15m; the listener follows the camera. AMBIENCE controls remain independent.
+Press P to access settings without needing the cursor first. Fullscreen, mute, mouse sensitivity, game volume and music volume are inside the menu; there are no floating sound/fullscreen buttons. Preferences persist between modes and visits. Music volume controls the optional ambient track, currently absent, independently of Shooter effects. These controls do not mute proximity voice. Click the resume prompt to return to navigation after releasing the cursor with Esc. Chat disables movement, fullscreen and voice shortcuts. Microphone tracks stop and are unpublished on release, blur, pause, page exit and disposal; delayed permission results are discarded if V is no longer held. Voice is transmitted only to the corresponding LiveKit room, never recorded or played back to its sender. Spatial playback is full at 0-3m, smoothly attenuated at 3-15m, and silent beyond 15m; the listener follows the camera.
 
 Touch devices and browsers without pointer lock receive a limited viewing mode with the reveal, rotating exhibit and settings. The magnifying-glass button opens inspection in this mode; drag or pinch to rotate and zoom, then close with the X button. Desktop with a mouse is required for exploration. If WebGL 2 is unavailable, the page displays a readable fallback.
 

@@ -24,7 +24,12 @@ defineTypes(KillState, { id: 'string', attackerId: 'string', victimId: 'string',
 export class ShooterState extends Schema {
   killFeed = new ArraySchema<KillState>();
   players = new MapSchema<ShooterPlayer>(); online = 0; capacity = MAX_PLAYERS; tick = 0;
-  match = 'practice';
+  match = 'waiting'; round = 0; matchEndsAt = 0; nextRoundAt = 0; results = new ArraySchema<RoundScoreState>();
   serverTime = 0; shooterEnabled = shooterEnabled;
 }
-defineTypes(ShooterState, { killFeed: [KillState], players: { map: ShooterPlayer }, online: 'uint8', capacity: 'uint8', tick: 'uint32', match: 'string', serverTime: 'float64', shooterEnabled: 'boolean' });
+export class RoundScoreState extends Schema {
+  playerId = ''; displayName = ''; kills = 0; deaths = 0; streak = 0;
+}
+defineTypes(RoundScoreState, { playerId: 'string', displayName: 'string', kills: 'uint32', deaths: 'uint32', streak: 'uint32' });
+defineTypes(ShooterState, { killFeed: [KillState], players: { map: ShooterPlayer }, online: 'uint8', capacity: 'uint8', tick: 'uint32', match: 'string',
+  round: 'uint32', matchEndsAt: 'float64', nextRoundAt: 'float64', results: [RoundScoreState], serverTime: 'float64', shooterEnabled: 'boolean' });

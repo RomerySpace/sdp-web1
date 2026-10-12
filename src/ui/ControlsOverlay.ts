@@ -1,5 +1,6 @@
 import type { VoiceState } from '../audio/VoiceChatManager';
 import type { VoiceConnectionState } from '../audio/LiveKitVoiceTransport';
+import { createElement, Settings2 } from 'lucide';
 
 const voiceLabels: Record<VoiceState, string> = {
   idle: 'MIC NOT AUTHORIZED',
@@ -16,7 +17,7 @@ export class ControlsOverlay {
   private microphone: VoiceState = 'idle';
   private connection: VoiceConnectionState = 'disconnected';
 
-  constructor(container: HTMLElement, limited: boolean) {
+  constructor(container: HTMLElement, limited: boolean, onMenu: () => void) {
     this.element = document.createElement('aside');
     this.element.className = 'controls-overlay';
     this.element.setAttribute('aria-label', 'Exhibition controls');
@@ -24,8 +25,14 @@ export class ControlsOverlay {
       <div class="control-row"><span class="key-group"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Move</span></div>
       <div class="control-row"><kbd class="wide-key">ENTER</kbd><span>Chat</span></div>
       <div class="control-row"><span class="wide-key key-label">HOLD V</span><span>Voice</span><span class="mic-dot" aria-hidden="true"></span></div>
+      <div class="control-row"><kbd class="wide-key">F</kbd><span>Fullscreen</span></div>
       <div class="control-row escape-row"><kbd class="wide-key">ESC</kbd><span>Release cursor</span></div>
     `;
+    const menu = document.createElement('button'); menu.type = 'button'; menu.className = 'control-row menu-row';
+    menu.setAttribute('aria-label', 'Open Limbo settings'); menu.title = 'P: settings menu';
+    menu.innerHTML = '<kbd class="wide-key">P</kbd><span class="menu-label">Menu</span>';
+    menu.querySelector('span')!.prepend(createElement(Settings2)); menu.addEventListener('click', onMenu);
+    this.element.append(menu);
     this.voiceStatus = document.createElement('p');
     this.voiceStatus.className = 'voice-status';
     this.voiceStatus.setAttribute('role', 'status');
