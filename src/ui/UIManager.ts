@@ -88,6 +88,7 @@ export class UIManager {
     this.audioButton.setAttribute('aria-label', muted ? 'Unmute ambient sound' : 'Mute ambient sound');
     this.audioButton.title = muted ? 'Unmute ambience' : 'Mute ambience';
   }
+  setVolume(value: number): void { this.element.querySelector<HTMLInputElement>('input[type="range"]')!.value = String(value); }
 
   setFullscreen(fullscreen: boolean): void {
     this.fullscreenButton.classList.toggle('is-fullscreen', fullscreen);

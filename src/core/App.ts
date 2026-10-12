@@ -16,12 +16,14 @@ import { Vector3 } from 'three';
 import { modeConfig } from '../modes/ModeConfig';
 import '../styles/modes.css';
 import { ENABLE_SHOOTER_TEST } from '../../shared/GameplayConfig';
+import { PlayerSettings } from './PlayerSettings';
 
 export class App {
   readonly state = new ExperienceStateMachine();
   private readonly scene: SceneManager;
   private readonly player: FirstPersonController;
   private readonly audio = new AudioManager();
+  private readonly settings = new PlayerSettings();
   private readonly network = new ColyseusNetworkAdapter();
   private readonly voiceTransport: LiveKitVoiceTransport;
   private readonly voice: VoiceChatManager;
@@ -58,12 +60,7 @@ export class App {
     this.chat = new ChatManager(this.network);
     this.ui = new UIManager(container, {
       enter: (name) => this.enter(name), resume: () => this.resume(), submit: (text) => this.submitChat(text),
-      toggleAudio: () => {
-        const muted = this.audio.toggleMute();
-        const effects = this.modes?.shooter?.audio;
-        if (effects && effects.muted !== muted) effects.toggleMute();
-        return muted;
-      }, volume: (value) => this.audio.setVolume(value),
+      toggleAudio: () => this.settings.toggleMute(), volume: (value) => this.settings.set('volume', value),
       fullscreen: () => this.toggleFullscreen(),
       inspect: () => this.limited ? this.inspectSculpture() : this.interact(), closeInspection: () => this.closeInspection(),
     }, this.limited, this.audio.muted, this.network.displayName);
@@ -75,9 +72,13 @@ export class App {
       resetChat: () => { this.chat.reset(); this.ui.chat.reset(); },
       changed: mode => { this.ui.element.inert = mode !== 'LIMBO' && mode !== 'SHOOTER'; if (mode !== 'LIMBO') this.ui.inspection.update(false, false); },
       inspect: () => this.inspectSculpture(),
-    });
+    }, this.settings);
     container.dataset.mode = 'LIMBO';
     this.unsubscribers.push(
+      this.settings.subscribe(state => {
+        this.player.sensitivity = state.sensitivity; this.audio.setVolume(state.volume); this.audio.setMuted(state.muted);
+        this.ui.setMuted(state.muted); this.ui.setVolume(state.volume);
+      }),
       this.state.subscribe((state) => {
         this.player.setEnabled(this.modes.value === 'LIMBO' && state === 'EXPLORING' && !this.limited);
         if (state !== 'EXPLORING') this.inputs.stop();
@@ -182,7 +183,10 @@ export class App {
     }
     if (this.modes.value === 'SHOOTER') {
       if (event.repeat) return;
-      if (event.code === 'Escape') { event.preventDefault(); this.modes.pause(); }
+      if (event.target instanceof HTMLElement && event.target.closest('input[type="text"],textarea,[contenteditable]')) return;
+      if (event.code === 'KeyP') { event.preventDefault(); this.modes.toggleMenu(); }
+      else if (event.code === 'Escape') { event.preventDefault(); this.modes.pause(); }
+      else if (!this.modes.ui.element.hidden) return;
       else if (event.code === 'Enter' && !(event.target instanceof HTMLElement && event.target.closest('button'))) {
         event.preventDefault(); this.modes.shooter?.pause(true); this.modes.ui.hide(); this.state.set('CHATTING');
       }
@@ -244,7 +248,10 @@ export class App {
   };
 
   private pause(): void {
-    if (this.modes?.value === 'SHOOTER') { this.modes.pause(); return; }
+    if (this.modes?.value === 'SHOOTER') {
+      if (this.state.value === 'CHATTING') this.state.set('PAUSED');
+      this.modes.pause(); return;
+    }
     this.voice.release(); this.player.input.clear();
     if (['EXPLORING', 'CHATTING', 'INSPECTING'].includes(this.state.value)) this.state.set('PAUSED');
     this.player.releaseLock();

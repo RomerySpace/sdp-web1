@@ -5,6 +5,7 @@ import type { ColyseusNetworkAdapter } from '../network/ColyseusNetworkAdapter';
 import type { ShooterMode } from './shooter/ShooterMode';
 import { ModeInterface } from '../ui/ModeInterface';
 import { ENABLE_SHOOTER_TEST } from '../../shared/GameplayConfig';
+import { PlayerSettings } from '../core/PlayerSettings';
 export type GameMode = 'LIMBO' | 'SHOOTER_LOADING' | 'SHOOTER' | 'RETURNING_TO_LIMBO';
 interface Hooks {
   pauseLimbo(): void; restoreLimbo(): void; suspendCommunication(): void; restoreCommunication(): void;
@@ -21,7 +22,7 @@ export class GameModeManager {
   private returning = false;
   private haze = 0;
   constructor(private readonly container: HTMLElement, private readonly renderer: WebGLRenderer,
-    private readonly network: ColyseusNetworkAdapter, private readonly hooks: Hooks) {
+    private readonly network: ColyseusNetworkAdapter, private readonly hooks: Hooks, private readonly settings = new PlayerSettings()) {
     this.ui = new ModeInterface(container, { join: () => void this.joinShooter(), back: () => void this.returnToLimbo(),
       resume: () => this.shooter?.resume() });
   }
@@ -47,14 +48,14 @@ export class GameModeManager {
       // Inspection never reaches this import; only an explicit join does.
       const { ShooterMode } = await import('./shooter/ShooterMode');
       abort.signal.throwIfAborted();
-      candidate = new ShooterMode(this.container, this.renderer, this.network, () => this.ui.pause(), () => this.ui.hide());
+      candidate = new ShooterMode(this.container, this.renderer, this.network, () => this.ui.pause(), () => this.ui.hide(), this.settings);
       await candidate.initialize(text => { if (generation === this.generation) this.ui.loading(text); }, abort.signal);
       abort.signal.throwIfAborted();
       this.ui.loading('Joining Shooter room');
       await this.network.switchRoom(SHOOTER_ROOM);
       abort.signal.throwIfAborted();
       this.hooks.resetChat(); this.shooter = candidate; this.set('SHOOTER');
-      candidate.enter(); this.ui.pause(true);
+      candidate.enter(); this.ui.attachSession(candidate.menu.element); this.ui.pause(true);
     } catch (error) {
       candidate?.dispose();
       if (generation !== this.generation || this.disposed) return;
@@ -71,7 +72,7 @@ export class GameModeManager {
     try {
       this.shooter?.pause();
       if (this.operation) await this.operation;
-      this.shooter?.dispose(); this.shooter = undefined;
+      this.shooter?.dispose(); this.shooter = undefined; this.ui.attachSession();
       this.hooks.resetChat();
       if (this.network.roomType !== LOBBY_NAME || this.network.status.state !== 'connected') await this.network.switchRoom(LOBBY_NAME);
     } catch (error) {
@@ -91,6 +92,11 @@ export class GameModeManager {
     if (this.value === 'SHOOTER') this.shooter?.update(dt);
   }
   pause(): void { if (this.value === 'SHOOTER') this.shooter?.pause(); }
+  toggleMenu(): void {
+    if (this.value !== 'SHOOTER') return;
+    if (this.shooter?.paused && !this.ui.element.hidden && this.network.status.state === 'connected') this.shooter.resume();
+    else this.pause();
+  }
   resize(): void { this.shooter?.resize(); }
   dispose(): void {
     this.disposed = true; ++this.generation; this.abort?.abort(); this.shooter?.dispose(); this.ui.dispose();

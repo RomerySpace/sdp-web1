@@ -1,6 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
 import { enterExhibition } from './entry';
+import { sessionRanking } from '../src/modes/shooter/ui/SessionRanking';
+import type { NetworkPlayer } from '../shared/MultiplayerProtocol';
 import type { GameModeManager } from '../src/modes/GameModeManager';
 import type { ColyseusNetworkAdapter } from '../src/network/ColyseusNetworkAdapter';
 import type { SceneManager } from '../src/scene/SceneManager';
@@ -50,6 +52,65 @@ async function canvasContrast(page: Page): Promise<number> {
     return contrast;
   });
 }
+test('session ranking uses authoritative kills then deaths and excludes disconnected players', () => {
+  const player = (playerId: string, kills: number, deaths: number, connected = true): NetworkPlayer => ({
+    playerId, kills, deaths, connected, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, lastProcessedInput: 0,
+  });
+  const players = [player('c', 3, 5), player('b', 3, 2), player('a', 3, 2), player('d', 4, 8), player('e', 10, 0, false)];
+  expect(sessionRanking(players).map(player => player.playerId)).toEqual(['d', 'a', 'b', 'c']);
+  expect(players[0].playerId).toBe('c');
+});
+test('P opens a live room scoreboard with persistent, functional sensitivity and audio controls', async ({ page }, info) => {
+  await enterLimbo(page); await openProtocol(page); await enterShooter(page);
+  await expect(page.locator('.shooter-menu-button')).toContainText('P');
+  await expect(page.locator('.shooter-fire-hint')).toContainText('B');
+  await page.keyboard.down('KeyW'); await page.waitForTimeout(250); await page.keyboard.press('KeyP'); await page.keyboard.up('KeyW');
+  await expect(page.getByRole('table', { name: 'Room scores' })).toBeVisible();
+  expect(await page.evaluate(() => document.pointerLockElement)).toBeNull();
+  expect(await page.evaluate(() => window.sdpUnified.modes.shooter!.input.enabled)).toBe(false);
+  const steps = await page.evaluate(() => window.sdpUnified.modes.shooter!.fixedSteps);
+  await page.waitForTimeout(200); expect(await page.evaluate(() => window.sdpUnified.modes.shooter!.fixedSteps)).toBe(steps);
+  await expect(page.locator('.session-ranking tbody tr')).toHaveCount(1);
+  await expect(page.locator('.session-ranking tbody tr[data-local="true"] td:nth-child(2)')).toHaveText('SDP Tester');
+  await page.getByRole('slider', { name: 'Mouse sensitivity' }).press('End');
+  expect(await page.evaluate(() => window.sdpUnified.modes.shooter!.input.sensitivity)).toBe(2.5);
+  expect(await page.evaluate(() => localStorage.getItem('sdp:sensitivity'))).toBe('2.5');
+  await page.getByRole('slider', { name: 'Game volume' }).press('Home'); await page.waitForTimeout(300);
+  expect(await page.evaluate(() => (window.sdpUnified.modes.shooter!.audio as unknown as { gain: GainNode }).gain.gain.value)).toBeLessThan(.001);
+  await page.getByRole('slider', { name: 'Game volume' }).press('End');
+  await page.getByRole('button', { name: 'Mute game sound', exact: true }).click(); await page.waitForTimeout(300);
+  expect(await page.evaluate(() => (window.sdpUnified.modes.shooter!.audio as unknown as { gain: GainNode }).gain.gain.value)).toBeLessThan(.001);
+  await page.getByRole('button', { name: 'Unmute game sound', exact: true }).click(); await page.waitForTimeout(300);
+  expect(await page.evaluate(() => (window.sdpUnified.modes.shooter!.audio as unknown as { gain: GainNode }).gain.gain.value)).toBeGreaterThan(.65);
+  await page.screenshot({ path: info.outputPath('session-menu-desktop.png') });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  const controls = await page.getByRole('button', { name: 'RETURN TO LIMBO' }).boundingBox();
+  expect(controls!.y + controls!.height).toBeLessThan(844);
+  await page.screenshot({ path: info.outputPath('session-menu-mobile.png') });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByRole('slider', { name: 'Mouse sensitivity' }).focus();
+  await page.keyboard.press('KeyP'); await expect(page.locator('.mode-overlay')).toBeHidden();
+  await expect.poll(() => page.evaluate(() => window.sdpUnified.modes.shooter!.input.enabled)).toBe(true);
+  expect(await page.evaluate(() => document.activeElement instanceof HTMLInputElement)).toBe(false);
+  const yaw = await page.evaluate(() => window.sdpUnified.modes.shooter!.input.yaw);
+  await page.mouse.move(770, 500); await page.mouse.move(870, 500);
+  const fast = Math.abs(await page.evaluate(() => window.sdpUnified.modes.shooter!.input.yaw) - yaw);
+  expect(fast).toBeGreaterThan(.01);
+  await page.keyboard.press('Enter'); await page.getByRole('textbox', { name: 'Chat message' }).press('p');
+  await expect(page.getByRole('textbox', { name: 'Chat message' })).toHaveValue('p');
+  await expect(page.locator('.mode-overlay')).toBeHidden();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await expect(page.getByRole('textbox', { name: 'Chat message' })).toBeHidden();
+  await expect(page.getByRole('table', { name: 'Room scores' })).toBeVisible();
+  await page.keyboard.press('KeyP'); await expect.poll(() => page.evaluate(() => window.sdpUnified.modes.shooter!.input.enabled)).toBe(true);
+  await page.keyboard.press('KeyP'); await page.getByRole('button', { name: 'RETURN TO LIMBO' }).click();
+  await expect(page.locator('#app')).toHaveAttribute('data-mode', 'LIMBO');
+  expect(await page.evaluate(() => window.sdpUnified.player.sensitivity)).toBe(2.5);
+  await page.reload(); await enterExhibition(page);
+  expect(await page.evaluate(() => window.sdpUnified.player.sensitivity)).toBe(2.5);
+  await expect(page.locator('.volume-control input')).toHaveValue('1');
+});
 test('entry stays white before choosing a name and does not request Shooter resources', async ({ page }, info) => {
   const requests: string[] = []; page.on('request', request => requests.push(request.url()));
   await page.goto('/?debugMode=limbo');
@@ -158,6 +219,12 @@ test('two actual browsers: authoritative hits, crouch, digital death and server 
     await expect(second.locator('.desynchronization-state')).toBeHidden();
     expect(await second.evaluate(() => Math.abs(window.sdpUnified.modes.shooter!.weapon.springs.recoil.velocity))).toBeLessThan(.001);
     await second.screenshot({ path: info.outputPath('server-respawn.png') });
+    await first.bringToFront(); await first.keyboard.press('KeyP');
+    await expect(first.getByRole('table', { name: 'Room scores' })).toBeVisible();
+    await expect(first.locator('.session-ranking tbody tr')).toHaveCount(2);
+    await expect(first.locator('.session-ranking tbody tr').first().locator('td')).toHaveText(['1', 'SDP Tester', '1', '0', '1']);
+    await expect(first.locator('.session-ranking tbody tr').nth(1).locator('td')).toHaveText(['2', 'SDP Tester #2', '0', '1', '0']);
+    await first.screenshot({ path: info.outputPath('ranked-live-session.png') });
     expect(errors).toEqual([]);
   } finally { await a.close(); await b.close(); }
 });

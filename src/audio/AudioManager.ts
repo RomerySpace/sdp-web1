@@ -77,11 +77,14 @@ export class AudioManager {
   }
 
   toggleMute(): boolean {
-    this.muted = !this.muted;
+    this.setMuted(!this.muted);
     try { localStorage.setItem(MUTE_KEY, String(this.muted)); } catch { /* Preference is optional. */ }
-    if (!this.muted && !document.hidden) void this.context?.resume().catch(() => {});
-    this.updateGain();
     return this.muted;
+  }
+  setMuted(muted: boolean): void {
+    this.muted = muted;
+    if (!muted && !document.hidden) void this.context?.resume().catch(() => {});
+    this.updateGain();
   }
 
   setVolume(volume: number): void { this.volume = Math.max(0, Math.min(1, volume)); this.updateGain(); }

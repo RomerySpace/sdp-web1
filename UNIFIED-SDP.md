@@ -50,7 +50,10 @@ SDP_WEB_PORT=5375 PORT=2589 LIVEKIT_PORT=7984 LIVEKIT_RTC_TCP_PORT=7985 LIVEKIT_
 4. Solo aparece JOIN SHOOTER TEST, centrado abajo. Al pulsarlo se carga la simulacion y se cambia de sala. Inspeccionar no descarga mapa, fisica ni codigo exclusivo del Shooter.
 5. ENTER SIMULATION obtiene el control del raton mediante un gesto nuevo, necesario cuando la carga ha agotado la autorizacion del navegador.
 6. En Shooter: WASD, raton, SPACE, SHIFT, CTRL, R, boton izquierdo y boton derecho conservan su comportamiento original. B alterna SEMI-AUTO / AUTO; mantener boton izquierdo en AUTO dispara una rafaga con elevacion progresiva de mira, compensable con el raton.
-7. ESC abre la pausa. RESUME continua; RETURN TO LIMBO vuelve sin recargar la pagina. En Limbo, CLICK TO RESUME recupera el raton.
+7. P abre/cierra el menu de sesion; su indicacion esta siempre visible durante la partida. ESC sigue abriendo la pausa. El mismo menu contiene clasificacion, sensibilidad, volumen, silenciar y RETURN TO LIMBO. RESUME o P recuperan el control; volver a Limbo no recarga la pagina.
+
+La clasificacion muestra puesto, nombre, kills, deaths y STRIKE de los jugadores conectados de la sala actual. Ordena por kills descendentes y deaths ascendentes; los empates restantes son estables por identificador. Los datos vienen del servidor, no son contadores locales inventados. La partida sigue para los demas mientras el menu libera el raton y detiene tus controles.
+La sensibilidad (0.25x-2.50x, valor inicial 1x), volumen y silencio se guardan localmente. La sensibilidad se comparte con Limbo; el volumen controla los efectos del Shooter y la ambientacion de Limbo, sin cambiar el sistema de voz. B / CHANGE junto al modo de disparo indica la tecla para alternar AUTO y SEMI-AUTO.
 
 Un fallo de carga ofrece RETRY o regreso a Limbo. Tambien puede cancelarse durante la carga.
 La inspeccion tactil sigue disponible. El FPS requiere escritorio, raton y pointer lock, como WEB2.

@@ -1,6 +1,7 @@
 import type { CharacterController } from '../physics/CharacterController';
 import type { Weapon } from '../weapon/Weapon';
 import type { LobbySnapshot } from '../../../../shared/MultiplayerProtocol';
+import { createElement, ListOrdered } from 'lucide';
 export class ShooterHUD {
   readonly element = document.createElement('div');
   private readonly strike: HTMLElement;
@@ -8,17 +9,20 @@ export class ShooterHUD {
   private readonly feed: HTMLElement;
   private readonly fireMode: HTMLElement;
   private feedIds = '';
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, onMenu: () => void) {
     this.element.className = 'shooter-hud'; this.element.hidden = true;
     this.element.innerHTML = `<header><span>SDP</span><span>DE_DUST2 / 01</span></header>
       <div class="shooter-score"><span class="shooter-strike">STRIKE 00</span><span class="shooter-record">0 K / 0 D</span></div>
       <ol class="shooter-kill-feed" aria-label="Eliminations" aria-live="polite"></ol>
       <div class="shooter-crosshair" aria-hidden="true"></div>
-      <div class="shooter-movement"></div><div class="shooter-health" aria-label="Health"></div><div class="shooter-ammo" aria-label="Ammunition"><span class="shooter-fire-mode">SDP / SEMI-AUTO</span>
+      <button class="shooter-menu-button" type="button" aria-label="Open session menu" title="P: session menu"><kbd>P</kbd><span>MENU</span></button>
+      <div class="shooter-movement"></div><div class="shooter-health" aria-label="Health"></div><div class="shooter-ammo" aria-label="Ammunition"><div class="shooter-fire-control"><span class="shooter-fire-mode">SDP / SEMI-AUTO</span><span class="shooter-fire-hint" title="B: switch fire mode"><kbd>B</kbd> CHANGE</span></div>
       <strong class="shooter-magazine">30</strong><span class="shooter-reserve">/ 120</span><span class="shooter-action"></span></div>`;
     container.append(this.element);
     this.strike = this.element.querySelector('.shooter-strike')!; this.score = this.element.querySelector('.shooter-record')!;
     this.feed = this.element.querySelector('.shooter-kill-feed')!; this.fireMode = this.element.querySelector('.shooter-fire-mode')!;
+    const menu = this.element.querySelector<HTMLButtonElement>('.shooter-menu-button')!;
+    menu.prepend(createElement(ListOrdered)); menu.addEventListener('click', onMenu);
   }
   receive(snapshot: LobbySnapshot): void {
     const local = snapshot.players.find(p => p.playerId === snapshot.localPlayerId);

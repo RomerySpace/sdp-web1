@@ -4,13 +4,14 @@ export class AudioManager {
   private context?: AudioContext;
   private gain?: GainNode;
   private noise?: AudioBuffer;
+  volume = .5;
   muted = false;
   constructor() { try { this.muted = localStorage.getItem('sdp:muted') === 'true'; } catch { /* Optional preference. */ } }
   enter(): void {
     if (this.context) { void this.context.resume().catch(() => {}); return; }
     try {
       const ctx = this.context = sharedAudioContext();
-      this.gain = ctx.createGain(); this.gain.gain.value = this.muted ? 0 : 0.35; this.gain.connect(ctx.destination);
+      this.gain = ctx.createGain(); this.gain.gain.value = this.muted ? 0 : this.volume * .7; this.gain.connect(ctx.destination);
       this.noise = ctx.createBuffer(1, ctx.sampleRate / 2, ctx.sampleRate);
       const samples = this.noise.getChannelData(0);
       let seed = 419;
@@ -35,10 +36,14 @@ export class AudioManager {
   step(sprinting: boolean): void { this.report(sprinting ? 0.1 : 0.065, 350, 0.065); }
   reload(): void { this.report(0.12, 2200, 0.09); }
   toggleMute(): boolean {
-    this.muted = !this.muted;
+    this.setMuted(!this.muted);
     try { localStorage.setItem('sdp:muted', String(this.muted)); } catch { /* Optional. */ }
-    if (this.context && this.gain) this.gain.gain.setTargetAtTime(this.muted ? 0 : 0.35, this.context.currentTime, 0.05);
     return this.muted;
+  }
+  setMuted(muted: boolean): void { this.muted = muted; this.updateGain(); }
+  setVolume(value: number): void { this.volume = Math.max(0, Math.min(1, value)); this.updateGain(); }
+  private updateGain(): void {
+    if (this.context && this.gain) this.gain.gain.setTargetAtTime(this.muted ? 0 : this.volume * .7, this.context.currentTime, .05);
   }
   setVisible(visible: boolean): void { if (this.context) void (visible ? this.context.resume() : this.context.suspend()).catch(() => {}); }
   dispose(): void { this.gain?.disconnect(); }

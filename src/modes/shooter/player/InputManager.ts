@@ -13,6 +13,7 @@ export class InputManager {
   trigger = false;
   shots = 0;
   enabled = false;
+  sensitivity = 1;
   constructor(readonly canvas: HTMLCanvasElement) {
     const signal = this.events.signal;
     window.addEventListener('keydown', e => {
@@ -25,8 +26,8 @@ export class InputManager {
     window.addEventListener('keyup', e => { this.keys.delete(e.code); if (this.locked && controls.has(e.code)) e.preventDefault(); }, { signal });
     window.addEventListener('mousemove', e => {
       if (!this.enabled || !this.locked) return;
-      const x = MathUtils.clamp(e.movementX, -500, 500) * gameConfig.player.mouseSensitivity;
-      const y = MathUtils.clamp(e.movementY, -500, 500) * gameConfig.player.mouseSensitivity;
+      const x = MathUtils.clamp(e.movementX, -500, 500) * gameConfig.player.mouseSensitivity * this.sensitivity;
+      const y = MathUtils.clamp(e.movementY, -500, 500) * gameConfig.player.mouseSensitivity * this.sensitivity;
       this.yaw -= x; this.pitch = MathUtils.clamp(this.pitch - y, -1.48, 1.48);
       this.lookX += x; this.lookY += y;
     }, { signal });

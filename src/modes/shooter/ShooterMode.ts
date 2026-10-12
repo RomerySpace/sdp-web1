@@ -16,6 +16,8 @@ import { Environment } from './world/Environment';
 import { ContactShading } from './world/ContactShading';
 import { RemoteShooterPlayers } from './network/RemoteShooterPlayers';
 import { ShooterHUD } from './ui/ShooterHUD';
+import { ShooterMenu } from './ui/ShooterMenu';
+import { PlayerSettings } from '../../core/PlayerSettings';
 import { CombatFeedback } from './ui/CombatFeedback';
 import { gameplayConfig } from '../../../shared/GameplayConfig';
 import { PredictionHistory } from './network/PredictionHistory';
@@ -27,6 +29,7 @@ export class ShooterMode {
   readonly environment: Environment; readonly contactShading: ContactShading; readonly hud: ShooterHUD;
   readonly remotes: RemoteShooterPlayers;
   readonly feedback: CombatFeedback;
+  readonly menu: ShooterMenu;
   health = gameplayConfig.combat.maxHealth; dead = false; life = 0;
   physics?: PhysicsWorld; player?: CharacterController; shooting?: ShootingSystem;
   paused = true; active = false; colliderCount = 0; fixedSteps = 0;
@@ -40,7 +43,7 @@ export class ShooterMode {
   private lastInput?: ShooterInput;
   private lastInputSent = 0;
   constructor(container: HTMLElement, private readonly renderer: WebGLRenderer, private readonly network: ColyseusNetworkAdapter,
-    private readonly onPaused: () => void, private readonly onResumed: () => void) {
+    private readonly onPaused: () => void, private readonly onResumed: () => void, settings = new PlayerSettings()) {
     this.previousRenderer = { toneMapping: renderer.toneMapping, exposure: renderer.toneMappingExposure,
       autoClear: renderer.autoClear, autoReset: renderer.info.autoReset, shadowType: renderer.shadowMap.type,
       shadowAutoUpdate: renderer.shadowMap.autoUpdate, pixelRatio: renderer.getPixelRatio() };
@@ -48,7 +51,11 @@ export class ShooterMode {
     this.scene.add(this.camera.root); this.camera.camera.add(this.weapon.root);
     this.environment = new Environment(this.scene, renderer); this.contactShading = new ContactShading(this.scene, this.camera.camera);
     this.scene.traverse(object => { if ('isLight' in object) object.layers.enable(1); });
-    this.remotes = new RemoteShooterPlayers(this.scene, this.weapon.modelRoot); this.hud = new ShooterHUD(container);
+    this.remotes = new RemoteShooterPlayers(this.scene, this.weapon.modelRoot); this.hud = new ShooterHUD(container, () => this.pause());
+    this.menu = new ShooterMenu(settings);
+    this.unsubscribers.push(settings.subscribe(state => {
+      this.input.sensitivity = state.sensitivity; this.audio.setVolume(state.volume); this.audio.setMuted(state.muted);
+    }));
     this.feedback = new CombatFeedback(container);
     const signal = this.events.signal;
     document.addEventListener('pointerlockchange', () => {
@@ -200,7 +207,7 @@ export class ShooterMode {
       this.shooting?.fire();
     }
     this.shooting?.update(activeDt); this.input.lookX = this.input.lookY = 0;
-    this.remotes.update(performance.now()); this.hud.update(p, this.weapon, this.health, this.dead);
+    this.remotes.update(performance.now()); this.hud.update(p, this.weapon, this.health, this.dead); this.menu.update(this.network.snapshot);
     this.feedback.update(dt, this.health, this.dead); this.environment.follow(this.camera.root.position);
     const camera = this.camera.camera, renderer = this.renderer;
     renderer.info.reset(); renderer.clear(); camera.layers.set(0); renderer.render(this.scene, camera); this.contactShading.render(renderer);
@@ -221,7 +228,7 @@ export class ShooterMode {
   dispose(): void {
     if (this.disposed) return;
     this.active = false; this.disposed = true; this.events.abort(); this.unsubscribers.forEach(fn => fn());
-    this.input.dispose(); this.audio.dispose(); this.hud.dispose(); this.feedback.dispose(); this.shooting?.dispose(); this.remotes.dispose();
+    this.input.dispose(); this.audio.dispose(); this.hud.dispose(); this.menu.dispose(); this.feedback.dispose(); this.shooting?.dispose(); this.remotes.dispose();
     this.contactShading.dispose(); this.weapon.dispose(); this.map.dispose(); this.environment.dispose(); this.physics?.dispose(); this.scene.clear();
     const r = this.renderer, previous = this.previousRenderer;
     r.toneMapping = previous.toneMapping; r.toneMappingExposure = previous.exposure; r.autoClear = previous.autoClear;

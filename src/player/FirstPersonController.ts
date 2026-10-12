@@ -14,6 +14,7 @@ export class FirstPersonController {
   private yaw = 0;
   private pitch = 0;
   private active = false;
+  sensitivity = 1;
   private readonly baseFov: number;
 
   constructor(readonly camera: PerspectiveCamera, private readonly canvas: HTMLCanvasElement) {
@@ -24,8 +25,8 @@ export class FirstPersonController {
     this.pitch = camera.rotation.x;
     window.addEventListener('mousemove', (event) => {
       if (!this.active || !this.locked) return;
-      this.yaw -= event.movementX * 0.0017;
-      this.pitch = MathUtils.clamp(this.pitch - event.movementY * 0.0017, -Math.PI / 2 + 0.03, Math.PI / 2 - 0.03);
+      this.yaw -= event.movementX * 0.0017 * this.sensitivity;
+      this.pitch = MathUtils.clamp(this.pitch - event.movementY * 0.0017 * this.sensitivity, -Math.PI / 2 + 0.03, Math.PI / 2 - 0.03);
       camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
     }, { signal: this.events.signal });
   }
