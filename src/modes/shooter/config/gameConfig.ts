@@ -10,8 +10,16 @@ export const gameConfig = {
     eyeHeight: 1.7, crouchEyeHeight: 1.05, radius: 0.3, mass: 75,
     mouseSensitivity: 0.0017, stepHeight: 0.32, maxSlope: 48, groundProbe: 0.065,
     coyoteTime: 0.08, crouchDuration: 0.2, adsSpeedMultiplier: 0.73,
-    // Startup checks full capsule clearance and supporting floor near this seed.
-    spawn: { x: 45, y: 6.53, z: -20, yaw: 0.6 },
+    // Authored street/courtyard seeds, not a ray cast from above the rooftops.
+    spawn: { x: 50, y: 0.1, z: -50, yaw: 0.6 },
+    spawnSearch: { radius: 3, floorTolerance: 0.65, clearance: 0.06 },
+    spawnZones: [
+      { x: 50, y: 0.1, z: -50 }, { x: 50, y: 0.04, z: -40 },
+      { x: 60, y: 0.18, z: -40 }, { x: 10, y: 0.18, z: -40 },
+      { x: 10, y: 0.04, z: -50 }, { x: 10, y: 0.13, z: -10 },
+      { x: 40, y: 0.4, z: 0 }, { x: 40, y: 0, z: 10 },
+      { x: 20, y: 0.02, z: 20 }, { x: 10, y: 0.04, z: 30 },
+    ],
   },
   camera: {
     baseFov: 74, sprintFov: 77, adsFov: 55, bobAmplitude: 0.018, bobFrequency: 1.7,

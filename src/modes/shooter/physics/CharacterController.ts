@@ -148,6 +148,11 @@ export class CharacterController {
     this.current.copy(this.body.translation()); this.previous.copy(this.current);
     this.physics.world.updateSceneQueries();
   }
+  shift(delta: Vector3): void {
+    this.body.setTranslation(this.current.clone().add(delta), true);
+    this.current.add(delta); this.previous.add(delta);
+    this.physics.world.updateSceneQueries();
+  }
   dispose(): void {
     this.physics.world.removeCharacterController(this.motor);
     this.physics.world.removeRigidBody(this.body);
@@ -174,17 +179,19 @@ export class CharacterController {
   }
 }
 
-export function findSpawn(physics: PhysicsWorld, seed = gameConfig.player.spawn): Vector3 {
-  const p = gameConfig.player;
+export function findSpawn(physics: PhysicsWorld, seed: { x: number; y: number; z: number } = gameConfig.player.spawn): Vector3 {
+  const p = gameConfig.player, search = p.spawnSearch;
   const shape = new RAPIER.Capsule(p.height / 2 - p.radius, p.radius + 0.04);
   const offsets: [number, number][] = [[0, 0]];
-  for (let radius = 1; radius <= 18; radius += 1.5) for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 8) offsets.push([Math.cos(angle) * radius, Math.sin(angle) * radius]);
+  for (let radius = .8; radius <= search.radius; radius += .8) for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 8) offsets.push([Math.cos(angle) * radius, Math.sin(angle) * radius]);
   for (const [dx, dz] of offsets) {
     const x = seed.x + dx, z = seed.z + dz;
-    const origin = new Vector3(x, seed.y + 3, z);
-    const hit = physics.ray(origin, new Vector3(0, -1, 0), 12);
+    const origin = new Vector3(x, seed.y + search.floorTolerance, z);
+    const hit = physics.ray(origin, new Vector3(0, -1, 0), search.floorTolerance * 2);
     if (!hit || hit.normal.y < 0.8) continue;
-    const y = origin.y - hit.toi + 0.06;
+    const floor = origin.y - hit.toi;
+    if (Math.abs(floor - seed.y) > search.floorTolerance) continue;
+    const y = floor + search.clearance;
     if (physics.world.intersectionWithShape({ x, y: y + p.height / 2, z }, identityRotation, shape)) continue;
     let supported = true;
     for (const [ox, oz] of [[-0.35, 0], [0.35, 0], [0, -0.35], [0, 0.35]]) {

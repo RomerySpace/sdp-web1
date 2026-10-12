@@ -103,13 +103,17 @@ ModeConfig.ts permite ajustar alcance y direccion de la interaccion.
 
 La conexion Colyseus es una sola por visitante. Al cambiar, se espera la salida de la anterior; callbacks tardios no deben introducir entidades de otra sala.
 Las posiciones de Shooter se calculan en el servidor, no se aceptan posiciones arbitrarias. Municion, cadencia y duracion de recarga se controlan tambien en el servidor.
-El punto seguro de reaparicion tambien se asigna en el servidor y se conserva en el controlador local de cada visitante.
+Los puntos de entrada y reaparicion se eligen en calles/patios definidos en gameConfig.ts, con rango vertical de suelo, soporte completo, espacio de capsula y comprobacion de ocupacion. No se buscan superficies desde encima de las azoteas ni se usa una azotea como alternativa si el suelo esta ocupado.
 Los impactos y animaciones locales siguen siendo inmediatos, pero no deciden salud ni bajas. CombatSimulation usa capsula corporal y esfera de cabeza Rapier, con la altura realmente resuelta por la fisica, incluida la transicion de agachado. El rayo parte del jugador del servidor y usa su orientacion validada; el collider fijo mas cercano del mapa limita el alcance. No se aceptan victimas, origenes, posiciones ni danos enviados por el cliente.
 El historial de objetivos compensa hasta 200 ms. La demora se calcula con sondas RTT emitidas por el servidor y los 70 ms de interpolacion, no con una fecha elegida por el cliente. No rebobina paredes estaticas ni permite golpear vidas anteriores.
 Salud, DEAD, vida, fecha de muerte/reconstruccion y proteccion se sincronizan por estado y eventos de sala. El numero de vida impide que entradas o acciones antiguas afecten a una reaparicion. El servidor retira el cuerpo muerto de la fisica y elige puntos con suelo, espacio de capsula y separacion respecto a jugadores activos.
 DigitalAvatarEffect reutiliza un lote de 48 fragmentos instanciados por avatar y materiales con disolucion por celdas y scanlines. Los recursos se liberan al salir. CombatFeedback genera una textura de borde una sola vez, dejando limpio el centro; el dano activa muelles suaves de camara. No hay sangre, rojo ni ragdolls.
 
-**Limites del prototipo:** no hay replay completo de entradas pendientes ni reconciliacion fina; la correccion de posicion aun limita desviaciones grandes. La compensacion es un rebobinado limitado de objetivos sobre el mapa estatico, no un sistema competitivo completo con validacion historica de puertas moviles. No hay equipos, rondas, anticheat avanzado ni estadisticas persistentes; match sigue siendo practice.
+La correccion local compara la posicion autoritativa con la prediccion historica de esa entrada confirmada, conservando el movimiento posterior. Las correcciones pequenas se absorben visualmente de forma suave; los saltos grandes siguen restableciendo la posicion segura del servidor. Las entradas viajan a 30 Hz, con cambios de control y disparos enviados inmediatamente; la fisica sigue a 60 Hz. Los avatares usan fechas del servidor, un buffer adaptable de 70-140 ms y extrapolacion limitada a 100 ms para interrupciones breves. El Shooter recupera pasos acotados cuando el renderizado baja de 20 FPS. El Limbo conserva su ritmo anterior.
+El montaje del arma remota separa la orientacion importada del giro de apuntado. El canon sigue yaw/pitch y el fogonazo pertenece al mismo soporte. Al reaparecer no se interpola desde la ubicacion de la vida anterior.
+El generador del servidor agrupa la misma geometria en trimeshes por zonas, reduciendo 1.277 colliders a 76 sin alterar los 847.353 triangulos. Ejecutar npm run prepare:shooter y reiniciar el backend tras cambiar este generador; un proceso ya arrancado conserva sus colisiones en memoria.
+
+**Limites del prototipo:** el historial permite correccion con prediccion, pero no replay completo de entradas/fisica pendientes. La compensacion es un rebobinado limitado de objetivos sobre el mapa estatico, no un sistema competitivo completo con validacion historica de puertas moviles. No hay equipos, rondas, anticheat avanzado ni estadisticas persistentes; match sigue siendo practice.
 Las animaciones procedimentales no se transmiten fotograma a fotograma.
 No se han implementado Redis, seleccion regional, matchmaking competitivo ni limite global/cola de 300. No se ha validado capacidad para 300 ni latencia intercontinental de 40-60 ms.
 
@@ -138,6 +142,7 @@ npm run test:shooter-disabled
 ```
 
 La suite unificada comprueba solicitudes reales, renderizado con pixeles/capturas, dos clientes, impactos/DEAD/reaparicion/agachado, sprint, aislamiento, controles, transiciones y audio WebRTC con una senal sintetica. Las pruebas usan puertos separados 5383/2597/7990 para no mezclar visitantes de desarrollo. No equivale a una prueba entre dos ordenadores fisicos ni a una prueba de carga masiva.
+Incluye dos navegadores con 80 ms de retraso en cada direccion y jitter adicional: comprueba que el arma remota apunta correctamente, que los spawns estan en el suelo, que no hay teleports y que la posicion local converge. Los mensajes se copian antes de retrasarlos porque el SDK reutiliza buffers. Los diagnosticos exclusivos de desarrollo muestran FPS real, ping, jitter, buffer y numero de correcciones/teleports.
 
 Para comprobar el build compilado contra el backend aislado que inicia Playwright, abrir otra terminal:
 

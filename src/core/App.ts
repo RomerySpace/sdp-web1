@@ -289,7 +289,8 @@ export class App {
 
   private readonly tick = (now: number): void => {
     if (this.disposed || document.hidden) return;
-    const dt = this.lastTime ? Math.min((now - this.lastTime) / 1000, 0.05) : 0;
+    const frameDt = this.lastTime ? (now - this.lastTime) / 1000 : 0;
+    const dt = Math.min(frameDt, 0.05);
     this.lastTime = now;
     this.elapsed += dt;
     if (this.state.value === 'ENTERING') {
@@ -300,7 +301,8 @@ export class App {
       if (t >= 1) this.state.set(this.limited || this.player.locked ? 'EXPLORING' : 'PAUSED');
     }
     if (!this.contextLost) {
-      this.modes.update(dt);
+      // Shooter catches up bounded fixed steps after a slow render frame.
+      this.modes.update(this.modes.value === 'SHOOTER' ? Math.min(frameDt, .125) : dt);
       if (this.modes.value !== 'SHOOTER' && this.modes.value !== 'RETURNING_TO_LIMBO') {
         if (this.modes.value === 'LIMBO') this.player.update(dt);
         this.ui.inspection.update(
@@ -313,11 +315,12 @@ export class App {
       }
     }
     if (this.diagnostics && dt > 0) {
-      this.fps += (1 / dt - this.fps) * .08;
+      this.fps += (1 / frameDt - this.fps) * .08;
       if (now - this.pingTime > 2000) { this.pingTime = now; void this.network.ping().then(ms => this.latency = ms).catch(() => {}); }
       if (now - this.diagnosticTime > 500) {
         this.diagnosticTime = now;
-        this.diagnostics.textContent = `MODE ${this.modes.value}\nROOM ${this.network.status.roomId || '-'}\nONLINE ${this.network.status.online}/${this.network.status.capacity}\nFPS ${Math.round(this.fps)}\nPING ${Math.round(this.latency)} ms\nPHYSICS ${this.modes.shooter?.snapshot.physicsSteps ?? 'inactive'}\nMODEL CACHE ${assetCount()}\nRENDERERS 1`;
+        const shooter = this.modes.shooter?.snapshot;
+        this.diagnostics.textContent = `MODE ${this.modes.value}\nROOM ${this.network.status.roomId || '-'}\nONLINE ${this.network.status.online}/${this.network.status.capacity}\nFPS ${Math.round(this.fps)}\nPING ${Math.round(this.latency)} ms\nPHYSICS ${shooter?.physicsSteps ?? 'inactive'}\nJITTER ${Math.round(shooter?.network.jitterMs ?? 0)} ms\nBUFFER ${Math.round(shooter?.network.interpolationMs ?? 0)} ms\nCORRECTIONS ${shooter?.network.corrections ?? 0} / TELEPORTS ${shooter?.network.teleports ?? 0}\nMODEL CACHE ${assetCount()}\nRENDERERS 1`;
       }
     }
     this.frame = requestAnimationFrame(this.tick);

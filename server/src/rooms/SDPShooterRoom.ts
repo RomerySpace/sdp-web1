@@ -1,7 +1,7 @@
 import { Room, ServerError, type Client } from '@colyseus/core';
 import { randomUUID } from 'node:crypto';
 import { MAX_PLAYERS } from '../../../shared/MultiplayerProtocol';
-import { SHOOTER_HZ, SHOOTER_PATCH_HZ, validateShooterInput, validateWeaponAction, type ShooterInput } from '../../../shared/ShooterProtocol';
+import { SHOOTER_HZ, SHOOTER_PATCH_HZ, shooterNetworkConfig, validateShooterInput, validateWeaponAction, type ShooterInput } from '../../../shared/ShooterProtocol';
 import type { RoomChatMessage } from '../../../shared/CommunicationProtocol';
 import { ShooterState, ShooterPlayer } from '../state/ShooterState';
 import { ShooterWorld } from '../simulation/ShooterWorld';
@@ -36,7 +36,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
       entry.lastAction = action.seq; player.weaponSeq = action.seq;
       const now = this.clock.elapsedTime, w = gameConfig.weapon;
       if (action.action === 'fire') {
-        if (!entry.input.active || now - entry.received > 250 || player.reloading || player.ammo <= 0 || now - entry.lastShot < w.fireInterval * 1000) return;
+        if (!entry.input.active || now - entry.received > shooterNetworkConfig.inputTimeoutMs || player.reloading || player.ammo <= 0 || now - entry.lastShot < w.fireInterval * 1000) return;
         entry.lastShot = now; player.ammo--;
         player.protectedUntil = Math.min(player.protectedUntil, now);
         const poses = this.poses(now);
@@ -112,7 +112,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
         if (now >= player.respawnAt) this.respawn(id, now);
         continue;
       }
-      if (!player.connected || now - entry.received > 250) { entry.input.active = false; this.world.input(id, entry.input); }
+      if (!player.connected || now - entry.received > shooterNetworkConfig.inputTimeoutMs) { entry.input.active = false; this.world.input(id, entry.input); }
       if (player.reloading && now >= entry.reloadUntil) {
         const transfer = Math.min(gameConfig.weapon.magazineSize - player.ammo, player.reserve);
         player.ammo += transfer; player.reserve -= transfer; player.reloading = false;

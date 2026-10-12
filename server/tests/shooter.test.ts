@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateShooterInput, validateWeaponAction } from '../../shared/ShooterProtocol';
 import { ShooterWorld } from '../src/simulation/ShooterWorld';
+import { PhysicsWorld, RAPIER } from '../../src/modes/shooter/physics/PhysicsWorld';
+import { findSpawn } from '../../src/modes/shooter/physics/CharacterController';
+import { gameConfig } from '../../src/modes/shooter/config/gameConfig';
 const input = { seq: 1, life: 1, f: 1, r: 0, y: 0, p: 0, s: false, c: false, j: false, a: false, active: true };
 test('Shooter accepts bounded inputs, never arbitrary positions or hit reports', () => {
   assert.deepEqual(validateShooterInput(input), input);
@@ -11,6 +14,37 @@ test('Shooter accepts bounded inputs, never arbitrary positions or hit reports',
   assert.equal(validateShooterInput({ ...input, j: 'true' }), null);
   assert.deepEqual(validateWeaponAction({ seq: 1, life: 1, action: 'fire' }), { seq: 1, life: 1, action: 'fire' });
   assert.equal(validateWeaponAction({ seq: 1, life: 1, action: 'fire', hit: 'other-player' }), null);
+});
+test('ground search stays below roofs and refuses unsupported floors', async () => {
+  const physics = await PhysicsWorld.initialize(), seed = gameConfig.player.spawn;
+  try {
+    physics.world.createCollider(RAPIER.ColliderDesc.cuboid(8, .1, 8).setTranslation(seed.x, -.1, seed.z));
+    physics.world.createCollider(RAPIER.ColliderDesc.cuboid(8, .1, 8).setTranslation(seed.x, 6, seed.z));
+    physics.world.updateSceneQueries();
+    const spawn = findSpawn(physics);
+    assert.ok(spawn.y < .1, `Unexpected rooftop spawn: ${spawn.y}`);
+    assert.throws(() => findSpawn(physics, { ...seed, x: 1000 }), /No safe floor/);
+  } finally { physics.dispose(); }
+});
+test('all 25 initial spawns and repeated respawns stay on separated ground-level map floors', async () => {
+  const world = await ShooterWorld.create();
+  try {
+    for (let i = 0; i < 25; i++) {
+      const p = world.add(String(i), i);
+      assert.ok(p.spawn.y > -.1 && p.spawn.y < 1, `Initial spawn ${i}: ${p.spawn.toArray()}`);
+      for (let j = 0; j < i; j++) assert.ok(p.spawn.distanceTo(world.player(String(j))!.spawn) > .7);
+    }
+    for (let i = 0; i < 60; i++) world.step(() => false);
+    for (let i = 0; i < 25; i++) {
+      world.freeze(String(i));
+      const p = world.respawn(String(i));
+      assert.ok(p.spawn.y > -.1 && p.spawn.y < 1, `Respawn ${i}: ${p.spawn.toArray()}`);
+      for (let j = 0; j < 25; j++) if (i !== j) assert.ok(Math.hypot(p.spawn.x - world.player(String(j))!.current.x,
+        p.spawn.z - world.player(String(j))!.current.z) > .7);
+      for (let tick = 0; tick < 20; tick++) world.step(() => false);
+      assert.equal(p.grounded, true);
+    }
+  } finally { world.dispose(); }
 });
 test('authoritative physics settles on actual Dust 2 geometry and assigns separated spawns', async () => {
   const world = await ShooterWorld.create();

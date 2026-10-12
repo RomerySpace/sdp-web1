@@ -1,6 +1,6 @@
 import { ACESFilmicToneMapping, PCFSoftShadowMap, Scene, Vector3, type WebGLRenderer } from 'three';
 import type { ColyseusNetworkAdapter } from '../../network/ColyseusNetworkAdapter';
-import { SHOOTER_ROOM } from '../../../shared/ShooterProtocol';
+import { SHOOTER_ROOM, shooterNetworkConfig, type ShooterInput } from '../../../shared/ShooterProtocol';
 import type { NetworkPlayer } from '../../../shared/MultiplayerProtocol';
 import { gameConfig } from './config/gameConfig';
 import { AudioManager } from './audio/AudioManager';
@@ -18,6 +18,7 @@ import { RemoteShooterPlayers } from './network/RemoteShooterPlayers';
 import { ShooterHUD } from './ui/ShooterHUD';
 import { CombatFeedback } from './ui/CombatFeedback';
 import { gameplayConfig } from '../../../shared/GameplayConfig';
+import { PredictionHistory } from './network/PredictionHistory';
 import './styles/shooter.css';
 
 export class ShooterMode {
@@ -34,6 +35,10 @@ export class ShooterMode {
   private suppressPauseMenu = false;
   private readonly previousRenderer;
   private readonly currentFeet = new Vector3();
+  private readonly viewCorrection = new Vector3();
+  private readonly prediction = new PredictionHistory();
+  private lastInput?: ShooterInput;
+  private lastInputSent = 0;
   constructor(container: HTMLElement, private readonly renderer: WebGLRenderer, private readonly network: ColyseusNetworkAdapter,
     private readonly onPaused: () => void, private readonly onResumed: () => void) {
     this.previousRenderer = { toneMapping: renderer.toneMapping, exposure: renderer.toneMappingExposure,
@@ -61,8 +66,14 @@ export class ShooterMode {
         if (local.life !== this.life) this.spawn(local);
         this.applyHealth(local.health ?? this.health);
         if (local.dead) this.die();
-        this.currentFeet.copy(this.player.current); this.currentFeet.y -= this.player.height / 2;
-        if (this.currentFeet.distanceTo(new Vector3(local.x, local.y, local.z)) > 1.5) this.player.correct(local);
+        const delta = this.prediction.reconcile(local);
+        if (delta && !this.dead) {
+          if (delta.length() > shooterNetworkConfig.teleportDistance) {
+            this.player.correct(local); this.player.stopHorizontal(); this.viewCorrection.set(0, 0, 0); this.prediction.reset(this.life);
+          } else {
+            this.player.shift(delta); this.viewCorrection.sub(delta);
+          }
+        }
         if ((local.weaponSeq ?? 0) >= this.actionSequence) {
           this.weapon.ammo = local.ammo ?? this.weapon.ammo; this.weapon.reserve = local.reserve ?? this.weapon.reserve;
           if (!local.reloading) { this.weapon.reloading = false; this.weapon.reloadElapsed = 0; }
@@ -94,6 +105,7 @@ export class ShooterMode {
     this.player?.spawn.set(player.spawnX ?? player.x, player.spawnY ?? player.y, player.spawnZ ?? player.z);
     this.player?.respawn(); this.camera.reset(); this.weapon.reset(player.ammo, player.reserve); this.feedback.reset();
     this.health = player.health ?? gameplayConfig.combat.maxHealth; this.life = player.life ?? 1; this.dead = false;
+    this.prediction.reset(this.life); this.viewCorrection.set(0, 0, 0); this.lastInput = undefined; this.lastInputSent = 0;
     this.accumulator = this.stepDistance = 0;
     this.player?.correct(player); this.input.yaw = player.yaw; this.input.pitch = player.pitch; this.input.clear();
     this.sequence = Math.max(this.sequence, player.lastProcessedInput + 1); this.actionSequence = player.weaponSeq ?? 0;
@@ -128,14 +140,26 @@ export class ShooterMode {
     if (!this.active) return;
     this.suppressPauseMenu = hideMenu;
     this.paused = true; this.input.enabled = false; this.input.clear(); this.accumulator = 0;
-    this.player?.stopHorizontal(); this.sendInput(false);
+    this.player?.stopHorizontal(); this.sendInput(false, true);
     if (this.input.locked) document.exitPointerLock(); if (!hideMenu) this.onPaused();
   }
-  private sendInput(active: boolean): void {
-    this.network.sendShooterInput({ seq: ++this.sequence, life: this.life, f: active ? this.input.forward : 0, r: active ? this.input.sideways : 0,
+  private sendInput(active: boolean, force = false): number | undefined {
+    const now = performance.now(), input: ShooterInput = { seq: this.sequence + 1, life: this.life, f: active ? this.input.forward : 0, r: active ? this.input.sideways : 0,
       y: Math.atan2(Math.sin(this.input.yaw), Math.cos(this.input.yaw)), p: this.input.pitch,
       s: active && this.input.keys.has('ShiftLeft'), c: active && (this.input.keys.has('ControlLeft') || this.input.keys.has('ControlRight')),
-      j: active && this.input.pending('Space'), a: active && this.input.aiming, active });
+      j: active && this.input.pending('Space'), a: active && this.input.aiming, active };
+    const previous = this.lastInput;
+    const changed = !previous || ['f', 'r', 's', 'c', 'j', 'a', 'active'].some(key => input[key as keyof ShooterInput] !== previous[key as keyof ShooterInput]);
+    if (!force && !changed && now - this.lastInputSent < 1000 / shooterNetworkConfig.inputHz) return;
+    this.sequence = input.seq; this.lastInput = input; this.lastInputSent = now;
+    this.network.sendShooterInput(input);
+    this.recordPrediction(input.seq);
+    return input.seq;
+  }
+  private recordPrediction(sequence: number): void {
+    if (!this.player) return;
+    this.currentFeet.copy(this.player.current); this.currentFeet.y -= this.player.height / 2;
+    this.prediction.record(sequence, this.currentFeet);
   }
   update(dt: number): void {
     if (!this.active || this.disposed || !this.player || !this.physics) return;
@@ -143,7 +167,9 @@ export class ShooterMode {
     if (!this.paused && !this.dead) {
       this.accumulator = Math.min(this.accumulator + dt, gameConfig.physics.timestep * gameConfig.physics.maxSubsteps);
       while (this.accumulator >= gameConfig.physics.timestep) {
-        this.sendInput(true); p.beforeStep(gameConfig.physics.timestep, this.weapon.reloading); this.physics.step(); p.afterStep(); this.fixedSteps++;
+        const sent = this.sendInput(true);
+        p.beforeStep(gameConfig.physics.timestep, this.weapon.reloading); this.physics.step(); p.afterStep(); this.fixedSteps++;
+        if (sent !== undefined) this.recordPrediction(sent);
         if (p.tookOff) this.weapon.onJump();
         if (p.landingSpeed > 0) { this.camera.onLanding(p.landingSpeed); this.weapon.onLanding(p.landingSpeed); }
         if (p.grounded) {
@@ -159,11 +185,13 @@ export class ShooterMode {
     }
     this.weapon.update(activeDt, p, this.input);
     this.camera.update(this.dead ? dt : activeDt, p, this.paused || this.dead ? 1 : this.accumulator / gameConfig.physics.timestep, this.weapon.ads);
+    this.viewCorrection.multiplyScalar(Math.exp(-shooterNetworkConfig.correctionResponse * dt));
+    this.camera.root.position.add(this.viewCorrection); this.camera.root.updateMatrixWorld(true);
     const clicks = this.input.shots; this.input.shots = 0;
     if (!this.paused && !this.dead && (clicks > 0 || gameConfig.weapon.automatic && this.input.trigger)) {
       const before = this.shooting?.shotsFired; this.shooting?.fire();
       if (this.shooting?.shotsFired !== before) {
-        this.sendInput(true);
+        this.sendInput(true, true);
         this.network.sendWeaponAction({ seq: ++this.actionSequence, life: this.life, action: 'fire' });
       }
     }
@@ -183,7 +211,9 @@ export class ShooterMode {
     grounded: this.player?.grounded, movement: this.player?.state, colliders: this.colliderCount, map: this.map.stats,
     ammo: this.weapon.ammo, reserve: this.weapon.reserve, shots: this.shooting?.shotsFired, reloading: this.weapon.reloading,
     health: this.health, dead: this.dead, life: this.life,
-    weaponLoaded: this.weapon.loaded, remotePlayers: this.remotes.count }; }
+    weaponLoaded: this.weapon.loaded, remotePlayers: this.remotes.count,
+    network: { corrections: this.prediction.corrections, teleports: this.prediction.teleports,
+      jitterMs: this.remotes.clock.jitterMs, interpolationMs: this.remotes.clock.interpolationMs, maxSnapshotGapMs: this.remotes.clock.maxGapMs } }; }
   dispose(): void {
     if (this.disposed) return;
     this.active = false; this.disposed = true; this.events.abort(); this.unsubscribers.forEach(fn => fn());

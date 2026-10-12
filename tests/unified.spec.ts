@@ -11,6 +11,7 @@ declare global { interface Window {
   retiredShooter?: ShooterMode;
   audioContexts: number;
   createdAudioContexts: AudioContext[];
+  shooterMotionSamples: { time: number; x: number; y: number; z: number }[];
 } }
 const shooterRequest = (url: string): boolean => /\/shooter\/|\/modes\/shooter\/|ShooterMode-|shooter-physics-|rapier3d/.test(url);
 async function enterLimbo(page: Page): Promise<void> {
@@ -83,6 +84,7 @@ test('two actual browsers: authoritative hits, crouch, digital death and server 
     expect(Math.hypot(stillDead.x - dead.x, stillDead.z - dead.z)).toBeLessThan(.01);
     await expect.poll(async () => (await targetState()).life, { timeout: 7000 }).toBe(dead.life! + 1);
     const revived = await targetState();
+    expect(revived.spawnY).toBeLessThan(1); expect(dead.spawnY).toBeLessThan(1);
     expect(revived.bornAt! - dead.diedAt!).toBeGreaterThanOrEqual(3000); expect(revived.bornAt! - dead.diedAt!).toBeLessThan(3250);
     expect(revived.health).toBe(100); expect(revived.ammo).toBe(30); expect(revived.dead).toBe(false);
     expect(revived.protectedUntil!).toBeGreaterThan(revived.bornAt!);
@@ -93,6 +95,92 @@ test('two actual browsers: authoritative hits, crouch, digital death and server 
     await expect(second.locator('.desynchronization-state')).toBeHidden();
     expect(await second.evaluate(() => Math.abs(window.sdpUnified.modes.shooter!.weapon.springs.recoil.velocity))).toBeLessThan(.001);
     await second.screenshot({ path: info.outputPath('server-respawn.png') });
+    expect(errors).toEqual([]);
+  } finally { await a.close(); await b.close(); }
+});
+test('two browsers: ground spawns, correctly aimed remote weapon and stable movement with 160ms RTT plus jitter', async ({ browser }, info) => {
+  const a = await browser.newContext(), b = await browser.newContext(), first = await a.newPage(), second = await b.newPage();
+  const errors: string[] = [];
+  for (const page of [first, second]) page.on('pageerror', error => errors.push(error.message));
+  await first.addInitScript(() => {
+    // Delay real Colyseus WS delivery while preserving native protocol validation.
+    window.WebSocket = new Proxy(window.WebSocket, { construct(target, args) {
+      const socket = Reflect.construct(target, args) as WebSocket;
+      if (!String(args[0]).includes('/multiplayer/')) return socket;
+      const send = socket.send.bind(socket); let outgoing = 0, incoming = 0;
+      socket.send = data => {
+        const payload = data instanceof ArrayBuffer ? data.slice(0) : ArrayBuffer.isView(data)
+          ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength).slice() : data;
+        outgoing = Math.max(outgoing, performance.now() + 80);
+        setTimeout(() => { if (socket.readyState === WebSocket.OPEN) send(payload); }, outgoing - performance.now());
+      };
+      socket.addEventListener('message', event => {
+        event.stopImmediatePropagation();
+        const now = performance.now(), jitter = now % 1800 < 140 ? 140 : 0;
+        incoming = Math.max(incoming, now + 80 + jitter);
+        setTimeout(() => { if (socket.readyState === WebSocket.OPEN) socket.onmessage?.call(socket, event); }, incoming - now);
+      });
+      return socket;
+    } });
+  });
+  try {
+    await enterLimbo(first); await openProtocol(first); await enterShooter(first);
+    await enterLimbo(second); await openProtocol(second); await enterShooter(second);
+    await first.bringToFront(); if (await first.getByRole('button', { name: 'RESUME', exact: true }).isVisible()) await first.getByRole('button', { name: 'RESUME', exact: true }).click();
+    expect(await first.evaluate(() => window.sdpUnified.modes.shooter!.player!.spawn.y)).toBeLessThan(1);
+    await first.evaluate(() => { const input = window.sdpUnified.modes.shooter!.input; input.yaw = .7; input.pitch = .35; });
+    await expect.poll(() => second.evaluate(() => {
+      const game = window.sdpUnified.modes.shooter!, remote = game.remotes.group.children[0];
+      if (!remote) return 0;
+      remote.updateMatrixWorld(true);
+      const model = remote.getObjectByName('remote-weapon-model')!, mount = remote.getObjectByName('remote-weapon-mount')!;
+      const forward = game.camera.aimDirection.clone().set(0, 0, 1).transformDirection(model.matrixWorld);
+      const expected = game.camera.aimDirection.clone().set(0, 0, -1).transformDirection(mount.matrixWorld);
+      return forward.dot(expected);
+    })).toBeGreaterThan(.999);
+    await second.evaluate(() => {
+      const app = window.sdpUnified, game = app.modes.shooter!, state = app.network.snapshot!;
+      const own = state.players.find(p => p.playerId === state.localPlayerId)!, other = state.players.find(p => p.playerId !== state.localPlayerId)!;
+      game.input.yaw = Math.atan2(-(other.x - own.x), -(other.z - own.z));
+      game.input.pitch = Math.atan2(other.y + 1.15 - (own.y + 1.7), Math.hypot(other.x - own.x, other.z - own.z));
+    });
+    await second.waitForTimeout(150);
+    await second.screenshot({ path: info.outputPath('ground-spawn-remote-weapon.png') });
+    expect(await first.evaluate(() => window.sdpUnified.network.ping())).toBeGreaterThanOrEqual(150);
+    await first.evaluate(() => {
+      const game = window.sdpUnified.modes.shooter!; game.input.yaw = 0; game.input.pitch = 0;
+      window.shooterMotionSamples = [];
+      const start = performance.now();
+      const sample = (now: number) => {
+        const p = game.camera.root.position;
+        window.shooterMotionSamples.push({ time: now, x: p.x, y: p.y, z: p.z });
+        if (now - start < 5000) requestAnimationFrame(sample);
+      }; requestAnimationFrame(sample);
+    });
+    const remoteBefore = await second.evaluate(() => window.sdpUnified.modes.shooter!.remotes.group.children[0].position.toArray());
+    await first.keyboard.down('ShiftLeft'); await first.keyboard.down('KeyW'); await first.waitForTimeout(3000);
+    await first.keyboard.up('KeyW'); await first.keyboard.up('ShiftLeft'); await first.waitForTimeout(2200);
+    const data = await first.evaluate(() => {
+      const app = window.sdpUnified, game = app.modes.shooter!, snapshot = app.network.snapshot!, local = snapshot.players.find(p => p.playerId === snapshot.localPlayerId)!;
+      return { samples: window.shooterMotionSamples, network: game.snapshot.network, status: app.network.status.state,
+        finalPositionError: Math.hypot(game.player!.current.x - local.x, game.player!.current.z - local.z) };
+    });
+    const excess = data.samples.slice(1).map((sample, index) => {
+      const before = data.samples[index], dt = (sample.time - before.time) / 1000;
+      return Math.hypot(sample.x - before.x, sample.z - before.z) - 6.6 * Math.min(dt, .125);
+    });
+    expect(data.samples.length).toBeGreaterThan(30); expect(data.status).toBe('connected');
+    expect(data.finalPositionError).toBeLessThan(.8);
+    expect(data.network.teleports).toBe(0); expect(Math.max(...excess)).toBeLessThan(.4);
+    expect(data.network.maxSnapshotGapMs).toBeGreaterThan(90);
+    expect(data.network.interpolationMs).toBeGreaterThan(70);
+    const moved = await second.evaluate(before => {
+      const p = window.sdpUnified.modes.shooter!.remotes.group.children[0].position;
+      return Math.hypot(p.x - before[0], p.z - before[2]);
+    }, remoteBefore);
+    expect(moved).toBeGreaterThan(1);
+    await info.attach('simulated-network-results', { body: JSON.stringify({ ...data, samples: data.samples.length,
+      maximumCameraDiscontinuity: Math.max(...excess), remoteMovement: moved }, null, 2), contentType: 'application/json' });
     expect(errors).toEqual([]);
   } finally { await a.close(); await b.close(); }
 });

@@ -37,17 +37,20 @@ export class ShooterWorld {
       for (const g of data.colliders) physics.world.createCollider(RAPIER.ColliderDesc.trimesh(Float32Array.from(g.vertices), Uint32Array.from(g.indices)).setFriction(0).setRestitution(0));
       physics.world.updateSceneQueries();
       const world = new ShooterWorld(physics);
-      for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
-        const seed = { ...gameConfig.player.spawn, x: gameConfig.player.spawn.x + Math.cos(angle) * 24, z: gameConfig.player.spawn.z + Math.sin(angle) * 24 };
-        try { const spawn = findSpawn(physics, seed); if (!world.spawns.some(p => p.distanceTo(spawn) < 3)) world.spawns.push(spawn); } catch { /* Unsupported map areas are not spawn points. */ }
+      for (const zone of gameConfig.player.spawnZones) {
+        for (const [dx, dz] of [[0, 0], [1.4, 0], [-1.4, 0], [0, 1.4], [0, -1.4]]) {
+          try {
+            const spawn = findSpawn(physics, { x: zone.x + dx, y: zone.y, z: zone.z + dz });
+            if (!world.spawns.some(p => p.distanceTo(spawn) < 1)) world.spawns.push(spawn);
+          } catch { /* Reject unsupported or obstructed street positions. */ }
+        }
       }
-      world.spawns.push(findSpawn(physics));
+      if (!world.spawns.length) throw new Error('No ground-level Shooter spawn is available.');
       return world;
     } catch (error) { physics.dispose(); throw error; }
   }
   add(id: string, slot: number): CharacterController {
-    const seed = { ...gameConfig.player.spawn, x: gameConfig.player.spawn.x + slot % 5 * 1.4, z: gameConfig.player.spawn.z + Math.floor(slot / 5) * 1.4 };
-    const spawn = findSpawn(this.physics, seed);
+    const spawn = this.chooseSpawn(slot, false);
     const input = new ServerInput();
     const player = new CharacterController(this.physics, input, spawn);
     this.entries.set(id, { input, player });
@@ -71,16 +74,24 @@ export class ShooterWorld {
     this.physics.world.updateSceneQueries();
   }
   respawn(id: string): CharacterController {
+    const spawn = this.chooseSpawn(this.spawnSequence++, true);
     this.remove(id);
+    const input = new ServerInput(), player = new CharacterController(this.physics, input, spawn);
+    this.entries.set(id, { input, player }); return player;
+  }
+  private chooseSpawn(slot: number, preferDistance: boolean): Vector3 {
     const p = gameConfig.player, shape = new RAPIER.Capsule(p.height / 2 - p.radius, p.radius + .04);
     const others = [...this.entries.values()].filter(e => e.player.body.isEnabled()).map(e => e.player.current);
     const candidates = this.spawns.filter(point => !this.physics.world.intersectionWithShape(
       { x: point.x, y: point.y + p.height / 2, z: point.z }, { x: 0, y: 0, z: 0, w: 1 }, shape, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS));
-    const score = (point: Vector3) => others.length ? Math.min(...others.map(other => Math.hypot(point.x - other.x, point.z - other.z))) : 0;
-    candidates.sort((a, b) => score(b) - score(a));
-    const spawn = candidates.length ? candidates[others.length ? 0 : this.spawnSequence++ % candidates.length].clone() : findSpawn(this.physics);
-    const input = new ServerInput(), player = new CharacterController(this.physics, input, spawn);
-    this.entries.set(id, { input, player }); return player;
+    if (!candidates.length) throw new Error('All ground-level Shooter spawns are occupied.');
+    if (preferDistance && others.length) {
+      const score = (point: Vector3) => Math.min(...others.map(other => Math.hypot(point.x - other.x, point.z - other.z)));
+      candidates.sort((a, b) => score(b) - score(a));
+      return candidates[0].clone();
+    }
+    const preferred = this.spawns[slot % this.spawns.length];
+    return (candidates.includes(preferred) ? preferred : candidates[0]).clone();
   }
   player(id: string): CharacterController | undefined { return this.entries.get(id)?.player; }
   remove(id: string): void { this.entries.get(id)?.player.dispose(); this.entries.delete(id); }

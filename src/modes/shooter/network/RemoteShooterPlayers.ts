@@ -1,12 +1,12 @@
-import { BoxGeometry, CapsuleGeometry, SphereGeometry, Group, Mesh, MeshStandardMaterial, MathUtils, type Scene } from 'three';
+import { BoxGeometry, CapsuleGeometry, SphereGeometry, Group, Mesh, MeshStandardMaterial, MathUtils, Vector3, type Scene } from 'three';
 import type { LobbySnapshot, NetworkPlayer } from '../../../../shared/MultiplayerProtocol';
 import type { WeaponEvent } from '../../../../shared/ShooterProtocol';
 import { gameplayConfig } from '../../../../shared/GameplayConfig';
 import { gameConfig } from '../config/gameConfig';
 import { DigitalAvatarEffect } from '../effects/DigitalAvatarEffect';
-interface Sample { time: number; x: number; y: number; z: number; yaw: number; pitch: number; height: number }
+import { MotionBuffer, SnapshotClock } from './SnapshotInterpolation';
 interface Remote { group: Group; torso: Mesh; head: Mesh; legs: Mesh[]; arms: Mesh[]; weapon: Group; effect: DigitalAvatarEffect;
-  reloadStarted: number; reloading: boolean; flash: Mesh; flashUntil: number; state: NetworkPlayer; samples: Sample[]; height: number }
+  reloadStarted: number; reloading: boolean; flash: Mesh; flashUntil: number; state: NetworkPlayer; motion: MotionBuffer; height: number }
 export class RemoteShooterPlayers {
   readonly group = new Group();
   private readonly remotes = new Map<string, Remote>();
@@ -17,11 +17,20 @@ export class RemoteShooterPlayers {
   private readonly flashGeometry = new BoxGeometry(.04, .04, .08);
   private readonly material = new MeshStandardMaterial({ color: '#7d8c92', roughness: .8 });
   private readonly flashMaterial = new MeshStandardMaterial({ color: '#fff5df', emissive: '#fff5df', emissiveIntensity: 2 });
-  private serverOffset = 0; private lastTime = 0;
+  readonly clock = new SnapshotClock();
+  private lastTime = 0; private lastTick = -1;
+  private readonly shoulder = new Vector3();
+  private readonly hand = new Vector3();
+  private readonly armDirection = new Vector3();
+  private readonly limbAxis = new Vector3(0, 1, 0);
   constructor(scene: Scene, private readonly weapon: Group) { scene.add(this.group); }
   get count(): number { return this.remotes.size; }
   receive(snapshot: LobbySnapshot): void {
-    if (snapshot.serverTime !== undefined) this.serverOffset = snapshot.serverTime - snapshot.receivedAt;
+    if (!snapshot.roomId) { this.lastTick = -1; this.clock.reset(); }
+    if (snapshot.tick <= this.lastTick && snapshot.players.length) return;
+    this.lastTick = snapshot.tick;
+    const serverTime = snapshot.serverTime ?? snapshot.receivedAt;
+    this.clock.receive(serverTime, snapshot.receivedAt);
     const present = new Set<string>();
     for (const p of snapshot.players) {
       if (!p.connected || p.playerId === snapshot.localPlayerId) continue;
@@ -30,9 +39,15 @@ export class RemoteShooterPlayers {
         const group = new Group(), effect = new DigitalAvatarEffect(group), material = effect.material(this.material);
         const torso = new Mesh(this.torso, material), head = new Mesh(this.head, material);
         const legs = [new Mesh(this.limb, material), new Mesh(this.limb, material)], arms = [new Mesh(this.limb, material), new Mesh(this.limb, material)];
+        arms[0].name = 'remote-left-arm'; arms[1].name = 'remote-right-arm';
         group.add(torso, head, ...legs, ...arms);
-        for (const x of [-.14, .14]) { const foot = new Mesh(this.foot, material); foot.position.set(x, .05, .04); group.add(foot); }
-        const gun = this.weapon.clone(true); gun.position.set(.25, 1.25, -.25);
+        for (const x of [-.14, .14]) { const foot = new Mesh(this.foot, material); foot.position.set(x, .05, -.04); group.add(foot); }
+        // Aim rotates the mount; the model's muzzle conversion stays on its child.
+        const gun = new Group(), model = this.weapon.clone(true), rotation = gameConfig.weapon.modelRotation;
+        gun.name = 'remote-weapon-mount'; model.name = 'remote-weapon-model';
+        model.rotation.set(rotation.x, rotation.y, rotation.z);
+        model.scale.setScalar(gameConfig.weapon.scale);
+        gun.add(model); gun.position.set(.22, 1.25, -.25);
         const weaponMaterials = new Map<MeshStandardMaterial, MeshStandardMaterial>();
         gun.traverse(object => {
           object.layers.set(0);
@@ -42,17 +57,17 @@ export class RemoteShooterPlayers {
             object.material = weaponMaterials.get(base)!;
           }
         }); group.add(gun);
-        const flash = new Mesh(this.flashGeometry, this.flashMaterial); flash.position.set(.25, 1.25, -.64); flash.visible = false; group.add(flash);
+        const flash = new Mesh(this.flashGeometry, this.flashMaterial); flash.position.set(0, 0, -gameConfig.weapon.length / 2); flash.visible = false; gun.add(flash);
         group.position.set(p.x, p.y, p.z); group.rotation.y = p.yaw;
-        remote = { group, torso, head, legs, arms, weapon: gun, effect, reloadStarted: 0, reloading: false, flash, flashUntil: 0, samples: [], height: p.height ?? 1.8, state: p };
+        remote = { group, torso, head, legs, arms, weapon: gun, effect, reloadStarted: 0, reloading: false, flash, flashUntil: 0, motion: new MotionBuffer(), height: p.height ?? 1.8, state: p };
         this.remotes.set(p.playerId, remote); this.group.add(group);
       }
-      if (p.life !== remote.state.life) remote.samples.length = 0;
+      if (p.life !== remote.state.life) { remote.motion.clear(); remote.group.position.set(p.x, p.y, p.z); }
+      if (p.dead && !remote.state.dead) remote.motion.clear();
       remote.state = p;
       if (p.reloading && !remote.reloading) remote.reloadStarted = performance.now();
       remote.reloading = !!p.reloading;
-      remote.samples.push({ time: snapshot.receivedAt, x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch, height: p.height ?? 1.8 });
-      if (remote.samples.length > 12) remote.samples.shift();
+      remote.motion.push({ time: serverTime, x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch, height: p.height ?? 1.8 });
     }
     for (const [id, remote] of this.remotes) if (!present.has(id)) { this.remove(remote); this.remotes.delete(id); }
   }
@@ -62,27 +77,35 @@ export class RemoteShooterPlayers {
   }
   update(now: number): void {
     const dt = this.lastTime ? Math.min(.05, (now - this.lastTime) / 1000) : .016; this.lastTime = now;
-    const time = now - gameplayConfig.combat.interpolationDelay * 1000, serverTime = now + this.serverOffset;
+    const time = this.clock.renderTime(now), serverTime = this.clock.serverNow(now);
     for (const remote of this.remotes.values()) {
-      const samples = remote.samples; if (!samples.length) continue;
-      let before = samples[0], after = samples[samples.length - 1];
-      for (let i = 1; i < samples.length; i++) { if (samples[i].time >= time) { before = samples[i - 1]; after = samples[i]; break; } before = samples[i]; }
-      const t = after.time > before.time ? Math.max(0, Math.min(1, (time - before.time) / (after.time - before.time))) : 1;
-      remote.group.position.set(before.x + (after.x - before.x) * t, before.y + (after.y - before.y) * t, before.z + (after.z - before.z) * t);
-      remote.group.rotation.y = before.yaw + Math.atan2(Math.sin(after.yaw - before.yaw), Math.cos(after.yaw - before.yaw)) * t;
-      remote.height = MathUtils.damp(remote.height, before.height + (after.height - before.height) * t, 22, dt);
+      const pose = remote.motion.sample(time); if (!pose) continue;
+      const response = 1 - Math.exp(-40 * dt);
+      remote.group.position.x += (pose.x - remote.group.position.x) * response;
+      remote.group.position.y += (pose.y - remote.group.position.y) * response;
+      remote.group.position.z += (pose.z - remote.group.position.z) * response;
+      remote.group.rotation.y = pose.yaw;
+      remote.height = MathUtils.damp(remote.height, pose.height, 22, dt);
       const crouch = MathUtils.clamp((1.8 - remote.height) / (1.8 - 1.16), 0, 1);
       remote.head.position.y = remote.height - .19;
       remote.torso.position.y = 1.14 - crouch * .56; remote.torso.scale.y = 1 - crouch * .12;
       for (let i = 0; i < 2; i++) {
-        const leg = remote.legs[i]; leg.position.set(i ? .14 : -.14, .35 - crouch * .05, crouch * .09);
+        const leg = remote.legs[i]; leg.position.set(i ? .14 : -.14, .35 - crouch * .05, -crouch * .09);
         leg.scale.y = 1 - crouch * .15; leg.rotation.x = -crouch * .7;
-        const arm = remote.arms[i]; arm.position.set(i ? .29 : -.29, 1.06 - crouch * .55, -.07); arm.scale.y = .8; arm.rotation.x = -.35;
       }
       const reload = remote.reloading ? Math.sin(Math.min(1, (now - remote.reloadStarted) / (gameConfig.weapon.reloadDuration * 1000)) * Math.PI) : 0;
-      remote.weapon.rotation.x = before.pitch + (after.pitch - before.pitch) * t;
+      remote.weapon.rotation.x = pose.pitch;
       remote.weapon.rotation.z = reload * .35; remote.weapon.position.y = 1.25 - crouch * .58 - reload * .14;
-      remote.flash.position.y = remote.weapon.position.y; remote.flash.visible = !remote.state.dead && now < remote.flashUntil;
+      for (let i = 0; i < 2; i++) {
+        this.shoulder.set(i ? .29 : -.29, 1.4 - crouch * .56, 0);
+        this.hand.set(0, i ? -.08 : -.03, i ? .12 : -.13).applyEuler(remote.weapon.rotation).add(remote.weapon.position);
+        this.armDirection.subVectors(this.hand, this.shoulder);
+        const arm = remote.arms[i]; arm.position.copy(this.shoulder).add(this.hand).multiplyScalar(.5);
+        arm.scale.y = this.armDirection.length() / .7;
+        arm.quaternion.setFromUnitVectors(this.limbAxis, this.armDirection.normalize());
+      }
+      remote.head.rotation.x = pose.pitch;
+      remote.flash.visible = !remote.state.dead && now < remote.flashUntil;
       const death = MathUtils.clamp((serverTime - (remote.state.diedAt ?? serverTime)) / (gameplayConfig.death.duration * 1000), 0, 1);
       const reconstruction = MathUtils.clamp((serverTime - (remote.state.bornAt ?? 0)) / (gameplayConfig.death.reconstructionDuration * 1000), 0, 1);
       remote.group.visible = !remote.state.dead || death < 1;

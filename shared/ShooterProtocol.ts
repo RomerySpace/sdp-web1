@@ -1,6 +1,12 @@
 export const SHOOTER_ROOM = 'SDPShooterRoom';
 export const SHOOTER_HZ = 60;
 export const SHOOTER_PATCH_HZ = 30;
+export const shooterNetworkConfig = {
+  inputHz: 30, inputTimeoutMs: 400,
+  interpolationMs: 70, maxInterpolationMs: 140, extrapolationMs: 100,
+  historySize: 120, correctionTolerance: .12, teleportDistance: 3,
+  correctionResponse: 14,
+};
 export interface ShooterInput {
   seq: number; life: number; f: number; r: number; y: number; p: number;
   s: boolean; c: boolean; j: boolean; a: boolean; active: boolean;
