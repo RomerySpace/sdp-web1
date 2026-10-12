@@ -1,4 +1,5 @@
-import { Room, type Client } from '@colyseus/core';
+import { Room, ServerError, type Client } from '@colyseus/core';
+import { roomDisplayName, validateDisplayName } from '../../../shared/PlayerIdentity';
 import { randomUUID } from 'node:crypto';
 import { validVoiceRequest, type RoomChatMessage } from '../../../shared/CommunicationProtocol';
 import { ChatPolicy } from '../communication/ChatPolicy';
@@ -12,6 +13,10 @@ interface VisitorInput { value: MovementInput; receivedAt: number; slot: number 
 const INPUT_TIMEOUT_MS = 250;
 
 export class SDPLobby extends Room<{ state: LobbyState }> {
+  static async onAuth(_token: string, options: { displayName?: unknown } = {}): Promise<boolean> {
+    if (options.displayName !== undefined && !validateDisplayName(options.displayName)) throw new ServerError(400, 'Invalid display name.');
+    return true;
+  }
   state = new LobbyState();
   maxClients = MAX_PLAYERS;
   maxMessagesPerSecond = 60;
@@ -67,12 +72,14 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
     }, 1000 / SIMULATION_HZ);
   }
 
-  onJoin(client: Client): void {
+  onJoin(client: Client, options: { displayName?: unknown } = {}): void {
+    if (options.displayName !== undefined && !validateDisplayName(options.displayName)) throw new ServerError(400, 'Invalid display name.');
     const occupied = new Set(Array.from(this.inputs.values(), (entry) => entry.slot));
     let slot = 0;
     while (occupied.has(slot)) slot++;
     const spawn = spawnPosition(slot);
     const player = new VisitorState();
+    player.displayName = roomDisplayName(options.displayName, [...this.state.players.values()].map(p => p.displayName), `VISITOR ${String(slot + 1).padStart(2, '0')}`);
     Object.assign(player, spawn);
     this.state.players.set(client.sessionId, player);
     this.state.online++;
@@ -124,7 +131,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
     this.state.tick = (this.state.tick + 1) >>> 0;
   }
 
-  private visitorName(id: string): string { return `VISITOR ${String((this.inputs.get(id)?.slot ?? 0) + 1).padStart(2, '0')}`; }
+  private visitorName(id: string): string { return this.state.players.get(id)?.displayName ?? 'VISITOR'; }
 
   async onDispose(): Promise<void> {
     this.inputs.clear(); this.simulation.clear(); this.chat.clear(); this.voiceRequests.clear();

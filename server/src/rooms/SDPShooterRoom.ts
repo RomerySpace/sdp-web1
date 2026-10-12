@@ -3,16 +3,24 @@ import { randomUUID } from 'node:crypto';
 import { MAX_PLAYERS } from '../../../shared/MultiplayerProtocol';
 import { SHOOTER_HZ, SHOOTER_PATCH_HZ, shooterNetworkConfig, validateShooterInput, validateWeaponAction, type ShooterInput } from '../../../shared/ShooterProtocol';
 import type { RoomChatMessage } from '../../../shared/CommunicationProtocol';
-import { ShooterState, ShooterPlayer } from '../state/ShooterState';
+import { ShooterState, ShooterPlayer, KillState } from '../state/ShooterState';
 import { ShooterWorld } from '../simulation/ShooterWorld';
 import { ChatPolicy } from '../communication/ChatPolicy';
 import { gameConfig } from '../../../src/modes/shooter/config/gameConfig';
 import { gameplayConfig } from '../../../shared/GameplayConfig';
 import { shooterEnabled } from '../config/GameplayConfig';
-import { CombatSimulation, type CombatPose } from '../simulation/CombatSimulation';
+import { CombatSimulation, type CombatPose, type PlayerHit } from '../simulation/CombatSimulation';
+import { HealthRecovery } from '../simulation/HealthRecovery';
+import { roomDisplayName, validateDisplayName } from '../../../shared/PlayerIdentity';
+import { shotRecoil } from '../../../shared/WeaponRecoil';
 interface Entry { input: ShooterInput; received: number; slot: number; lastAction: number; lastShot: number; reloadUntil: number;
-  probe: string; probeAt: number; rtt: number }
+  probe: string; probeAt: number; rtt: number; recovery: HealthRecovery; burstShots: number }
 export class SDPShooterRoom extends Room<{ state: ShooterState }> {
+  static async onAuth(_token: string, options: { displayName?: unknown } = {}): Promise<boolean> {
+    if (!shooterEnabled) throw new ServerError(403, 'Shooter test is disabled.');
+    if (options.displayName !== undefined && !validateDisplayName(options.displayName)) throw new ServerError(400, 'Invalid display name.');
+    return true;
+  }
   state = new ShooterState(); maxClients = MAX_PLAYERS; maxMessagesPerSecond = 100;
   private world!: ShooterWorld;
   private readonly entries = new Map<string, Entry>();
@@ -36,12 +44,22 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
       entry.lastAction = action.seq; player.weaponSeq = action.seq;
       const now = this.clock.elapsedTime, w = gameConfig.weapon;
       if (action.action === 'fire') {
-        if (!entry.input.active || now - entry.received > shooterNetworkConfig.inputTimeoutMs || player.reloading || player.ammo <= 0 || now - entry.lastShot < w.fireInterval * 1000) return;
+        const interval = player.automatic ? gameplayConfig.combat.automaticFireInterval : w.fireInterval;
+        if (!entry.input.active || now - entry.received > shooterNetworkConfig.inputTimeoutMs || player.reloading || player.ammo <= 0 || now - entry.lastShot < interval * 1000) return;
+        const burst = now - entry.lastShot > gameplayConfig.combat.recoilReset * 1000 ? 0 : entry.burstShots;
+        entry.burstShots = burst + 1;
         entry.lastShot = now; player.ammo--;
         player.protectedUntil = Math.min(player.protectedUntil, now);
         const poses = this.poses(now);
         const hit = this.combat.fire(this.world, this.pose(client.sessionId, now), entry.input.y, entry.input.p, now, entry.rtt, poses);
         if (hit) this.damage(hit, client.sessionId, now);
+        const recoil = shotRecoil(burst, player.automatic, entry.input.a);
+        entry.input.p = Math.min(1.48, entry.input.p + recoil.pitch);
+        entry.input.y = Math.atan2(Math.sin(entry.input.y + recoil.yaw), Math.cos(entry.input.y + recoil.yaw));
+        this.world.input(client.sessionId, entry.input);
+      } else if (action.action === 'mode') {
+        if (player.reloading) return;
+        player.automatic = !player.automatic; entry.burstShots = 0;
       } else {
         if (player.reloading || player.ammo >= w.magazineSize || player.reserve <= 0) return;
         player.reloading = true; entry.reloadUntil = now + w.reloadDuration * 1000;
@@ -67,7 +85,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
       const message = this.chat.accept(client.sessionId, raw, this.clock.elapsedTime);
       if (!message) { client.send('chat:error', 'Message is empty, too long, or sent too quickly.'); return; }
       const data: RoomChatMessage = { messageId: randomUUID(), senderId: client.sessionId,
-        senderName: `PLAYER ${String((this.entries.get(client.sessionId)?.slot ?? 0) + 1).padStart(2, '0')}`,
+        senderName: player.displayName,
         message, timestamp: Date.now(), roomId: this.roomId, position: { x: player.x, y: player.y, z: player.z } };
       this.broadcast('chat:message', data);
     });
@@ -80,16 +98,18 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
       while (this.accumulator >= 1000 / SHOOTER_HZ) { this.step(); this.accumulator -= 1000 / SHOOTER_HZ; }
     }, 1000 / SHOOTER_HZ);
   }
-  onJoin(client: Client): void {
+  onJoin(client: Client, options: { displayName?: unknown } = {}): void {
     if (!shooterEnabled) throw new ServerError(403, 'Shooter test is disabled.');
+    if (options.displayName !== undefined && !validateDisplayName(options.displayName)) throw new ServerError(400, 'Invalid display name.');
     const used = new Set([...this.entries.values()].map(entry => entry.slot)); let slot = 0; while (used.has(slot)) slot++;
     const character = this.world.add(client.sessionId, slot);
     const player = new ShooterPlayer();
+    player.displayName = roomDisplayName(options.displayName, [...this.state.players.values()].map(p => p.displayName), `PLAYER ${String(slot + 1).padStart(2, '0')}`);
     Object.assign(player, character.spawn, { yaw: gameConfig.player.spawn.yaw,
       spawnX: character.spawn.x, spawnY: character.spawn.y, spawnZ: character.spawn.z });
     player.bornAt = this.clock.elapsedTime; player.protectedUntil = player.bornAt + gameplayConfig.combat.spawnProtection * 1000;
     this.state.players.set(client.sessionId, player); this.state.online++;
-    this.entries.set(client.sessionId, { slot, received: this.clock.elapsedTime, lastAction: -1, lastShot: -1000, reloadUntil: 0, probe: '', probeAt: 0, rtt: 0,
+    this.entries.set(client.sessionId, { slot, received: this.clock.elapsedTime, lastAction: -1, lastShot: -1000, reloadUntil: 0, probe: '', probeAt: 0, rtt: 0, recovery: new HealthRecovery(), burstShots: 0,
       input: { seq: -1, life: player.life, f: 0, r: 0, y: player.yaw, p: 0, s: false, c: false, j: false, a: false, active: false } });
     this.combat.record(this.poses(this.clock.elapsedTime));
   }
@@ -117,6 +137,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
         const transfer = Math.min(gameConfig.weapon.magazineSize - player.ammo, player.reserve);
         player.ammo += transfer; player.reserve -= transfer; player.reloading = false;
       }
+      entry.recovery.step(player, now, 1 / SHOOTER_HZ);
     }
     this.world.step(id => this.state.players.get(id)!.reloading);
     for (const [id, entry] of this.entries) {
@@ -129,22 +150,35 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     }
     this.state.tick = (this.state.tick + 1) >>> 0;
     this.state.serverTime = now;
+    while (this.state.killFeed.length && now - this.state.killFeed[0].timestamp > gameplayConfig.combat.killFeedDuration * 1000) this.state.killFeed.shift();
     this.combat.record(this.poses(now));
   }
   private pose(id: string, time: number): CombatPose {
     const p = this.state.players.get(id)!;
-    return { id, time, life: p.life, x: p.x, y: p.y, z: p.z, height: p.height, dead: p.dead, connected: p.connected, protectedUntil: p.protectedUntil };
+    const entry = this.entries.get(id)!;
+    const reload = p.reloading ? Math.sin(Math.max(0, 1 - (entry.reloadUntil - time) / (gameConfig.weapon.reloadDuration * 1000)) * Math.PI) : 0;
+    return { id, time, life: p.life, x: p.x, y: p.y, z: p.z, height: p.height, yaw: p.yaw, pitch: p.pitch, reload,
+      dead: p.dead, connected: p.connected, protectedUntil: p.protectedUntil };
   }
   private poses(time: number): CombatPose[] { return [...this.state.players.keys()].map(id => this.pose(id, time)); }
-  private damage(id: string, attackerId: string, now: number): void {
+  private damage(hit: PlayerHit, attackerId: string, now: number): void {
+    const id = hit.playerId;
     const player = this.state.players.get(id)!;
     if (player.dead || !player.connected || now < player.protectedUntil) return;
-    const damage = Math.min(player.health, gameplayConfig.combat.damage);
+    const damage = Math.min(player.health, gameplayConfig.combat.regionDamage[hit.region]);
     player.health -= damage;
-    this.broadcast('combat:event', { type: 'damage', playerId: id, attackerId, health: player.health, damage, life: player.life, roomId: this.roomId, timestamp: now });
+    player.lastDamageAt = now; this.entries.get(id)!.recovery.interrupt();
+    this.broadcast('combat:event', { type: 'damage', playerId: id, attackerId, health: player.health, damage, region: hit.region, life: player.life, roomId: this.roomId, timestamp: now });
     if (!player.health) {
       player.dead = true; player.diedAt = now; player.respawnAt = now + gameplayConfig.combat.respawnDelay * 1000;
       player.reloading = false; player.sprinting = false;
+      player.deaths++; player.streak = 0;
+      const attacker = this.state.players.get(attackerId)!; attacker.kills++; attacker.streak++;
+      const record = new KillState();
+      Object.assign(record, { id: randomUUID(), attackerId, victimId: id, attackerName: attacker.displayName,
+        victimName: player.displayName, region: hit.region, timestamp: now });
+      this.state.killFeed.push(record);
+      while (this.state.killFeed.length > gameplayConfig.combat.killFeedLimit) this.state.killFeed.shift();
       const entry = this.entries.get(id)!; entry.input.active = false; entry.reloadUntil = 0;
       this.world.freeze(id);
       this.broadcast('combat:event', { type: 'death', playerId: id, attackerId, health: 0, life: player.life, roomId: this.roomId, timestamp: now });
@@ -159,10 +193,10 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
       spawnX: body.spawn.x, spawnY: body.spawn.y, spawnZ: body.spawn.z, yaw: gameConfig.player.spawn.yaw, pitch: 0,
       dead: false, life: p.life + 1, diedAt: 0, respawnAt: 0, bornAt: now,
       protectedUntil: now + gameplayConfig.combat.spawnProtection * 1000,
-      health: gameplayConfig.combat.maxHealth, ammo: gameConfig.weapon.magazineSize, reserve: gameConfig.weapon.reserveAmmo,
+      health: gameplayConfig.combat.maxHealth, lastDamageAt: now, ammo: gameConfig.weapon.magazineSize, reserve: gameConfig.weapon.reserveAmmo,
       reloading: false, crouching: false, sprinting: false, grounded: false, height: gameConfig.player.height });
     entry.input = { ...entry.input, life: p.life, f: 0, r: 0, s: false, c: false, j: false, a: false, active: false, y: p.yaw, p: 0 };
-    entry.received = now; entry.lastShot = -1000; entry.reloadUntil = 0;
+    entry.received = now; entry.lastShot = -1000; entry.reloadUntil = 0; entry.burstShots = 0; entry.recovery.interrupt();
     this.broadcast('combat:event', { type: 'respawn', playerId: id, health: p.health, life: p.life, roomId: this.roomId, timestamp: now });
   }
   onDispose(): void { this.world?.dispose(); this.entries.clear(); this.chat.clear(); this.combat.clear(); }

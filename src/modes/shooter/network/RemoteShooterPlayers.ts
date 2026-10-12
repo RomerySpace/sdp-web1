@@ -1,4 +1,5 @@
-import { BoxGeometry, CapsuleGeometry, SphereGeometry, Group, Mesh, MeshStandardMaterial, MathUtils, Vector3, type Scene } from 'three';
+import { BoxGeometry, CapsuleGeometry, SphereGeometry, Group, Mesh, MeshStandardMaterial, MathUtils, type Scene } from 'three';
+import { AvatarLayout } from '../../../../shared/AvatarLayout';
 import type { LobbySnapshot, NetworkPlayer } from '../../../../shared/MultiplayerProtocol';
 import type { WeaponEvent } from '../../../../shared/ShooterProtocol';
 import { gameplayConfig } from '../../../../shared/GameplayConfig';
@@ -6,7 +7,7 @@ import { gameConfig } from '../config/gameConfig';
 import { DigitalAvatarEffect } from '../effects/DigitalAvatarEffect';
 import { MotionBuffer, SnapshotClock } from './SnapshotInterpolation';
 interface Remote { group: Group; torso: Mesh; head: Mesh; legs: Mesh[]; arms: Mesh[]; weapon: Group; effect: DigitalAvatarEffect;
-  reloadStarted: number; reloading: boolean; flash: Mesh; flashUntil: number; state: NetworkPlayer; motion: MotionBuffer; height: number }
+  reloadStarted: number; reloading: boolean; flash: Mesh; flashUntil: number; state: NetworkPlayer; motion: MotionBuffer; height: number; layout: AvatarLayout }
 export class RemoteShooterPlayers {
   readonly group = new Group();
   private readonly remotes = new Map<string, Remote>();
@@ -19,10 +20,6 @@ export class RemoteShooterPlayers {
   private readonly flashMaterial = new MeshStandardMaterial({ color: '#fff5df', emissive: '#fff5df', emissiveIntensity: 2 });
   readonly clock = new SnapshotClock();
   private lastTime = 0; private lastTick = -1;
-  private readonly shoulder = new Vector3();
-  private readonly hand = new Vector3();
-  private readonly armDirection = new Vector3();
-  private readonly limbAxis = new Vector3(0, 1, 0);
   constructor(scene: Scene, private readonly weapon: Group) { scene.add(this.group); }
   get count(): number { return this.remotes.size; }
   receive(snapshot: LobbySnapshot): void {
@@ -59,7 +56,7 @@ export class RemoteShooterPlayers {
         }); group.add(gun);
         const flash = new Mesh(this.flashGeometry, this.flashMaterial); flash.position.set(0, 0, -gameConfig.weapon.length / 2); flash.visible = false; gun.add(flash);
         group.position.set(p.x, p.y, p.z); group.rotation.y = p.yaw;
-        remote = { group, torso, head, legs, arms, weapon: gun, effect, reloadStarted: 0, reloading: false, flash, flashUntil: 0, motion: new MotionBuffer(), height: p.height ?? 1.8, state: p };
+        remote = { group, torso, head, legs, arms, weapon: gun, effect, reloadStarted: 0, reloading: false, flash, flashUntil: 0, motion: new MotionBuffer(), height: p.height ?? 1.8, state: p, layout: new AvatarLayout() };
         this.remotes.set(p.playerId, remote); this.group.add(group);
       }
       if (p.life !== remote.state.life) { remote.motion.clear(); remote.group.position.set(p.x, p.y, p.z); }
@@ -86,24 +83,16 @@ export class RemoteShooterPlayers {
       remote.group.position.z += (pose.z - remote.group.position.z) * response;
       remote.group.rotation.y = pose.yaw;
       remote.height = MathUtils.damp(remote.height, pose.height, 22, dt);
-      const crouch = MathUtils.clamp((1.8 - remote.height) / (1.8 - 1.16), 0, 1);
-      remote.head.position.y = remote.height - .19;
-      remote.torso.position.y = 1.14 - crouch * .56; remote.torso.scale.y = 1 - crouch * .12;
-      for (let i = 0; i < 2; i++) {
-        const leg = remote.legs[i]; leg.position.set(i ? .14 : -.14, .35 - crouch * .05, -crouch * .09);
-        leg.scale.y = 1 - crouch * .15; leg.rotation.x = -crouch * .7;
-      }
       const reload = remote.reloading ? Math.sin(Math.min(1, (now - remote.reloadStarted) / (gameConfig.weapon.reloadDuration * 1000)) * Math.PI) : 0;
-      remote.weapon.rotation.x = pose.pitch;
-      remote.weapon.rotation.z = reload * .35; remote.weapon.position.y = 1.25 - crouch * .58 - reload * .14;
+      const layout = remote.layout; layout.update(remote.height, pose.pitch, reload);
+      remote.head.position.copy(layout.head.center);
+      remote.torso.position.copy(layout.torso.center); remote.torso.scale.y = layout.torso.height / .88;
       for (let i = 0; i < 2; i++) {
-        this.shoulder.set(i ? .29 : -.29, 1.4 - crouch * .56, 0);
-        this.hand.set(0, i ? -.08 : -.03, i ? .12 : -.13).applyEuler(remote.weapon.rotation).add(remote.weapon.position);
-        this.armDirection.subVectors(this.hand, this.shoulder);
-        const arm = remote.arms[i]; arm.position.copy(this.shoulder).add(this.hand).multiplyScalar(.5);
-        arm.scale.y = this.armDirection.length() / .7;
-        arm.quaternion.setFromUnitVectors(this.limbAxis, this.armDirection.normalize());
+        const leg = remote.legs[i], arm = remote.arms[i];
+        leg.position.copy(layout.legs[i].center); leg.quaternion.copy(layout.legs[i].rotation); leg.scale.y = layout.legs[i].height / .7;
+        arm.position.copy(layout.arms[i].center); arm.quaternion.copy(layout.arms[i].rotation); arm.scale.y = layout.arms[i].height / .7;
       }
+      remote.weapon.position.copy(layout.weaponPosition); remote.weapon.rotation.copy(layout.weaponRotation);
       remote.head.rotation.x = pose.pitch;
       remote.flash.visible = !remote.state.dead && now < remote.flashUntil;
       const death = MathUtils.clamp((serverTime - (remote.state.diedAt ?? serverTime)) / (gameplayConfig.death.duration * 1000), 0, 1);

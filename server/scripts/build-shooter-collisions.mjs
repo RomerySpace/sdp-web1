@@ -5,6 +5,7 @@ import { NodeIO } from '@gltf-transform/core';
 import { KHRDracoMeshCompression } from '@gltf-transform/extensions';
 import draco from 'draco3dgltf';
 import { Matrix4, Vector3 } from 'three';
+import { tsImport } from 'tsx/esm/api';
 
 const source = new URL('../../public/shooter/MAP/dust2plainmap.glb', import.meta.url);
 const target = new URL('../assets/dust2-colliders.json.gz', import.meta.url);
@@ -75,6 +76,10 @@ for (const geometries of buckets.values()) {
   flush();
 }
 await mkdir(new URL('../assets/', import.meta.url), { recursive: true });
-const data = gzipSync(JSON.stringify({ version: 2, sourceHash, triangles, cellSize, colliders }));
+console.log('[SDP] Validating connected outdoor spawn routes');
+const { buildSpawnNavigation } = await tsImport('../src/simulation/SpawnNavigation.ts', import.meta.url);
+const navigation = await buildSpawnNavigation(colliders);
+const data = gzipSync(JSON.stringify({ version: 3, sourceHash, triangles, cellSize, colliders, navigation }));
 await writeFile(target, data);
 console.log(`[SDP] Dust 2: ${colliders.length} colliders, ${triangles} triangles, ${(data.length / 1048576).toFixed(2)} MiB. Source ${sourceHash}`);
+console.log(`[SDP] Spawns: ${navigation.points.length} outdoor points, ${navigation.connectedCells} connected cells, ${navigation.zoneCoverage} map zones. Hub ${navigation.hub}`);

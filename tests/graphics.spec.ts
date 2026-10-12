@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import type { PerspectiveCamera } from 'three';
 import type { DigitalFragmentManager } from '../src/scene/graphics/DigitalFragmentManager';
 import sharp from 'sharp';
+import { enterExhibition } from './entry';
 
 declare global {
   interface Window { sdpGraphics: DigitalFragmentManager }
@@ -14,7 +15,7 @@ test('graphics respect entry, world space, exclusion, distance, reconstruction a
   await page.goto('/?graphicsDebug=1');
   await expect.poll(() => page.evaluate(() => window.sdpGraphics?.stats.loadedAssets)).toBe(3);
   expect(await page.evaluate(() => window.sdpGraphics.stats.active)).toBe(0);
-  await page.getByRole('button', { name: 'CLICK TO ENTER' }).click();
+  await enterExhibition(page);
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
   await expect.poll(() => page.evaluate(() => window.sdpGraphics.stats.visible)).toBeGreaterThan(0);
   await expect.poll(() => page.evaluate(() => Math.max(...window.sdpGraphics.snapshot.map((entry) => entry.progress)))).toBeGreaterThan(0.95);
@@ -62,6 +63,9 @@ test('graphics respect entry, world space, exclusion, distance, reconstruction a
       }
       projected.push(samples);
     }
+    camera.position.set(fragment.x + front.x * 10, fragment.y, fragment.z + front.z * 10);
+    for (let i = 0; i < 240; i++) manager.update(1 / 60, 4 + i / 60, 1);
+    const defined = manager.snapshot.find((entry) => entry.key === fragment.key)!;
     camera.position.set(fragment.x, fragment.y, fragment.z);
     for (let i = 0; i < 240; i++) manager.update(1 / 60, 4 + i / 60, 1);
     const inside = manager.snapshot.find((entry) => entry.key === fragment.key)!;
@@ -73,13 +77,15 @@ test('graphics respect entry, world space, exclusion, distance, reconstruction a
     manager.update(1 / 60, 14, 1);
     const revisited = manager.snapshot.find((entry) => entry.key === fragment.key);
     return {
-      near, inside, distant, revisited, fragment, projected,
+      near, defined, inside, distant, revisited, fragment, projected,
       primitives: [vectors.type, points.type],
     };
   });
   expect(result.primitives).toEqual(['LineSegments', 'Points']);
   expect(result.near.progress).toBe(1);
   expect(result.near.opacity).toBeGreaterThan(0.1);
+  expect(result.defined.progress).toBe(1);
+  expect(result.defined.opacity).toBeGreaterThan(.34);
   expect(result.inside.opacity).toBeLessThan(0.002);
   expect(result.inside.progress).toBeLessThan(0.01);
   expect(result.distant?.visible ?? false).toBe(false);
@@ -133,7 +139,7 @@ test('each source renders visible spatial geometry on desktop and mobile', async
   test.setTimeout(60000);
   await page.goto('/?graphicsDebug=1');
   await expect.poll(() => page.evaluate(() => window.sdpGraphics?.stats.loadedAssets)).toBe(3);
-  await page.getByRole('button', { name: 'CLICK TO ENTER' }).click();
+  await enterExhibition(page);
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
   const sources = await page.evaluate(() => Array.from(new Set(window.sdpGraphics.snapshot.map((fragment) => fragment.source))));
   for (const source of sources) {

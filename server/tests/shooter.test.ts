@@ -53,7 +53,7 @@ test('authoritative physics settles on actual Dust 2 geometry and assigns separa
     assert.ok(a.spawn.distanceTo(b.spawn) > .6);
     for (let i = 0; i < 60; i++) world.step(() => false);
     assert.equal(a.grounded, true); assert.equal(b.grounded, true);
-    const before = a.current.clone(); world.input('a', input);
+    const before = a.current.clone(); world.input('a', { ...input, y: Math.PI });
     for (let i = 0; i < 60; i++) world.step(() => false);
     assert.ok(a.current.distanceTo(before) > .5);
     assert.ok(a.current.distanceTo(before) < 4.1);

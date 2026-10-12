@@ -1,4 +1,4 @@
-import { CircleGeometry, Mesh, MeshBasicMaterial, Vector3 } from 'three';
+import { CircleGeometry, MathUtils, Mesh, MeshBasicMaterial, Vector3 } from 'three';
 import type { Scene } from 'three';
 import { gameConfig } from '../config/gameConfig';
 import type { PhysicsWorld } from '../physics/PhysicsWorld';
@@ -30,6 +30,8 @@ export class ShootingSystem {
     this.camera.onShot(); this.audio.shot();
     this.camera.camera.getWorldPosition(this.origin);
     const hit = this.physics.ray(this.origin, this.camera.aimDirection, gameConfig.weapon.range, this.player.collider);
+    this.camera.input.pitch = MathUtils.clamp(this.camera.input.pitch + this.weapon.recoil.pitch, -1.48, 1.48);
+    this.camera.input.yaw += this.weapon.recoil.yaw;
     this.lastHit = null;
     if (!hit) return;
     const point = this.origin.clone().addScaledVector(this.camera.aimDirection, hit.toi);

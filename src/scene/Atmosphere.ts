@@ -35,7 +35,7 @@ export class Atmosphere {
           vec3 blue = vec3(0.953, 0.973, 0.987);
           vec3 color = mix(ivory, blue, veil * (0.37 + atmosphereReveal * 0.13));
           color += exp(-dot(p - vec2(-0.2, 0.12), p - vec2(-0.2, 0.12)) * 3.0) * 0.009;
-          gl_FragColor = vec4(color, 1.0);
+          gl_FragColor = vec4(mix(vec3(1.0), color, atmosphereReveal), 1.0);
         }
       `,
     }));
@@ -69,10 +69,12 @@ export class Atmosphere {
           float haze = 1.0 - exp(-pow(opticalDistance * density, 2.0) * heightFalloff * (1.0 + flow * 0.12));
           vec3 hazeColor = mix(vec3(0.981, 0.987, 0.992), vec3(0.970, 0.982, 0.991),
                                smoothstep(18.0, 100.0, opticalDistance));
+          haze = mix(1.0, haze, smoothstep(0.0, 0.3, atmosphereReveal));
+          hazeColor = mix(vec3(1.0), hazeColor, atmosphereReveal);
           gl_FragColor.rgb = mix(gl_FragColor.rgb, hazeColor, clamp(haze, 0.0, 1.0));
         `);
     };
-    material.customProgramCacheKey = () => 'sdp-atmosphere-v1';
+    material.customProgramCacheKey = () => 'sdp-atmosphere-v2';
   }
 
   update(time: number, reveal: number): void {

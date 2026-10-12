@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { Client, type Room } from '@colyseus/sdk';
 import { LOBBY_NAME } from '../shared/MultiplayerProtocol';
 import { proximityGain } from '../src/audio/SpatialVoiceSettings';
+import { enterExhibition } from './entry';
 
 test('proximity curve has full volume near, smooth attenuation and a hard hearing radius', () => {
   const settings = { fullDistance: 3, maxDistance: 15, smoothing: 0.06 };
@@ -14,9 +15,8 @@ test('proximity curve has full volume near, smooth attenuation and a hard hearin
 
 async function enter(page: Page, room?: string): Promise<void> {
   await page.goto(`/?multiplayerDebug=1${room ? `&room=${room}` : ''}`);
-  await expect(page.locator('.connection-indicator')).toHaveAttribute('data-connection', 'connected');
+  await enterExhibition(page);
   await expect(page.locator('.controls-overlay')).toHaveAttribute('data-voice-connection', 'connected');
-  await page.getByRole('button', { name: 'CLICK TO ENTER' }).click();
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
 }
 

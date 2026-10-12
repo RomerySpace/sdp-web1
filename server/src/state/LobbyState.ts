@@ -3,6 +3,7 @@ import { MAX_PLAYERS, PLAYER_HEIGHT } from '../../../shared/MultiplayerProtocol'
 import { shooterEnabled } from '../config/GameplayConfig';
 
 export class VisitorState extends Schema {
+  displayName = '';
   x = 0;
   y = PLAYER_HEIGHT;
   z = 9;
@@ -12,6 +13,7 @@ export class VisitorState extends Schema {
   lastProcessedInput = 0;
 }
 defineTypes(VisitorState, {
+  displayName: 'string',
   x: 'float32', y: 'float32', z: 'float32', yaw: 'float32', pitch: 'float32',
   connected: 'boolean', lastProcessedInput: 'uint32',
 });

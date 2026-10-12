@@ -15,6 +15,12 @@ export interface MovementInput {
 
 export interface NetworkPlayer {
   playerId: string;
+  displayName?: string;
+  automatic?: boolean;
+  kills?: number;
+  deaths?: number;
+  streak?: number;
+  lastDamageAt?: number;
   x: number;
   y: number;
   z: number;
@@ -50,6 +56,7 @@ export interface LobbySnapshot {
   players: readonly NetworkPlayer[];
   serverTime?: number;
   shooterEnabled?: boolean;
+  killFeed?: readonly KillRecord[];
 }
 
 export interface ConnectionStatus {
@@ -77,3 +84,4 @@ export function validateMovementInput(value: unknown): MovementInput | null {
     ...('s' in data ? { s: data.s as boolean } : {}),
   };
 }
+import type { KillRecord } from './ShooterProtocol';

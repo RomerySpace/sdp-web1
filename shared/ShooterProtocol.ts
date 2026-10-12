@@ -15,10 +15,12 @@ export interface CharacterInput {
   readonly keys: Set<string>; readonly forward: number; readonly sideways: number;
   yaw: number; aiming: boolean; consume(code: string): boolean; clear(): void;
 }
-export interface WeaponAction { seq: number; life: number; action: 'fire' | 'reload' }
+export type HitRegion = 'arm' | 'leg' | 'torso' | 'head' | 'foot';
+export interface KillRecord { id: string; attackerId: string; victimId: string; attackerName: string; victimName: string; region: HitRegion; timestamp: number }
+export interface WeaponAction { seq: number; life: number; action: 'fire' | 'reload' | 'mode' }
 export interface WeaponEvent extends WeaponAction { playerId: string; roomId: string; timestamp: number }
 export interface CombatEvent { type: 'damage' | 'death' | 'respawn'; roomId: string; playerId: string;
-  life: number; timestamp: number; health: number; damage?: number; attackerId?: string }
+  life: number; timestamp: number; health: number; damage?: number; attackerId?: string; region?: HitRegion }
 export function validateShooterInput(raw: unknown): ShooterInput | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const v = raw as Record<string, unknown>;
@@ -37,5 +39,5 @@ export function validateWeaponAction(raw: unknown): WeaponAction | null {
   const v = raw as Record<string, unknown>;
   return Object.keys(v).length === 3 && Number.isSafeInteger(v.life) && (v.life as number) >= 1 && (v.life as number) <= 0x7fffffff &&
     Number.isSafeInteger(v.seq) && (v.seq as number) >= 0 && (v.seq as number) <= 0x7fffffff &&
-    (v.action === 'fire' || v.action === 'reload') ? { seq: v.seq as number, life: v.life as number, action: v.action } : null;
+    (v.action === 'fire' || v.action === 'reload' || v.action === 'mode') ? { seq: v.seq as number, life: v.life as number, action: v.action } : null;
 }

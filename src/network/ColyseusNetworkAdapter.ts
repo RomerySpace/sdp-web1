@@ -6,6 +6,8 @@ import {
 import type { MultiplayerConnection } from './MultiplayerConnection';
 import type { ShooterInput, WeaponAction, WeaponEvent, CombatEvent } from '../../shared/ShooterProtocol';
 import { validateChatText, type RoomChatMessage, type VoiceAccess } from '../../shared/CommunicationProtocol';
+import { validateDisplayName } from '../../shared/PlayerIdentity';
+import type { KillRecord } from '../../shared/ShooterProtocol';
 
 function serverEndpoint(): string {
   const configured = import.meta.env.VITE_SDP_SERVER_URL;
@@ -19,6 +21,7 @@ function serverEndpoint(): string {
 }
 
 interface DecodedLobby {
+  killFeed?: Iterable<KillRecord>;
   players: { forEach(callback: (player: Omit<NetworkPlayer, 'playerId'>, id: string) => void): void };
   online: number;
   capacity: number;
@@ -26,10 +29,12 @@ interface DecodedLobby {
   serverTime?: number;
   shooterEnabled?: boolean;
 }
-type LobbyRoom = Room<{ state: DecodedLobby }, DecodedLobby>;
+interface LobbyRoomType { state: DecodedLobby; onJoin(client: unknown, options?: { displayName?: string }): void }
+type LobbyRoom = Room<LobbyRoomType, DecodedLobby>;
 
 export class ColyseusNetworkAdapter implements MultiplayerConnection {
   private readonly client: Client;
+  private profileName = '';
   private room: LobbyRoom | undefined;
   private readonly states = new Set<(snapshot: LobbySnapshot) => void>();
   private readonly statuses = new Set<(status: ConnectionStatus) => void>();
@@ -53,6 +58,13 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
 
   constructor(endpoint = serverEndpoint()) {
     this.client = new Client(endpoint);
+    try { this.profileName = validateDisplayName(localStorage.getItem('sdp:displayName')) ?? ''; } catch {}
+  }
+  get displayName(): string { return this.profileName; }
+  setDisplayName(raw: string): void {
+    const name = validateDisplayName(raw); if (!name) throw new Error('Choose a name of 2-20 letters, numbers or spaces.');
+    this.profileName = name;
+    try { localStorage.setItem('sdp:displayName', name); } catch {}
   }
 
   get status(): ConnectionStatus { return this.currentStatus; }
@@ -73,8 +85,8 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
     try {
       const preferredRoom = import.meta.env.DEV && this.roomType === LOBBY_NAME ? new URLSearchParams(location.search).get('room') : null;
       const room = preferredRoom
-        ? await this.client.joinById<{ state: DecodedLobby }>(preferredRoom)
-        : await this.client.joinOrCreate<{ state: DecodedLobby }>(this.roomType);
+        ? await this.client.joinById<LobbyRoomType>(preferredRoom, { displayName: this.profileName || undefined })
+        : await this.client.joinOrCreate<LobbyRoomType>(this.roomType, { displayName: this.profileName || undefined });
       if (this.disposed || generation !== this.generation) { await room.leave(); return; }
       this.room = room;
       this.needsSpawn = true;
@@ -139,6 +151,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
     if (this.room !== room || this.disposed || room.reconnection.isReconnecting || !state?.players) return;
     const players: NetworkPlayer[] = [];
     state.players.forEach((player, id) => players.push({
+      displayName: player.displayName, automatic: player.automatic, kills: player.kills, deaths: player.deaths, streak: player.streak, lastDamageAt: player.lastDamageAt,
       playerId: id, x: player.x, y: player.y, z: player.z,
       yaw: player.yaw, pitch: player.pitch, connected: player.connected,
       lastProcessedInput: player.lastProcessedInput,
@@ -157,6 +170,8 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
       roomId: room.roomId, localPlayerId: room.sessionId,
       tick: state.tick, receivedAt: performance.now(), players,
       serverTime: state.serverTime, shooterEnabled: state.shooterEnabled,
+      killFeed: Array.from(state.killFeed ?? [], entry => ({ id: entry.id, attackerId: entry.attackerId, victimId: entry.victimId,
+        attackerName: entry.attackerName, victimName: entry.victimName, region: entry.region, timestamp: entry.timestamp })),
     };
     this.latestSnapshot = snapshot;
     for (const callback of this.states) callback(snapshot);

@@ -55,7 +55,8 @@ test('real server controls fire rate, health, dead input, respawn and stale-life
     assert.equal(a.roomId, b.roomId); await waitFor(() => !!a.state.players?.get(b.sessionId));
     const own = () => a.state.players.get(a.sessionId)!, target = () => a.state.players.get(b.sessionId)!;
     const yaw = Math.atan2(-(target().x - own().x), -(target().z - own().z));
-    timer = setInterval(() => a.send('shooter:input', { seq: ++seq, life: own().life, f: 0, r: 0, y: yaw, p: 0, s: false, c: false, j: false, a: false, active: true }), 50);
+    const pitch = Math.atan2(target().y + 1.14 - (own().y + 1.7), Math.hypot(target().x - own().x, target().z - own().z));
+    timer = setInterval(() => a.send('shooter:input', { seq: ++seq, life: own().life, f: 0, r: 0, y: yaw, p: pitch, s: false, c: false, j: false, a: false, active: true }), 50);
     await waitFor(() => a.state.serverTime > target().protectedUntil + 250);
     a.send('weapon:action', { seq: 1, life: 1, action: 'fire', hit: b.sessionId, damage: 1000 });
     await new Promise(r => setTimeout(r, 100)); assert.equal(target().health, 100); assert.equal(own().ammo, 30);
@@ -74,5 +75,54 @@ test('real server controls fire rate, health, dead input, respawn and stale-life
     b.send('shooter:input', { seq: 501, life: 1, f: 1, r: 0, y: 0, p: 0, s: false, c: false, j: false, a: false, active: true });
     await new Promise(r => setTimeout(r, 100)); assert.equal(target().ammo, 30); assert.ok(target().lastProcessedInput < 500);
     assert.equal(events.filter(e => e.type === 'death').length, 1); assert.equal(events.filter(e => e.type === 'respawn').length, 1);
+  } finally { if (timer) clearInterval(timer); await a.leave(); await b.leave(); await server.close(); }
+});
+test('real sessions synchronize chosen names, regional damage, interrupted regeneration, streaks and automatic fire', { timeout: 35000 }, async () => {
+  const server = await host(true), client = new Client(server.url);
+  const a = await client.joinOrCreate<ShooterState>(SHOOTER_ROOM, { displayName: 'Burst One' });
+  const b = await client.joinOrCreate<ShooterState>(SHOOTER_ROOM, { displayName: 'Target Two' });
+  const events: CombatEvent[] = [];
+  for (const room of [a, b]) {
+    room.onMessage('combat:ping', (nonce: string) => room.send('combat:pong', nonce));
+    room.onMessage('combat:event', (event: CombatEvent) => { if (room === a) events.push(event); });
+    room.onMessage('weapon:event', () => {});
+  }
+  let timer: ReturnType<typeof setInterval> | undefined, seq = 0, action = 0, head = false;
+  try {
+    await waitFor(() => !!a.state.players?.get(b.sessionId));
+    const own = () => a.state.players.get(a.sessionId)!, target = () => a.state.players.get(b.sessionId)!;
+    assert.equal(own().displayName, 'Burst One'); assert.equal(target().displayName, 'Target Two');
+    await assert.rejects(() => client.joinById(a.roomId, { displayName: '<script>bad</script>' }), /Invalid display name/);
+    timer = setInterval(() => {
+      const dx = target().x - own().x, dz = target().z - own().z;
+      a.send('shooter:input', { seq: ++seq, life: own().life, f: 0, r: 0, y: Math.atan2(-dx, -dz),
+        p: Math.atan2(target().y + (head ? 1.65 : 1.14) - (own().y + 1.7), Math.hypot(dx, dz)), s: false, c: false, j: false, a: false, active: true });
+    }, 33);
+    const fire = () => a.send('weapon:action', { seq: ++action, life: own().life, action: 'fire' });
+    await waitFor(() => a.state.serverTime > target().protectedUntil + 250);
+    fire(); await waitFor(() => target().health === 50);
+    assert.equal(events.find(e => e.type === 'damage')?.region, 'torso');
+    await waitFor(() => target().health >= 58, 9500);
+    assert.ok(target().health < 70, 'Recovery must be progressive, not instant.');
+    const before = target().health; fire(); await waitFor(() => target().health < before);
+    const secondDamageAt = target().lastDamageAt, damaged = target().health;
+    assert.equal(before - damaged, 50);
+    await waitFor(() => a.state.serverTime > secondDamageAt + 6600, 7200);
+    assert.equal(target().health, damaged, 'New damage must reset the seven-second recovery timer.');
+    await waitFor(() => target().health > damaged, 1200);
+    head = true; await new Promise(r => setTimeout(r, 160)); fire();
+    await waitFor(() => target().dead);
+    assert.equal(events.filter(e => e.type === 'damage').at(-1)?.region, 'head');
+    assert.equal(own().kills, 1); assert.equal(own().streak, 1); assert.equal(target().deaths, 1); assert.equal(target().streak, 0);
+    assert.equal(a.state.killFeed[0].attackerName, 'Burst One'); assert.equal(a.state.killFeed[0].victimName, 'Target Two');
+    await waitFor(() => target().life === 2); assert.equal(target().health, 100);
+    clearInterval(timer); timer = undefined;
+    a.send('weapon:action', { seq: ++action, life: own().life, action: 'mode' });
+    await waitFor(() => own().automatic);
+    a.send('shooter:input', { seq: ++seq, life: own().life, f: 0, r: 0, y: 0, p: 1, s: false, c: false, j: false, a: false, active: true });
+    await new Promise(r => setTimeout(r, 50)); const ammo = own().ammo;
+    fire(); fire(); await waitFor(() => own().ammo === ammo - 1);
+    await new Promise(r => setTimeout(r, 120)); fire(); await waitFor(() => own().ammo === ammo - 2);
+    assert.ok(own().pitch > 1, 'Authoritative automatic fire must also apply rising aim recoil.');
   } finally { if (timer) clearInterval(timer); await a.leave(); await b.leave(); await server.close(); }
 });

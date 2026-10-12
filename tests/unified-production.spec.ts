@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { enterExhibition } from './entry';
 test('compiled production ignores debug mode and requests Shooter chunks only after JOIN', async ({ page }, info) => {
   test.skip(!process.env.SDP_PRODUCTION_URL, 'Run a local production preview and set SDP_PRODUCTION_URL.');
   const urls: string[] = [], errors: string[] = [];
@@ -9,8 +10,7 @@ test('compiled production ignores debug mode and requests Shooter chunks only af
   expect(await page.evaluate(() => 'sdpUnified' in window)).toBe(false);
   const shooterOnly = () => urls.filter(url => /\/shooter\/|ShooterMode-|shooter-physics-/.test(url));
   expect(shooterOnly()).toEqual([]);
-  await expect(page.locator('.connection-indicator')).toHaveAttribute('data-connection', 'connected');
-  await page.getByRole('button', { name: 'CLICK TO ENTER' }).click(); await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
+  await enterExhibition(page);
   await page.keyboard.down('KeyW'); await expect(page.getByRole('button', { name: 'Interact with sculpture' })).toBeVisible(); await page.keyboard.up('KeyW');
   await page.keyboard.press('KeyE'); await expect(page.locator('.ui')).toHaveAttribute('data-state', 'INSPECTING');
   await expect(page.locator('.mode-overlay')).toBeHidden();

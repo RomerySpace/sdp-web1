@@ -47,6 +47,7 @@ export class App {
   private elapsed = 0;
   private entryProgress = 0;
   private reveal = 0;
+  private entering = false;
 
   constructor(container: HTMLElement) {
     this.scene = new SceneManager(container);
@@ -56,7 +57,7 @@ export class App {
     this.voice = new VoiceChatManager(this.voiceTransport);
     this.chat = new ChatManager(this.network);
     this.ui = new UIManager(container, {
-      enter: () => this.enter(), resume: () => this.resume(), submit: (text) => this.submitChat(text),
+      enter: (name) => this.enter(name), resume: () => this.resume(), submit: (text) => this.submitChat(text),
       toggleAudio: () => {
         const muted = this.audio.toggleMute();
         const effects = this.modes?.shooter?.audio;
@@ -65,7 +66,7 @@ export class App {
       }, volume: (value) => this.audio.setVolume(value),
       fullscreen: () => this.toggleFullscreen(),
       inspect: () => this.limited ? this.inspectSculpture() : this.interact(), closeInspection: () => this.closeInspection(),
-    }, this.limited, this.audio.muted);
+    }, this.limited, this.audio.muted, this.network.displayName);
     this.modes = new GameModeManager(container, this.scene.renderer, this.network, {
       pauseLimbo: () => { this.pause(); this.player.setEnabled(false); },
       suspendCommunication: () => { this.inputs.setEnabled(false); this.voice.release(); this.voiceTransport.setEnabled(false); this.audio.setActive(false); },
@@ -95,7 +96,6 @@ export class App {
     );
     this.bindEvents();
     void this.initialize();
-    void this.network.connect();
     if (import.meta.env.DEV && new URLSearchParams(location.search).has('multiplayerDebug')) {
       Object.assign(window, { sdpMultiplayer: { connection: this.network, remotes: this.scene.remotePlayers, player: this.player,
         voice: this.voice, voiceTransport: this.voiceTransport, chat: this.chat } });
@@ -125,8 +125,14 @@ export class App {
     if (!loaded) this.ui.notify('The environment light could not load. Diffuse viewing is still available.');
     if (!sculptureLoaded) this.ui.notify('The sculpture could not load. The exhibition is still available.');
     if (import.meta.env.DEV && ENABLE_SHOOTER_TEST && new URLSearchParams(location.search).get('debugMode') === 'shooter') {
-      this.state.set('ENTERING'); this.entryProgress = 1; this.reveal = 1; this.state.set('PAUSED');
-      void this.modes.joinShooter();
+      this.network.setDisplayName(this.network.displayName || 'DEV PLAYER');
+      try {
+        await this.network.switchRoom(LOBBY_NAME);
+        if (!this.disposed && this.network.snapshot?.shooterEnabled !== false) {
+          this.state.set('ENTERING'); this.entryProgress = 1; this.reveal = 1; this.state.set('PAUSED');
+          void this.modes.joinShooter();
+        }
+      } catch { this.ui.notify('Development connection unavailable. Enter Limbo to retry.'); }
     }
   }
 
@@ -207,14 +213,22 @@ export class App {
     }
   };
 
-  private enter(): void {
-    if (!this.ready || this.state.value !== 'INTRO') return;
-    this.state.set('ENTERING');
+  private enter(name?: string): void {
+    if (!this.ready || this.entering || this.state.value !== 'INTRO') return;
+    if (name === undefined) { this.ui.intro.chooseName(); return; }
+    this.network.setDisplayName(name); this.entering = true; this.ui.intro.connecting(true);
     // Both permission-sensitive calls happen in this same trusted gesture,
     // before fetching audio or waiting for the atmospheric reveal.
     if (!this.limited) this.player.requestLock(this.pointerDenied);
     this.audio.enter();
     this.voiceTransport.unlock();
+    void this.network.connect().then(() => {
+      if (this.disposed) return;
+      if (this.network.status.state === 'disconnected') this.ui.notify('Multiplayer unavailable. Reconnecting in the background.');
+      this.state.set('ENTERING');
+    }).catch(() => {
+      this.entering = false; this.player.releaseLock(); this.ui.intro.connecting(false, 'Connection unavailable. Please try again.');
+    });
   }
 
   private resume(): void {

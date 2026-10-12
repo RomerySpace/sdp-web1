@@ -2,7 +2,7 @@
 
 ## Cambios
 
-- gameConfig.ts: entrada por defecto a nivel de calle y diez zonas de suelo. La busqueda solo admite su franja vertical, nunca azoteas; revisa espacio, soporte y ocupacion. Inicialmente se separan hasta 25 visitantes; reaparecer prioriza puntos alejados de jugadores vivos. Si no hay sitio, el servidor reintenta, sin colocar a alguien en una pared o un tejado.
+- SpawnNavigation.ts: el build analiza suelo, espacio de capsula, conexiones fisicas y cielo abierto en el mapa real. Valida 66 puntos en la zona exterior conectada principal, excluyendo azoteas e interiores/patios cerrados. ShooterWorld comprueba ocupacion antes de elegir; reaparecer prioriza distancia respecto a jugadores vivos. Si no hay sitio, reintenta sin colocar a alguien en una pared o tejado. Cambiar spawn/spawnZones requiere regenerar la navegacion.
 - RemoteShooterPlayers.ts: el arma tiene un soporte de apuntado independiente de la rotacion del GLB, como la camara local. El canon y el fogonazo siguen el mismo yaw/pitch; el agachado sigue bajando el soporte.
 - PredictionHistory.ts: la correccion compara entradas confirmadas con su historia de prediccion, no posiciones separadas por el retraso de red. El cuerpo sigue siendo validado por el servidor y la camara absorbe correcciones menores suavemente. No es un replay completo competitivo.
 - SnapshotInterpolation.ts: fechas de simulacion del servidor, buffer de jitter limitado y extrapolacion breve. Se reinicia al cambiar de sala/vida para evitar desplazamientos desde el spawn anterior.
@@ -28,7 +28,7 @@ Una medicion exploratoria de la version publica anterior, con una conexion por m
 
 ## Ajustar y probar
 
-gameConfig.player: spawn, spawnZones, spawnSearch.radius y floorTolerance.
+gameConfig.player: spawn y spawnZones orientan la seleccion de puntos en el build; spawnSearch se conserva para la inicializacion local. SpawnNavigation define la resolucion conservadora de .8 metros.
 shared/ShooterProtocol.ts: shooterNetworkConfig (frecuencia de entradas, timeout, buffer, extrapolacion, tolerancia de correccion y respuesta de camara).
 
 ```sh
@@ -41,7 +41,9 @@ npm run dev:unified
 ```
 
 Abrir http://localhost:5373/ en dos ventanas. Para desarrollo directo, ?debugMode=shooter.
-Comprobar entrada y reaparicion a nivel de calle, apuntado del arma de otro visitante, carrera, cambio de direccion, paredes y dos impactos/respawn. Revisar FPS, PING, JITTER, BUFFER y CORRECTIONS/TELEPORTS en desarrollo. Ninguno de estos diagnosticos aparece en produccion.
+Comprobar entrada y reaparicion en exteriores transitables, apuntado del arma de otro visitante, carrera, cambio de direccion, paredes y dos impactos al torso/respawn. Elegir nombres diferentes y revisar el historial de bajas y STRIKE. B cambia modo; AUTO dispara mientras se mantiene el boton y sube la mira. Tras un impacto no mortal, esperar 7 segundos para verificar la regeneracion progresiva; otro impacto debe reiniciar la espera. Revisar FPS, PING, JITTER, BUFFER y CORRECTIONS/TELEPORTS en desarrollo. Ninguno de estos diagnosticos aparece en produccion.
+
+Parametros de esta actualizacion en shared/GameplayConfig.ts: dano por region (25/50/100/12), regeneracion (7 segundos, 10 HP/s), cadencia AUTO (.1 segundos), recoil acumulativo y duracion/limite del killfeed (8 segundos, 6 entradas). Los nombres se validan antes de admitir la conexion; no equivalen a cuentas ni estadisticas persistentes.
 
 Al regenerar las colisiones hay que reiniciar el backend para que descarte el archivo cacheado. El build de Render ya ejecuta prepare:shooter; publicacion de fuentes sin desplegar el backend no actualiza sus colisiones.
 Las correcciones no cambian planes ni aseguran 40-60 ms entre continentes. El rendimiento publico debe comprobarse despues de un despliegue coordinado de Vercel y Render.

@@ -5,6 +5,7 @@ import { ChatManager } from '../src/chat/ChatManager';
 import type { MultiplayerConnection } from '../src/network/MultiplayerConnection';
 import type { RoomChatMessage } from '../shared/CommunicationProtocol';
 import { validateChatText } from '../shared/CommunicationProtocol';
+import { enterExhibition, submitName } from './entry';
 
 async function load(page: Page): Promise<void> {
   await page.goto('/');
@@ -14,8 +15,7 @@ async function load(page: Page): Promise<void> {
 
 async function enter(page: Page): Promise<void> {
   await load(page);
-  await page.getByRole('button', { name: 'CLICK TO ENTER' }).click();
-  await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
+  await enterExhibition(page);
   await expect.poll(() => page.evaluate(() => Boolean(document.pointerLockElement))).toBe(true);
 }
 
@@ -26,7 +26,7 @@ test('HDR, reveal, navigation, chat, pause, audio preference and fullscreen', as
   await load(page);
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'INTRO');
   await page.screenshot({ path: testInfo.outputPath('01-intro.png') });
-  await page.getByRole('button', { name: 'CLICK TO ENTER' }).click();
+  await submitName(page);
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'ENTERING');
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
   await page.waitForTimeout(1800); // Allow the restrained HUD fade to settle in the visual capture.
@@ -122,7 +122,7 @@ test('touch device has a working viewing mode', async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const page = await context.newPage();
   await page.goto('/');
-  await page.getByRole('button', { name: 'VIEW EXHIBITION' }).click();
+  await enterExhibition(page);
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
   await expect(page.locator('.viewing-note')).toContainText('DESKTOP REQUIRED');
   expect(await page.evaluate(() => document.pointerLockElement)).toBeNull();

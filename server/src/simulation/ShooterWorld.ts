@@ -1,13 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 import { PhysicsWorld, RAPIER } from '../../../src/modes/shooter/physics/PhysicsWorld';
-import { CharacterController, findSpawn } from '../../../src/modes/shooter/physics/CharacterController';
+import { CharacterController } from '../../../src/modes/shooter/physics/CharacterController';
+import type { SpawnNavigationData } from './SpawnNavigation';
 import { gameConfig } from '../../../src/modes/shooter/config/gameConfig';
 import type { CharacterInput, ShooterInput } from '../../../shared/ShooterProtocol';
 import { Vector3 } from 'three';
 
 interface Geometry { vertices: number[]; indices: number[] }
-let mapData: Promise<{ colliders: Geometry[] }> | undefined;
+let mapData: Promise<{ colliders: Geometry[]; navigation: SpawnNavigationData }> | undefined;
 class ServerInput implements CharacterInput {
   readonly keys = new Set<string>();
   yaw = 0; aiming = false; forward = 0; sideways = 0;
@@ -30,21 +31,15 @@ export class ShooterWorld {
   private constructor(readonly physics: PhysicsWorld) {}
   static async create(): Promise<ShooterWorld> {
     mapData ??= readFile(new URL('../../assets/dust2-colliders.json.gz', import.meta.url))
-      .then(bytes => JSON.parse(gunzipSync(bytes).toString()) as { colliders: Geometry[] });
+      .then(bytes => JSON.parse(gunzipSync(bytes).toString()) as { colliders: Geometry[]; navigation: SpawnNavigationData });
     const data = await mapData;
     const physics = await PhysicsWorld.initialize();
     try {
       for (const g of data.colliders) physics.world.createCollider(RAPIER.ColliderDesc.trimesh(Float32Array.from(g.vertices), Uint32Array.from(g.indices)).setFriction(0).setRestitution(0));
       physics.world.updateSceneQueries();
       const world = new ShooterWorld(physics);
-      for (const zone of gameConfig.player.spawnZones) {
-        for (const [dx, dz] of [[0, 0], [1.4, 0], [-1.4, 0], [0, 1.4], [0, -1.4]]) {
-          try {
-            const spawn = findSpawn(physics, { x: zone.x + dx, y: zone.y, z: zone.z + dz });
-            if (!world.spawns.some(p => p.distanceTo(spawn) < 1)) world.spawns.push(spawn);
-          } catch { /* Reject unsupported or obstructed street positions. */ }
-        }
-      }
+      if (data.navigation?.version !== 1 || data.navigation.connectedCells < 200) throw new Error('Regenerate validated spawn navigation with npm run prepare:shooter.');
+      for (const point of data.navigation.points) world.spawns.push(new Vector3().fromArray(point));
       if (!world.spawns.length) throw new Error('No ground-level Shooter spawn is available.');
       return world;
     } catch (error) { physics.dispose(); throw error; }

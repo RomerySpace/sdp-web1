@@ -9,7 +9,7 @@ const soundIcon = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path
 const fullscreenIcon = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path class="fullscreen-expand" d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/><path class="fullscreen-contract" d="M3 8h5V3m8 0v5h5M8 21v-5H3m13 5v-5h5"/></svg>`;
 
 interface UIActions {
-  enter(): void;
+  enter(name?: string): void;
   resume(): void;
   submit(text: string): void;
   toggleAudio(): boolean;
@@ -32,7 +32,7 @@ export class UIManager {
   private readonly notice: HTMLElement;
   private noticeTimer = 0;
 
-  constructor(container: HTMLElement, actions: UIActions, limited: boolean, muted: boolean) {
+  constructor(container: HTMLElement, actions: UIActions, limited: boolean, muted: boolean, savedName = '') {
     this.element = document.createElement('div');
     this.element.className = 'ui';
     this.element.dataset.state = 'INTRO';
@@ -67,7 +67,7 @@ export class UIManager {
     });
     this.fullscreenButton.addEventListener('click', actions.fullscreen);
     this.element.querySelector('.resume-button')!.addEventListener('click', actions.resume);
-    this.intro = new IntroScreen(this.element, actions.enter, limited);
+    this.intro = new IntroScreen(this.element, actions.enter, limited, savedName);
     this.chat = new ChatInterface(this.element, actions.submit);
     this.controls = new ControlsOverlay(this.element, limited);
     this.setMuted(muted);

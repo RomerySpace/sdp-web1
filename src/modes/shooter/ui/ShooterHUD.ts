@@ -1,16 +1,42 @@
 import type { CharacterController } from '../physics/CharacterController';
 import type { Weapon } from '../weapon/Weapon';
+import type { LobbySnapshot } from '../../../../shared/MultiplayerProtocol';
 export class ShooterHUD {
   readonly element = document.createElement('div');
+  private readonly strike: HTMLElement;
+  private readonly score: HTMLElement;
+  private readonly feed: HTMLElement;
+  private readonly fireMode: HTMLElement;
+  private feedIds = '';
   constructor(container: HTMLElement) {
     this.element.className = 'shooter-hud'; this.element.hidden = true;
     this.element.innerHTML = `<header><span>SDP</span><span>DE_DUST2 / 01</span></header>
+      <div class="shooter-score"><span class="shooter-strike">STRIKE 00</span><span class="shooter-record">0 K / 0 D</span></div>
+      <ol class="shooter-kill-feed" aria-label="Eliminations" aria-live="polite"></ol>
       <div class="shooter-crosshair" aria-hidden="true"></div>
-      <div class="shooter-movement"></div><div class="shooter-health" aria-label="Health"></div><div class="shooter-ammo" aria-label="Ammunition"><span>SDP / SEMI-AUTO</span>
+      <div class="shooter-movement"></div><div class="shooter-health" aria-label="Health"></div><div class="shooter-ammo" aria-label="Ammunition"><span class="shooter-fire-mode">SDP / SEMI-AUTO</span>
       <strong class="shooter-magazine">30</strong><span class="shooter-reserve">/ 120</span><span class="shooter-action"></span></div>`;
     container.append(this.element);
+    this.strike = this.element.querySelector('.shooter-strike')!; this.score = this.element.querySelector('.shooter-record')!;
+    this.feed = this.element.querySelector('.shooter-kill-feed')!; this.fireMode = this.element.querySelector('.shooter-fire-mode')!;
+  }
+  receive(snapshot: LobbySnapshot): void {
+    const local = snapshot.players.find(p => p.playerId === snapshot.localPlayerId);
+    this.strike.textContent = `STRIKE ${String(local?.streak ?? 0).padStart(2, '0')}`;
+    this.score.textContent = `${local?.kills ?? 0} K / ${local?.deaths ?? 0} D`;
+    const entries = snapshot.killFeed ?? [], ids = entries.map(entry => entry.id).join('|');
+    if (ids === this.feedIds) return; this.feedIds = ids;
+    this.feed.replaceChildren(...entries.map(entry => {
+      const row = document.createElement('li'); row.dataset.killId = entry.id;
+      const attacker = document.createElement('span'), action = document.createElement('span'), victim = document.createElement('span');
+      attacker.className = victim.className = 'kill-player'; attacker.textContent = attacker.title = entry.attackerName;
+      victim.textContent = victim.title = entry.victimName; action.className = 'kill-action'; action.textContent = 'KILLED';
+      row.append(attacker, action, victim); row.dataset.region = entry.region; return row;
+    }));
   }
   update(player: CharacterController, weapon: Weapon, health: number, dead: boolean): void {
+    this.fireMode.textContent = weapon.automatic ? 'SDP / AUTO' : 'SDP / SEMI-AUTO';
+    this.fireMode.title = 'Fire mode';
     this.element.querySelector('.shooter-magazine')!.textContent = String(weapon.ammo).padStart(2, '0');
     this.element.querySelector('.shooter-reserve')!.textContent = `/ ${weapon.reserve}`;
     this.element.querySelector('.shooter-action')!.textContent = weapon.reloading ? 'RELOADING' : weapon.ads > .6 ? 'AIMING' : '';

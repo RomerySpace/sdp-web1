@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Client, type Room } from '@colyseus/sdk';
 import sharp from 'sharp';
+import { enterExhibition, submitName } from './entry';
 import { LOBBY_NAME } from '../shared/MultiplayerProtocol';
 import type { LobbyState } from '../server/src/state/LobbyState';
 import type { ColyseusNetworkAdapter } from '../src/network/ColyseusNetworkAdapter';
@@ -25,8 +26,7 @@ declare global {
 
 async function enter(page: Page): Promise<void> {
   await page.goto('/?multiplayerDebug=1');
-  await expect(page.locator('.connection-indicator')).toHaveAttribute('data-connection', 'connected');
-  await page.getByRole('button', { name: 'CLICK TO ENTER' }).click();
+  await enterExhibition(page);
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
 }
 
@@ -117,7 +117,7 @@ test('unavailable backend leaves the exhibition and local controls usable', asyn
   await page.route('**/matchmake/**', (route) => route.abort());
   await page.goto('/?multiplayerDebug=1');
   await expect(page.locator('.connection-indicator')).toHaveAttribute('data-connection', 'disconnected');
-  await page.getByRole('button', { name: 'CLICK TO ENTER' }).click();
+  await submitName(page);
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
   await page.keyboard.down('KeyD');
   await page.waitForTimeout(800);

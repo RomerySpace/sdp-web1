@@ -61,6 +61,13 @@ button { border: 0; background: none; }
 .enter-button:hover:not(:disabled) .enter-rule { width: 34px; }
 .intro-caption { position: absolute; left: 0; right: 0; bottom: var(--edge); text-align: center; margin: 0; font-size: 8px; letter-spacing: 0.28em; color: var(--muted); }
 .intro.is-leaving { opacity: 0; visibility: hidden; }
+.intro-name-form { width: 280px; max-width: 82vw; margin: 46px auto 0; text-align: left; }
+.intro-name-form label { display: block; margin-bottom: 10px; font-size: 9px; letter-spacing: 0; color: var(--muted); }
+.intro-name-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border-bottom: 1px solid #cbd4d9; }
+.intro-name-row input { width: 100%; min-width: 0; height: 44px; border: 0; background: transparent; color: #465762; padding: 8px 0; font-size: 13px; user-select: text; }
+.intro-name-submit { min-width: 82px; height: 44px; padding: 8px 10px; font-size: 9px; letter-spacing: 0; }
+.intro-name-message { min-height: 32px; margin: 10px 0 0; line-height: 1.5; font-size: 10px; color: #778892; }
+.ui[data-state="INTRO"] .connection-indicator { visibility: hidden; }
 .device-note { position: absolute; top: calc(48% + 150px); left: 20px; right: 20px; text-align: center; font-size: 11px; color: var(--muted); }
 
 .crosshair { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 3px; height: 3px; border-radius: 50%; background: #75838c; opacity: 0; transition: opacity 1s; }

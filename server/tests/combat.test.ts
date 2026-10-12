@@ -21,7 +21,7 @@ test('server rays stop at geometry, rewind is bounded, dead and old lives cannot
     const shooter = pose('a', a), target = pose('b', b), combat = new CombatSimulation();
     combat.record([shooter, target]); combat.record([{ ...shooter, time: now }, { ...target, time: now }]);
     const yaw = Math.atan2(-(target.x - shooter.x), -(target.z - shooter.z));
-    assert.equal(combat.fire(world, shooter, yaw, 0, now, 0, [shooter, target]), 'b');
+    assert.equal(combat.fire(world, shooter, yaw, 0, now, 0, [shooter, target])?.playerId, 'b');
     assert.equal(combat.fire(world, shooter, yaw, 0, now, 0, [{ ...target, dead: true }]), null);
     assert.equal(combat.fire(world, shooter, yaw, 0, now, 0, [{ ...target, life: 2 }]), null);
     assert.equal(combat.fire(world, shooter, yaw, 0, now, 0, [{ ...target, protectedUntil: now + 10 }]), null);

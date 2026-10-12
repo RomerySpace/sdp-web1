@@ -5,7 +5,7 @@
 La carpeta de trabajo es `/Users/alvarometzker/Documents/alvarometzker/SDP/WEBSDPv1`.
 Se creo con `git worktree add -b feature/unified-sdp`, partiendo de WEB1, y se trasladaron tambien sus cambios locales sin confirmar.
 El remoto sigue siendo `https://github.com/RomerySpace/sdp-web1.git`.
-No se hizo push, merge, deploy ni cambio de plan. El worktree comparte metadatos Git, pero los archivos de los dos originales no se modificaron.
+La copia inicial no publico cambios. Las actualizaciones publicas posteriores se realizan solo con autorizacion del usuario, en el mismo repositorio y sin cambiar planes. El worktree comparte metadatos Git, pero los archivos de los dos originales no se modificaron.
 
 Originales:
 
@@ -44,12 +44,12 @@ SDP_WEB_PORT=5375 PORT=2589 LIVEKIT_PORT=7984 LIVEKIT_RTC_TCP_PORT=7985 LIVEKIT_
 
 ## Entrar y cambiar de modo
 
-1. Entrar en Limbo con CLICK TO ENTER.
+1. Pulsar CLICK TO ENTER y elegir USERNAME (2-20 caracteres). ENTER inicia la sesion y abre la niebla. Antes de elegir nombre, el fondo y el totem permanecen completamente blancos. El nombre se conserva localmente y al cambiar de modo; no es una cuenta autenticada.
 2. Acercarse a unos 3 metros de la escultura y mirarla. Aparece E / INTERACT.
 3. Pulsar E abre directamente la inspeccion original, sin menu. E o ESC cierran la inspeccion.
 4. Solo aparece JOIN SHOOTER TEST, centrado abajo. Al pulsarlo se carga la simulacion y se cambia de sala. Inspeccionar no descarga mapa, fisica ni codigo exclusivo del Shooter.
 5. ENTER SIMULATION obtiene el control del raton mediante un gesto nuevo, necesario cuando la carga ha agotado la autorizacion del navegador.
-6. En Shooter: WASD, raton, SPACE, SHIFT, CTRL, R, boton izquierdo y boton derecho conservan su comportamiento original.
+6. En Shooter: WASD, raton, SPACE, SHIFT, CTRL, R, boton izquierdo y boton derecho conservan su comportamiento original. B alterna SEMI-AUTO / AUTO; mantener boton izquierdo en AUTO dispara una rafaga con elevacion progresiva de mira, compensable con el raton.
 7. ESC abre la pausa. RESUME continua; RETURN TO LIMBO vuelve sin recargar la pagina. En Limbo, CLICK TO RESUME recupera el raton.
 
 Un fallo de carga ofrece RETRY o regreso a Limbo. Tambien puede cancelarse durante la carga.
@@ -59,8 +59,9 @@ La inspeccion tactil sigue disponible. El FPS requiere escritorio, raton y point
 
 Abrir dos ventanas en la misma URL. ONLINE muestra la poblacion real de la sala.
 En Limbo comprobar desplazamiento y ENTER para texto. Autorizar el microfono al mantener V; soltar V corta las pistas, no solo el indicador. La voz se atenua con la distancia.
-Entrar al Shooter en ambas ventanas. CTRL baja cabeza, torso y arma de los avatares; SHIFT corre. Apuntar al otro jugador: cada impacto valido resta 50 de 100 HP, con bordes digitales blancos y reaccion discreta de camara.
-Dos impactos eliminan al jugador. TARGET DESYNCHRONIZED confirma la baja; el otro avatar pierde geometria, emite fragmentos blancos/azules y se disuelve en 1.35 segundos. El eliminado ve DESYNCHRONIZED y no puede moverse, apuntar, disparar ni recargar.
+Entrar al Shooter en ambas ventanas. CTRL baja cabeza, torso y arma de los avatares; SHIFT corre. El servidor determina la region alcanzada: cabeza 100, torso 50, brazos/piernas 25 y pies 12 HP. Dos impactos al torso eliminan a un jugador con 100 HP; uno en la cabeza tambien. Los danos activan bordes digitales blancos y una reaccion discreta de camara.
+Tras 7 segundos sin dano, se recuperan 10 HP por segundo hasta 100. Cualquier nuevo impacto interrumpe la recuperacion y reinicia los 7 segundos. STRIKE cuenta bajas consecutivas y se reinicia al morir; K/D muestra el total de esta sesion de sala. El historial superior izquierdo muestra los nombres de atacante y victima durante 8 segundos, con un maximo de 6 entradas.
+TARGET DESYNCHRONIZED confirma la baja; el otro avatar pierde geometria, emite fragmentos blancos/azules y se disuelve en 1.35 segundos. El eliminado ve DESYNCHRONIZED y no puede moverse, apuntar, disparar ni recargar.
 El servidor lo reconstruye aproximadamente a los 3 segundos en otro punto seguro, con 100 HP, municion y retroceso reiniciados. La proteccion inicial dura 1.25 segundos y termina si dispara. Las paredes reales bloquean los impactos.
 En Limbo, mantener SHIFT al moverse aumenta la velocidad a 1.5 veces, con aceleracion suave y solo 2 grados de FOV adicionales. El servidor utiliza la misma simulacion limitada.
 Mantener una tercera ventana en Limbo permite comprobar que no recibe chat ni voz del Shooter.
@@ -103,8 +104,8 @@ ModeConfig.ts permite ajustar alcance y direccion de la interaccion.
 
 La conexion Colyseus es una sola por visitante. Al cambiar, se espera la salida de la anterior; callbacks tardios no deben introducir entidades de otra sala.
 Las posiciones de Shooter se calculan en el servidor, no se aceptan posiciones arbitrarias. Municion, cadencia y duracion de recarga se controlan tambien en el servidor.
-Los puntos de entrada y reaparicion se eligen en calles/patios definidos en gameConfig.ts, con rango vertical de suelo, soporte completo, espacio de capsula y comprobacion de ocupacion. No se buscan superficies desde encima de las azoteas ni se usa una azotea como alternativa si el suelo esta ocupado.
-Los impactos y animaciones locales siguen siendo inmediatos, pero no deciden salud ni bajas. CombatSimulation usa capsula corporal y esfera de cabeza Rapier, con la altura realmente resuelta por la fisica, incluida la transicion de agachado. El rayo parte del jugador del servidor y usa su orientacion validada; el collider fijo mas cercano del mapa limita el alcance. No se aceptan victimas, origenes, posiciones ni danos enviados por el cliente.
+El build genera una navegacion a partir del mismo GLB: soporte completo, espacio de capsula y conexiones transitables entre celdas. Selecciona la zona exterior conectada principal y 66 puntos separados a nivel de suelo, sin techo encima. Descarta azoteas, interiores y patios cerrados desconectados; no elige un tejado como alternativa. Cada entrada/reaparicion comprueba de nuevo la ocupacion y prioriza distancia respecto a jugadores vivos.
+Los impactos y animaciones locales siguen siendo inmediatos, pero no deciden salud ni bajas. CombatSimulation usa esfera de cabeza, capsulas separadas para torso y extremidades, y cajas de pies. AvatarLayout comparte la pose geometrica con el renderer remoto, incluyendo agachado, apuntado y recarga. El rayo parte del jugador del servidor y usa su orientacion validada; el collider fijo mas cercano del mapa limita el alcance. No se aceptan victimas, regiones, origenes, posiciones ni danos enviados por el cliente.
 El historial de objetivos compensa hasta 200 ms. La demora se calcula con sondas RTT emitidas por el servidor y los 70 ms de interpolacion, no con una fecha elegida por el cliente. No rebobina paredes estaticas ni permite golpear vidas anteriores.
 Salud, DEAD, vida, fecha de muerte/reconstruccion y proteccion se sincronizan por estado y eventos de sala. El numero de vida impide que entradas o acciones antiguas afecten a una reaparicion. El servidor retira el cuerpo muerto de la fisica y elige puntos con suelo, espacio de capsula y separacion respecto a jugadores activos.
 DigitalAvatarEffect reutiliza un lote de 48 fragmentos instanciados por avatar y materiales con disolucion por celdas y scanlines. Los recursos se liberan al salir. CombatFeedback genera una textura de borde una sola vez, dejando limpio el centro; el dano activa muelles suaves de camara. No hay sangre, rojo ni ragdolls.
@@ -125,7 +126,8 @@ Para produccion se necesitan las credenciales del backend y la cuota adecuada de
 
 ## Parametros y acceso temporal
 
-`shared/GameplayConfig.ts` centraliza salud, dano, cadencia, alcance, cargador, recarga, reaparicion, proteccion, compensacion, fragmentos, disolucion/reconstruccion, impulso/vineta y sprint/FOV de Limbo.
+`shared/GameplayConfig.ts` centraliza salud, regionDamage, regenerationDelay/Rate, cadencia semi/automatica, recoil, duracion/limite de killfeed, alcance, cargador, recarga, reaparicion, proteccion, compensacion, fragmentos, disolucion/reconstruccion, impulso/vineta y sprint/FOV de Limbo.
+Los graficos de Limbo se reconstruyen completamente y tienen mas opacidad a distancia; el comportamiento cercano de desvanecimiento y transparencia se mantiene.
 `ENABLE_SHOOTER_TEST = false` desactiva el acceso tanto en navegador como servidor. Reconstruir y desplegar ambos para una publicacion coherente; el codigo y los assets no se borran.
 El backend admite ademas `ENABLE_SHOOTER_TEST=false` en su entorno para restringir rapidamente todos los joins: comunica la restriccion a Limbo y rechaza crear o entrar en salas Shooter, incluso con un SDK externo. Reiniciar el backend tambien desconecta las salas existentes. No basta con editar un boton del frontend.
 Los shortcuts debug solo existen en desarrollo y respetan la restriccion. En produccion no se expone sdpUnified ni se interpreta debugMode.
@@ -161,4 +163,4 @@ SDP_PRODUCTION_URL=http://127.0.0.1:5384 npm run test:unified
 Vercel conserva npm run build y dist. El endpoint de Colyseus sigue configurado mediante VITE_SDP_SERVER_URL, con HTTPS/WSS en publico.
 Render conserva su estructura y variables privadas. El build instala las dependencias de raiz y servidor porque la fisica se reutiliza desde el mismo modulo de WEB2, y genera el archivo de colisiones antes de arrancar.
 server/assets/dust2-colliders.json.gz es un recurso derivado, ignorado por Git y regenerable con npm run prepare:shooter. No procede de datos de un cliente.
-Una futura publicacion debe coordinar el frontend y el backend nuevos: el backend antiguo no conoce SDPShooterRoom. Usar despliegues de prueba y autorizar expresamente cualquier push/merge/cambio de produccion.
+Cada publicacion debe coordinar frontend y backend: los cambios en esquemas, dano, regeneracion y navegacion necesitan ambos despliegues. Autorizar expresamente cualquier push/merge/cambio de produccion.

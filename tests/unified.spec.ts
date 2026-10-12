@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
+import { enterExhibition } from './entry';
 import type { GameModeManager } from '../src/modes/GameModeManager';
 import type { ColyseusNetworkAdapter } from '../src/network/ColyseusNetworkAdapter';
 import type { SceneManager } from '../src/scene/SceneManager';
@@ -17,9 +18,7 @@ const shooterRequest = (url: string): boolean => /\/shooter\/|\/modes\/shooter\/
 async function enterLimbo(page: Page): Promise<void> {
   await page.goto('/?debugMode=limbo');
   await expect(page.locator('.ui')).toHaveAttribute('data-sculpture', 'loaded');
-  await expect(page.locator('.connection-indicator')).toHaveAttribute('data-connection', 'connected');
-  await page.getByRole('button', { name: 'CLICK TO ENTER' }).click();
-  await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
+  await enterExhibition(page);
 }
 async function openProtocol(page: Page): Promise<void> {
   await page.evaluate(() => { const camera = window.sdpUnified.player.camera; camera.position.set(0, 1.7, 2.7); camera.rotation.set(0, 0, 0); });
@@ -40,6 +39,62 @@ async function visiblePixels(page: Page): Promise<number> {
   for (let i = 0; i < data.length; i += info.channels) if (Math.min(data[i], data[i + 1], data[i + 2]) < 210) contrast++;
   return contrast;
 }
+async function canvasContrast(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const scene = window.sdpUnified.scene, renderer = scene.renderer;
+    renderer.render(scene.scene, scene.camera);
+    const gl = renderer.getContext(), pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
+    gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    let contrast = 0;
+    for (let i = 0; i < pixels.length; i += 4) if (Math.min(pixels[i], pixels[i + 1], pixels[i + 2]) < 250) contrast++;
+    return contrast;
+  });
+}
+test('entry stays white before choosing a name and does not request Shooter resources', async ({ page }, info) => {
+  const requests: string[] = []; page.on('request', request => requests.push(request.url()));
+  await page.goto('/?debugMode=limbo');
+  await expect(page.getByRole('button', { name: 'CLICK TO ENTER' })).toBeEnabled();
+  expect(await canvasContrast(page)).toBe(0);
+  expect(await page.evaluate(() => window.sdpUnified.network.status.state)).toBe('disconnected');
+  await page.getByRole('button', { name: 'CLICK TO ENTER' }).click();
+  await expect(page.getByRole('textbox', { name: 'USERNAME', exact: true })).toBeVisible();
+  expect(await canvasContrast(page)).toBe(0);
+  await page.screenshot({ path: info.outputPath('white-name-entry.png') });
+  await page.getByRole('textbox', { name: 'USERNAME', exact: true }).fill('<script>');
+  await page.getByRole('button', { name: 'ENTER', exact: true }).click();
+  await expect(page.locator('#intro-name-message')).toContainText('2-20');
+  await page.getByRole('textbox', { name: 'USERNAME', exact: true }).fill('Named Visitor');
+  await page.getByRole('button', { name: 'ENTER', exact: true }).click();
+  await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
+  await expect.poll(() => page.evaluate(() => window.sdpUnified.network.snapshot?.players[0].displayName)).toBe('Named Visitor');
+  expect(await visiblePixels(page)).toBeGreaterThan(300);
+  expect(requests.filter(shooterRequest)).toEqual([]);
+  await page.screenshot({ path: info.outputPath('named-visitor-reveal.png') });
+});
+test('B toggles authoritative automatic fire; holding fires a rising burst, release stops and typing is ignored', async ({ page }, info) => {
+  await enterLimbo(page); await openProtocol(page); await enterShooter(page);
+  await page.keyboard.press('KeyB');
+  await expect(page.locator('.shooter-fire-mode')).toHaveText('SDP / AUTO');
+  await expect.poll(() => page.evaluate(() => {
+    const s = window.sdpUnified.network.snapshot!; return s.players.find(p => p.playerId === s.localPlayerId)!.automatic;
+  })).toBe(true);
+  const pitch = await page.evaluate(() => window.sdpUnified.modes.shooter!.input.pitch);
+  await page.mouse.down(); await page.waitForTimeout(680); await page.mouse.up();
+  const burst = await page.evaluate(() => { const game = window.sdpUnified.modes.shooter!; return { shots: game.shooting!.shotsFired, pitch: game.input.pitch }; });
+  expect(burst.shots).toBeGreaterThanOrEqual(5); expect(burst.pitch - pitch).toBeGreaterThan(.07);
+  await page.waitForTimeout(350);
+  expect(await page.evaluate(() => window.sdpUnified.modes.shooter!.shooting!.shotsFired)).toBe(burst.shots);
+  await page.screenshot({ path: info.outputPath('automatic-recoil.png') });
+  await page.keyboard.press('Enter');
+  await page.getByRole('textbox', { name: 'Chat message' }).press('b');
+  expect(await page.evaluate(() => window.sdpUnified.modes.shooter!.weapon.automatic)).toBe(true);
+  await page.keyboard.press('Escape'); await expect(page.locator('.mode-overlay')).toBeHidden();
+  await expect.poll(() => page.evaluate(() => window.sdpUnified.modes.shooter!.input.enabled && window.sdpUnified.modes.shooter!.input.locked)).toBe(true);
+  await page.keyboard.press('KeyB'); await expect(page.locator('.shooter-fire-mode')).toHaveText('SDP / SEMI-AUTO');
+  const before = await page.evaluate(() => window.sdpUnified.modes.shooter!.shooting!.shotsFired);
+  await page.mouse.down(); await page.waitForTimeout(500); await page.mouse.up();
+  expect(await page.evaluate(() => window.sdpUnified.modes.shooter!.shooting!.shotsFired)).toBe(before + 1);
+});
 test('two actual browsers: authoritative hits, crouch, digital death and server respawn', async ({ browser }, info) => {
   const a = await browser.newContext(), b = await browser.newContext(), first = await a.newPage(), second = await b.newPage();
   const errors: string[] = [];
@@ -63,7 +118,7 @@ test('two actual browsers: authoritative hits, crouch, digital death and server 
     await first.evaluate(() => {
       const app = window.sdpUnified, s = app.network.snapshot!, own = s.players.find(p => p.playerId === s.localPlayerId)!, other = s.players.find(p => p.playerId !== s.localPlayerId)!;
       const game = app.modes.shooter!, dx = other.x - own.x, dz = other.z - own.z;
-      game.input.yaw = Math.atan2(-dx, -dz); game.input.pitch = Math.atan2(other.y + other.height! * .58 - (own.y + own.height! - .1), Math.hypot(dx, dz));
+      game.input.yaw = Math.atan2(-dx, -dz); game.input.pitch = Math.atan2(other.y + 1.14 - (own.y + own.height! - .1), Math.hypot(dx, dz));
     });
     await first.waitForTimeout(300);
     await first.mouse.down(); await first.mouse.up();
@@ -71,10 +126,18 @@ test('two actual browsers: authoritative hits, crouch, digital death and server 
     await expect.poll(() => second.evaluate(() => window.sdpUnified.modes.shooter!.health)).toBe(50);
     await expect.poll(() => second.locator('.damage-vignette').evaluate(node => Number(getComputedStyle(node).opacity))).toBeGreaterThan(0);
     await second.screenshot({ path: info.outputPath('white-digital-damage.png') });
+    await first.evaluate(() => {
+      const app = window.sdpUnified, s = app.network.snapshot!, own = s.players.find(p => p.playerId === s.localPlayerId)!, other = s.players.find(p => p.playerId !== s.localPlayerId)!;
+      const game = app.modes.shooter!, dx = other.x - own.x, dz = other.z - own.z;
+      game.input.yaw = Math.atan2(-dx, -dz); game.input.pitch = Math.atan2(other.y + 1.14 - (own.y + own.height! - .1), Math.hypot(dx, dz));
+    });
+    await first.waitForTimeout(250);
     await first.mouse.down(); await first.mouse.up();
     await expect.poll(async () => (await targetState()).dead).toBe(true);
     const dead = await targetState(); const steps = await second.evaluate(() => window.sdpUnified.modes.shooter!.fixedSteps);
     await expect(second.locator('.desynchronization-state')).toBeVisible(); await expect(first.locator('.combat-confirmation')).toBeVisible();
+    await expect(first.locator('.shooter-strike')).toContainText('STRIKE 01');
+    await expect(first.locator('.shooter-kill-feed .kill-player')).toHaveText(['SDP Tester', 'SDP Tester #2']);
     await expect.poll(() => first.evaluate(() => window.sdpUnified.modes.shooter!.remotes.group.children[0].userData.coherence)).toBeLessThan(.95);
     await first.screenshot({ path: info.outputPath('avatar-desynchronizing.png') });
     await second.bringToFront(); await second.keyboard.down('KeyW'); await second.keyboard.press('KeyR'); await second.mouse.click(720, 500); await second.keyboard.up('KeyW');
@@ -149,6 +212,7 @@ test('two browsers: ground spawns, correctly aimed remote weapon and stable move
     expect(await first.evaluate(() => window.sdpUnified.network.ping())).toBeGreaterThanOrEqual(150);
     await first.evaluate(() => {
       const game = window.sdpUnified.modes.shooter!; game.input.yaw = 0; game.input.pitch = 0;
+      game.input.yaw = Math.PI;
       window.shooterMotionSamples = [];
       const start = performance.now();
       const sample = (now: number) => {
@@ -282,7 +346,7 @@ test('two browsers synchronize in Shooter and stay isolated from Limbo voice and
     expect(rooms[0]).toBe(rooms[1]); expect(rooms[0]).not.toBe(rooms[2]);
     await first.bringToFront(); if (await first.getByRole('button', { name: 'RESUME', exact: true }).isVisible()) await first.getByRole('button', { name: 'RESUME', exact: true }).click();
     const position = await second.evaluate(() => window.sdpUnified.modes.shooter!.remotes.group.children[0].position.toArray());
-    await first.keyboard.down('KeyA'); await first.waitForTimeout(1000); await first.keyboard.up('KeyA');
+    await first.keyboard.down('KeyW'); await first.waitForTimeout(1000); await first.keyboard.up('KeyW');
     await expect.poll(() => second.evaluate(before => { const p = window.sdpUnified.modes.shooter!.remotes.group.children[0].position; return Math.hypot(p.x - before[0], p.z - before[2]); }, position)).toBeGreaterThan(.5);
     await first.mouse.click(720, 500); await expect.poll(() => second.evaluate(() => window.sdpUnified.network.snapshot!.players.some(p => p.playerId !== window.sdpUnified.network.snapshot!.localPlayerId && p.ammo === 29))).toBe(true);
     await first.keyboard.press('Enter'); await first.getByRole('textbox', { name: 'Chat message' }).fill('Only combat room'); await first.keyboard.press('Enter');
@@ -312,7 +376,7 @@ test('failed assets allow retry and returning; mobile Limbo remains framed', asy
   await page.getByRole('button', { name: 'RETURN TO LIMBO' }).click(); await expect(page.locator('#app')).toHaveAttribute('data-mode', 'LIMBO');
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   try {
-    const mobile = await context.newPage(); await mobile.goto('/'); await mobile.getByRole('button', { name: 'VIEW EXHIBITION' }).click();
+    const mobile = await context.newPage(); await mobile.goto('/'); await enterExhibition(mobile);
     await expect(mobile.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
     await mobile.getByRole('button', { name: 'Inspect sculpture', exact: true }).click();
     await expect(mobile.locator('.ui')).toHaveAttribute('data-state', 'INSPECTING'); expect(await visiblePixels(mobile)).toBeGreaterThan(1000);

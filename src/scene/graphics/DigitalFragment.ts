@@ -66,8 +66,9 @@ export class DigitalFragment {
     this.distance = this.object.position.distanceTo(cameraPosition);
     const visibility = entered && config.enabled ? distanceVisibility(this.distance, config) : 0;
     const proximity = 1 - smoothstep(Math.min(4, config.visibilityDistance / 3), config.visibilityDistance * 2 / 3, this.distance);
-    const targetOpacity = visibility * (config.minimumOpacity + (config.maximumOpacity - config.minimumOpacity) * (0.4 + proximity * 0.6));
-    const targetProgress = Math.min(1, visibility * 1.6);
+    const definition = this.distance > 2.8 ? .8 + proximity * .2 : .4 + proximity * .6;
+    const targetOpacity = visibility * (config.minimumOpacity + (config.maximumOpacity - config.minimumOpacity) * definition);
+    const targetProgress = this.distance > 2.8 && visibility > .001 ? 1 : Math.min(1, visibility * 1.6);
     const step = dt / config.reconstructionDuration;
     this.progress += Math.max(-step, Math.min(step, targetProgress - this.progress));
     this.opacity += (targetOpacity - this.opacity) * (1 - Math.exp(-dt * 4));

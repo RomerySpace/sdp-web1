@@ -2,6 +2,10 @@
 export const ENABLE_SHOOTER_TEST: boolean = true;
 export const gameplayConfig = {
   combat: { maxHealth: 100, damage: 50, fireInterval: .14, range: 220,
+    regionDamage: { arm: 25, leg: 25, torso: 50, head: 100, foot: 12 },
+    regenerationDelay: 7, regenerationRate: 10, automaticFireInterval: .1,
+    recoilReset: .45, recoilPitch: .014, recoilGrowth: .0012, recoilYaw: .003,
+    killFeedDuration: 8, killFeedLimit: 6,
     respawnDelay: 3, spawnProtection: 1.25, maxRewind: .2, interpolationDelay: .07,
     magazineSize: 30, reserveAmmo: 120, reloadDuration: 2.2 },
   death: { duration: 1.35, fragmentCount: 48, dissolutionSpeed: 1, particleOpacity: .55, reconstructionDuration: .7 },

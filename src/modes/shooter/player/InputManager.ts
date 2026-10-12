@@ -1,6 +1,6 @@
 import { MathUtils } from 'three';
 import { gameConfig } from '../config/gameConfig';
-const controls = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ShiftLeft', 'ControlLeft', 'ControlRight', 'KeyR']);
+const controls = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ShiftLeft', 'ControlLeft', 'ControlRight', 'KeyR', 'KeyB']);
 export class InputManager {
   readonly keys = new Set<string>();
   private readonly pressed = new Set<string>();

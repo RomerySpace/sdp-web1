@@ -5,6 +5,8 @@ import { Spring } from '../core/Spring';
 import type { CharacterController } from '../physics/CharacterController';
 import type { InputManager } from '../player/InputManager';
 import { assetBuffer } from '../../../assets/AssetCache';
+import { gameplayConfig } from '../../../../shared/GameplayConfig';
+import { shotRecoil } from '../../../../shared/WeaponRecoil';
 
 export class Weapon {
   readonly root = new Group();
@@ -24,6 +26,9 @@ export class Weapon {
   time = 0;
   lastShot = -100;
   loaded = false;
+  automatic = false;
+  burstShots = 0;
+  recoil = { pitch: 0, yaw: 0 };
   sourceBounds?: number[][];
   private phase = 0;
   private sprintAmount = 0;
@@ -59,10 +64,13 @@ export class Weapon {
     this.reloading = true; this.reloadElapsed = 0; return true;
   }
   canShoot(): boolean {
-    return this.loaded && !this.reloading && this.ammo > 0 && this.time - this.lastShot >= gameConfig.weapon.fireInterval;
+    const interval = this.automatic ? gameplayConfig.combat.automaticFireInterval : gameConfig.weapon.fireInterval;
+    return this.loaded && !this.reloading && this.ammo > 0 && this.time - this.lastShot >= interval;
   }
   shoot(): boolean {
     if (!this.canShoot()) return false;
+    if (this.time - this.lastShot > gameplayConfig.combat.recoilReset) this.burstShots = 0;
+    this.recoil = shotRecoil(this.burstShots++, this.automatic, this.ads > .5);
     this.lastShot = this.time; this.ammo--;
     this.springs.recoil.kick(0.9 * gameConfig.weapon.recoil);
     this.springs.pitch.kick(0.55 * gameConfig.weapon.recoil);
@@ -74,7 +82,8 @@ export class Weapon {
     this.springs.pitch.kick(Math.min(speed, 9) * 0.07);
   }
   onJump(): void { this.springs.y.kick(-0.16); }
-  reset(ammo = gameConfig.weapon.magazineSize, reserve = gameConfig.weapon.reserveAmmo): void {
+  reset(ammo = gameConfig.weapon.magazineSize, reserve = gameConfig.weapon.reserveAmmo, automatic = false): void {
+    this.automatic = automatic; this.burstShots = 0; this.recoil = { pitch: 0, yaw: 0 };
     this.ammo = ammo; this.reserve = reserve; this.reloading = false; this.reloadElapsed = 0;
     this.ads = this.obstruction = this.phase = this.sprintAmount = this.crouchAmount = this.obstructionAmount = 0;
     this.lastShot = -100; Object.values(this.springs).forEach(s => s.reset());

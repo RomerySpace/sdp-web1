@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
+import { enterExhibition } from './entry';
 import type { FirstPersonController } from '../src/player/FirstPersonController';
 import type { Sculpture } from '../src/scene/Sculpture';
 import type { SculptureInspection } from '../src/scene/SculptureInspection';
@@ -15,8 +16,7 @@ declare global {
 async function enter(page: Page): Promise<void> {
   await page.goto('/?inspectionDebug=1&multiplayerDebug=1');
   await expect(page.locator('.ui')).toHaveAttribute('data-sculpture', 'loaded');
-  await expect(page.locator('.connection-indicator')).toHaveAttribute('data-connection', 'connected');
-  await page.getByRole('button', { name: 'CLICK TO ENTER' }).click();
+  await enterExhibition(page);
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
 }
 
@@ -136,7 +136,7 @@ test('touch inspection is framed, nonblank and closes without pointer lock', asy
     const page = await context.newPage();
     await page.goto('/?inspectionDebug=1');
     await expect(page.locator('.ui')).toHaveAttribute('data-sculpture', 'loaded');
-    await page.getByRole('button', { name: 'VIEW EXHIBITION' }).click();
+    await enterExhibition(page);
     await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
     await expect(page.locator('.inspect-button kbd')).toBeHidden();
     await page.getByRole('button', { name: 'Inspect sculpture', exact: true }).click();
@@ -165,7 +165,7 @@ test('a missing model disables inspection without breaking the exhibition', asyn
   await page.route('**/SDPv1.glb', (route) => route.abort());
   await page.goto('/?inspectionDebug=1');
   await expect(page.locator('.ui')).toHaveAttribute('data-sculpture', 'fallback');
-  await page.getByRole('button', { name: 'CLICK TO ENTER' }).click();
+  await enterExhibition(page);
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
   await page.evaluate(() => window.sdpInspection.player.camera.position.set(0, 1.7, 2.7));
   await page.keyboard.press('KeyE');

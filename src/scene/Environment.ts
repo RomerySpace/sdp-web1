@@ -57,7 +57,7 @@ export class Environment {
   }
 
   update(reveal: number): void {
-    (this.meshes[2].material as MeshBasicMaterial).opacity = 0.2 + reveal * 0.8;
+    (this.meshes[2].material as MeshBasicMaterial).opacity = reveal;
   }
 
   dispose(): void {

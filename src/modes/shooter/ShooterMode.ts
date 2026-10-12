@@ -61,6 +61,7 @@ export class ShooterMode {
       network.subscribeToState(snapshot => {
         if (network.roomType !== SHOOTER_ROOM) return;
         this.remotes.receive(snapshot);
+        this.hud.receive(snapshot);
         const local = snapshot.players.find(player => player.playerId === snapshot.localPlayerId);
         if (!local || !this.player) return;
         if (local.life !== this.life) this.spawn(local);
@@ -76,6 +77,7 @@ export class ShooterMode {
         }
         if ((local.weaponSeq ?? 0) >= this.actionSequence) {
           this.weapon.ammo = local.ammo ?? this.weapon.ammo; this.weapon.reserve = local.reserve ?? this.weapon.reserve;
+          this.weapon.automatic = local.automatic ?? false;
           if (!local.reloading) { this.weapon.reloading = false; this.weapon.reloadElapsed = 0; }
         }
       }), network.subscribeToWeapons(event => this.remotes.action(event)),
@@ -103,7 +105,7 @@ export class ShooterMode {
   }
   private spawn(player: NetworkPlayer): void {
     this.player?.spawn.set(player.spawnX ?? player.x, player.spawnY ?? player.y, player.spawnZ ?? player.z);
-    this.player?.respawn(); this.camera.reset(); this.weapon.reset(player.ammo, player.reserve); this.feedback.reset();
+    this.player?.respawn(); this.camera.reset(); this.weapon.reset(player.ammo, player.reserve, player.automatic); this.feedback.reset();
     this.health = player.health ?? gameplayConfig.combat.maxHealth; this.life = player.life ?? 1; this.dead = false;
     this.prediction.reset(this.life); this.viewCorrection.set(0, 0, 0); this.lastInput = undefined; this.lastInputSent = 0;
     this.accumulator = this.stepDistance = 0;
@@ -113,8 +115,8 @@ export class ShooterMode {
     if (player.dead) this.die();
   }
   private applyHealth(health: number): void {
-    if (health >= this.health) return;
-    this.camera.onDamage(this.health - health); this.feedback.hit(); this.health = health;
+    if (health < this.health) { this.camera.onDamage(this.health - health); this.feedback.hit(); }
+    this.health = health;
   }
   private die(): void {
     if (this.dead) return;
@@ -180,6 +182,10 @@ export class ShooterMode {
       }
     }
     const activeDt = this.paused || this.dead ? 0 : dt;
+    if (!this.paused && !this.dead && this.input.consume('KeyB') && !this.weapon.reloading) {
+      this.weapon.automatic = !this.weapon.automatic; this.weapon.burstShots = 0; this.input.trigger = false;
+      this.network.sendWeaponAction({ seq: ++this.actionSequence, life: this.life, action: 'mode' });
+    }
     if (!this.paused && !this.dead && this.input.consume('KeyR') && this.weapon.startReload()) {
       this.audio.reload(); this.network.sendWeaponAction({ seq: ++this.actionSequence, life: this.life, action: 'reload' });
     }
@@ -188,12 +194,10 @@ export class ShooterMode {
     this.viewCorrection.multiplyScalar(Math.exp(-shooterNetworkConfig.correctionResponse * dt));
     this.camera.root.position.add(this.viewCorrection); this.camera.root.updateMatrixWorld(true);
     const clicks = this.input.shots; this.input.shots = 0;
-    if (!this.paused && !this.dead && (clicks > 0 || gameConfig.weapon.automatic && this.input.trigger)) {
-      const before = this.shooting?.shotsFired; this.shooting?.fire();
-      if (this.shooting?.shotsFired !== before) {
-        this.sendInput(true, true);
-        this.network.sendWeaponAction({ seq: ++this.actionSequence, life: this.life, action: 'fire' });
-      }
+    if (!this.paused && !this.dead && this.weapon.canShoot() && (clicks > 0 || this.weapon.automatic && this.input.trigger)) {
+      this.sendInput(true, true);
+      this.network.sendWeaponAction({ seq: ++this.actionSequence, life: this.life, action: 'fire' });
+      this.shooting?.fire();
     }
     this.shooting?.update(activeDt); this.input.lookX = this.input.lookY = 0;
     this.remotes.update(performance.now()); this.hud.update(p, this.weapon, this.health, this.dead);
@@ -210,7 +214,7 @@ export class ShooterMode {
   get snapshot() { return { paused: this.paused, physicsSteps: this.fixedSteps, position: this.player?.current.toArray(),
     grounded: this.player?.grounded, movement: this.player?.state, colliders: this.colliderCount, map: this.map.stats,
     ammo: this.weapon.ammo, reserve: this.weapon.reserve, shots: this.shooting?.shotsFired, reloading: this.weapon.reloading,
-    health: this.health, dead: this.dead, life: this.life,
+    health: this.health, dead: this.dead, life: this.life, automatic: this.weapon.automatic,
     weaponLoaded: this.weapon.loaded, remotePlayers: this.remotes.count,
     network: { corrections: this.prediction.corrections, teleports: this.prediction.teleports,
       jitterMs: this.remotes.clock.jitterMs, interpolationMs: this.remotes.clock.interpolationMs, maxSnapshotGapMs: this.remotes.clock.maxGapMs } }; }

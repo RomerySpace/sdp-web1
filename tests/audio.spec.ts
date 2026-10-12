@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
+import { enterExhibition } from './entry';
 
 test('a supplied ambient asset starts only on entry, loops, fades and responds to volume', async ({ page }) => {
   test.skip(!existsSync('public/audio/ambient.mp3'), 'The ambient asset is optional; provide it to exercise playback.');
@@ -19,7 +20,7 @@ test('a supplied ambient asset starts only on entry, loops, fades and responds t
   await page.goto('/');
   await expect(page.locator('.ui')).toHaveAttribute('data-hdr', 'loaded');
   expect(await page.evaluate(() => 'audioProbe' in window)).toBe(false);
-  await page.getByRole('button', { name: 'CLICK TO ENTER' }).click();
+  await enterExhibition(page);
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
 
   const level = () => page.evaluate(() => {
