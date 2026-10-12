@@ -12,8 +12,26 @@ test('Shooter accepts bounded inputs, never arbitrary positions or hit reports',
   assert.equal(validateShooterInput({ ...input, f: 10 }), null);
   assert.equal(validateShooterInput({ ...input, y: Infinity }), null);
   assert.equal(validateShooterInput({ ...input, j: 'true' }), null);
+  assert.equal(validateShooterInput({ ...input, f: .5, r: -.25 })?.r, -.25);
+  for (const axis of [NaN, Infinity, -Infinity, 1.001, -1.001, '0.5']) assert.equal(validateShooterInput({ ...input, r: axis }), null);
   assert.deepEqual(validateWeaponAction({ seq: 1, life: 1, action: 'fire' }), { seq: 1, life: 1, action: 'fire' });
   assert.equal(validateWeaponAction({ seq: 1, life: 1, action: 'fire', hit: 'other-player' }), null);
+});
+test('analog Shooter movement uses the same Rapier controller locally and on the server', async () => {
+  const physics = await PhysicsWorld.initialize();
+  const { CharacterController } = await import('../../src/modes/shooter/physics/CharacterController');
+  const { Vector3 } = await import('three');
+  const makeInput = (forward: number) => ({ forward, sideways: 0, yaw: 0, aiming: false, keys: new Set<string>(), consume: () => false, clear: () => {} });
+  try {
+    physics.world.createCollider(RAPIER.ColliderDesc.cuboid(30, .1, 30).setTranslation(0, -.1, 0));
+    const full = new CharacterController(physics, makeInput(1), new Vector3(-4, 0, 0));
+    const half = new CharacterController(physics, makeInput(.5), new Vector3(4, 0, 0));
+    for (let i = 0; i < 120; i++) { full.beforeStep(1 / 60, false); half.beforeStep(1 / 60, false); physics.step(); full.afterStep(); half.afterStep(); }
+    assert.ok(Math.abs(half.velocity.z) > gameConfig.player.walkSpeed * .45);
+    assert.ok(Math.abs(half.velocity.z) < gameConfig.player.walkSpeed * .55);
+    assert.ok(Math.abs(full.velocity.z) <= gameConfig.player.walkSpeed + .01);
+    full.dispose(); half.dispose();
+  } finally { physics.dispose(); }
 });
 test('ground search stays below roofs and refuses unsupported floors', async () => {
   const physics = await PhysicsWorld.initialize(), seed = gameConfig.player.spawn;

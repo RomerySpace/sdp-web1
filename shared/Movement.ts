@@ -11,7 +11,7 @@ export function simulateMovement(state: MotionState, input: MovementInput, dt: n
   if (!input.active) { state.velocityX = state.velocityZ = 0; return; }
   let forward = input.f, sideways = input.r;
   const length = Math.hypot(forward, sideways);
-  if (length) { forward /= length; sideways /= length; }
+  if (length > 1) { forward /= length; sideways /= length; }
   const speed = MOVEMENT_SPEED * (input.s && length > 0 ? gameplayConfig.limbo.sprintMultiplier : 1);
   const x = (sideways * Math.cos(input.y) - forward * Math.sin(input.y)) * speed;
   const z = (-forward * Math.cos(input.y) - sideways * Math.sin(input.y)) * speed;

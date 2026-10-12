@@ -1,6 +1,7 @@
 import { createElement, Maximize, Minimize, Volume2, VolumeX } from 'lucide';
 import { PlayerSettings, settingsLimits, type SettingsState } from '../core/PlayerSettings';
 import { toggleFullscreen } from './Fullscreen';
+import { usesTouchControls } from '../input/InputCapabilities';
 
 export class SettingsPanel {
   readonly element = document.createElement('section');
@@ -13,7 +14,7 @@ export class SettingsPanel {
     this.element.className = 'session-settings'; this.element.setAttribute('aria-label', 'Experience settings');
     this.element.innerHTML = `<h2>SETTINGS</h2>`;
     const signal = this.events.signal;
-    for (const [key, label] of [['sensitivity', 'Mouse sensitivity'], ['volume', 'Game volume'], ['musicVolume', 'Music volume']] as const) {
+    for (const [key, label] of [['sensitivity', usesTouchControls() ? 'Look sensitivity' : 'Mouse sensitivity'], ['volume', 'Game volume'], ['musicVolume', 'Music volume']] as const) {
       const id = `${prefix}-${key === 'musicVolume' ? 'music-volume' : key}`;
       const row = document.createElement('label'); row.htmlFor = id;
       row.append(document.createTextNode(label.toUpperCase()));

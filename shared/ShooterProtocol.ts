@@ -37,7 +37,7 @@ export function validateShooterInput(raw: unknown): ShooterInput | null {
   const v = raw as Record<string, unknown>;
   if (Object.keys(v).length !== 11 || !Number.isSafeInteger(v.life) || (v.life as number) < 1 || (v.life as number) > 0x7fffffff ||
     !Number.isSafeInteger(v.seq) || (v.seq as number) < 0 || (v.seq as number) > 0x7fffffff ||
-    ![-1, 0, 1].includes(v.f as number) || ![-1, 0, 1].includes(v.r as number) ||
+    !isMovementAxis(v.f) || !isMovementAxis(v.r) ||
     typeof v.y !== 'number' || !Number.isFinite(v.y) || Math.abs(v.y) > Math.PI * 2 ||
     typeof v.p !== 'number' || !Number.isFinite(v.p) || Math.abs(v.p) > 1.5 ||
     !['s', 'c', 'j', 'a', 'active'].every(k => typeof v[k] === 'boolean')) return null;
@@ -52,3 +52,4 @@ export function validateWeaponAction(raw: unknown): WeaponAction | null {
     Number.isSafeInteger(v.seq) && (v.seq as number) >= 0 && (v.seq as number) <= 0x7fffffff &&
     (v.action === 'fire' || v.action === 'reload' || v.action === 'mode') ? { seq: v.seq as number, life: v.life as number, action: v.action } : null;
 }
+import { isMovementAxis } from './MultiplayerProtocol';

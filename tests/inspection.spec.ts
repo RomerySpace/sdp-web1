@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
 import { enterExhibition } from './entry';
+import { walkToSculpture } from './touch-driver';
 import type { FirstPersonController } from '../src/player/FirstPersonController';
 import type { Sculpture } from '../src/scene/Sculpture';
 import type { SculptureInspection } from '../src/scene/SculptureInspection';
@@ -139,7 +140,7 @@ test('touch inspection is framed, nonblank and closes without pointer lock', asy
     await enterExhibition(page);
     await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
     await expect(page.locator('.inspect-button kbd')).toBeHidden();
-    await page.getByRole('button', { name: 'Inspect sculpture', exact: true }).click();
+    await walkToSculpture(page);
     await expect(page.locator('.ui')).toHaveAttribute('data-state', 'INSPECTING');
     const { data: pixels, info } = await sharp(await page.locator('canvas').screenshot()).removeAlpha().raw().toBuffer({ resolveWithObject: true });
     let dark = 0;

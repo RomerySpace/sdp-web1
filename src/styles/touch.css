@@ -1,0 +1,67 @@
+#app[data-input="touch"] { --touch-edge: max(18px, env(safe-area-inset-right)); }
+#app[data-input="touch"] .scene-canvas { touch-action: none; }
+#app[data-input="touch"] .ui { z-index: 40; }
+#app[data-input="touch"] .mode-diagnostics { display: none; }
+.touch-controls { position: fixed; inset: 0; z-index: 35; pointer-events: none; user-select: none; -webkit-user-select: none; }
+.touch-controls [hidden], .touch-controls[hidden] { display: none; }
+.touch-look { position: absolute; inset: 0 0 0 45%; pointer-events: auto; touch-action: none; }
+.touch-stick { position: absolute; width: clamp(96px, 24dvh, 128px); aspect-ratio: 1; left: max(18px, env(safe-area-inset-left)); bottom: max(70px, calc(env(safe-area-inset-bottom) + 50px)); border: 1px solid rgba(70,90,104,.28); border-radius: 50%; background: rgba(246,251,254,.12); pointer-events: auto; touch-action: none; }
+.touch-stick-thumb { position: absolute; width: 42px; height: 42px; left: calc(50% - 21px); top: calc(50% - 21px); border-radius: 50%; border: 1px solid rgba(65,86,100,.3); background: rgba(244,249,252,.44); pointer-events: none; }
+.touch-button { position: absolute; width: 52px; height: 52px; display: grid; place-items: center; padding: 12px; border: 1px solid rgba(66,87,100,.26); border-radius: 50%; background: rgba(247,251,253,.4); color: #465e6c; pointer-events: auto; touch-action: none; -webkit-touch-callout: none; }
+.touch-button svg { width: 23px; height: 23px; stroke-width: 1.5; pointer-events: none; }
+.touch-button[aria-pressed="true"] { border-color: #658795; background: rgba(223,238,245,.75); color: #263e4a; }
+.touch-fire { width: 76px; height: 76px; right: var(--touch-edge); bottom: max(170px, calc(env(safe-area-inset-bottom) + 150px)); }
+.touch-fire svg { width: 32px; height: 32px; }
+.touch-aim { right: calc(var(--touch-edge) + 94px); bottom: max(182px, calc(env(safe-area-inset-bottom) + 162px)); }
+.touch-jump { right: var(--touch-edge); bottom: max(100px, calc(env(safe-area-inset-bottom) + 80px)); }
+.touch-crouch { right: calc(var(--touch-edge) + 62px); bottom: max(100px, calc(env(safe-area-inset-bottom) + 80px)); }
+.touch-reload { right: calc(var(--touch-edge) + 124px); bottom: max(100px, calc(env(safe-area-inset-bottom) + 80px)); }
+.touch-mode { right: calc(var(--touch-edge) + 156px); bottom: max(182px, calc(env(safe-area-inset-bottom) + 162px)); padding: 6px; gap: 0; grid-template-rows: 24px 12px; }
+.touch-mode svg { width: 20px; height: 20px; }
+.touch-mode-label { font-size: 7px; font-weight: 500; letter-spacing: 0; }
+.touch-sprint { left: max(56px, calc(env(safe-area-inset-left) + 38px)); bottom: max(214px, calc(env(safe-area-inset-bottom) + 194px)); }
+.touch-tools { position: absolute; top: max(76px, calc(env(safe-area-inset-top) + 66px)); right: var(--touch-edge); display: flex; gap: 8px; }
+.touch-tools .touch-button { position: relative; width: 44px; height: 44px; padding: 10px; border-radius: 4px; }
+.touch-tools svg { width: 20px; height: 20px; }
+.touch-voice-note { position: absolute; top: max(130px, calc(env(safe-area-inset-top) + 120px)); right: var(--touch-edge); width: min(240px, calc(100% - 36px)); text-align: right; font-size: 8px; line-height: 1.5; color: #778e9b; pointer-events: none; }
+.touch-controls[data-voice="denied"] .touch-voice-note { color: #6b565d; }
+.touch-controls[data-voice="speaking"] .touch-voice { color: #466d5e; border-color: #718c7b; }
+.touch-controls:not([data-context="shooter"]) :is(.touch-fire, .touch-aim, .touch-jump, .touch-crouch, .touch-reload, .touch-mode) { display: none; }
+.touch-controls:is([data-context="shooter"], [data-context="dead"]) :is(.touch-voice, .touch-voice-note) { display: none; }
+.touch-controls:is([data-context="inspection"], [data-context="dead"]) :is(.touch-stick, .touch-look, .touch-sprint) { display: none; }
+#app[data-input="touch"] :is(.controls-overlay, .exhibit-caption, .shooter-menu-button, .shooter-fire-hint, .chat-note, .chat-input-hint, .pause-hint) { display: none; }
+#app[data-input="touch"] .chat { left: 18px; bottom: max(262px, calc(env(safe-area-inset-bottom) + 242px)); width: min(260px, calc(100% - 36px)); z-index: 50; }
+#app[data-input="touch"] .chat:not(.is-open) { pointer-events: none; }
+#app[data-input="touch"] .chat-history { max-height: 84px; }
+#app[data-input="touch"] .chat.is-open { position: fixed; width: calc(100% - 36px); bottom: var(--chat-bottom, 18px); }
+#app[data-input="touch"] .chat-form input, #app[data-input="touch"] .intro-name-row input { font-size: 16px; }
+#app[data-input="touch"] .chat-form { padding: 5px 10px; min-height: 52px; gap: 8px; }
+#app[data-input="touch"] .chat-send, #app[data-input="touch"] .chat-close { width: 44px; height: 44px; flex: 0 0 44px; display: grid; place-items: center; padding: 10px; }
+.chat-send svg, .chat-close svg { width: 20px; height: 20px; }
+#app:not([data-input="touch"]) :is(.chat-send, .chat-close) { display: none; }
+#app[data-input="touch"] .shooter-health { bottom: max(34px, calc(env(safe-area-inset-bottom) + 28px)); left: max(18px, env(safe-area-inset-left)); }
+#app[data-input="touch"] .shooter-movement { bottom: max(18px, calc(env(safe-area-inset-bottom) + 12px)); left: max(18px, env(safe-area-inset-left)); }
+#app[data-input="touch"] .shooter-ammo { right: var(--touch-edge); bottom: max(18px, env(safe-area-inset-bottom)); }
+#app[data-input="touch"] .shooter-ammo { gap: 4px; }
+#app[data-input="touch"] .shooter-magazine { font-size: 24px; line-height: 1.2; }
+#app[data-input="touch"] .shooter-fire-control { min-height: 12px; }
+#app[data-input="touch"] .shooter-action { position: absolute; bottom: calc(100% + 3px); right: 0; min-height: 10px; font-size: 7px; }
+#app[data-input="touch"] .shooter-kill-feed { width: min(230px, calc(100% - 140px)); }
+#app[data-input="touch"] .protocol-content { max-height: calc(100dvh - 24px); overflow-y: auto; padding: 6px; }
+#app[data-input="touch"] .shooter-test-join { bottom: max(24px, env(safe-area-inset-bottom)); }
+@media (max-height: 500px) {
+  .touch-stick { bottom: max(54px, calc(env(safe-area-inset-bottom) + 44px)); }
+  .touch-sprint { left: max(40px, calc(env(safe-area-inset-left) + 22px)); bottom: max(160px, calc(env(safe-area-inset-bottom) + 150px)); }
+  .touch-fire { bottom: max(146px, calc(env(safe-area-inset-bottom) + 136px)); }
+  .touch-aim, .touch-mode { bottom: max(158px, calc(env(safe-area-inset-bottom) + 148px)); }
+  .touch-jump, .touch-crouch, .touch-reload { bottom: max(84px, calc(env(safe-area-inset-bottom) + 74px)); }
+  #app[data-input="touch"] .chat { bottom: 200px; }
+  #app[data-input="touch"] .session-table-scroll { max-height: 85px; }
+}
+@media (max-width: 360px) and (min-height: 501px) {
+  .touch-mode { right: calc(var(--touch-edge) + 62px); bottom: 246px; }
+  .touch-reload { right: var(--touch-edge); bottom: 246px; }
+  .touch-aim { right: calc(var(--touch-edge) + 94px); bottom: 172px; }
+  .touch-fire { bottom: 160px; }
+  .touch-jump, .touch-crouch { bottom: 92px; }
+}

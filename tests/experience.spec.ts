@@ -120,13 +120,15 @@ test('denied microphone and denied pointer lock remain recoverable', async ({ pa
   await expect(page.locator('.ui-notice')).toContainText('Mouse control was not granted');
 });
 
-test('touch device has a working viewing mode', async ({ browser }) => {
+test('touch device has a working playable Limbo without pointer lock', async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const page = await context.newPage();
   await page.goto('/');
   await enterExhibition(page);
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
-  await expect(page.locator('.viewing-note')).toContainText('DESKTOP REQUIRED');
+  await expect(page.locator('#app')).toHaveAttribute('data-input', 'touch');
+  await expect(page.locator('.touch-stick')).toBeVisible();
+  await expect(page.locator('.viewing-note')).toHaveCount(0);
   expect(await page.evaluate(() => document.pointerLockElement)).toBeNull();
   await context.close();
 });

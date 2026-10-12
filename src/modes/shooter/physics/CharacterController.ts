@@ -79,7 +79,7 @@ export class CharacterController {
     const speed = (this.crouching ? p.crouchSpeed : this.sprinting ? p.sprintSpeed : p.walkSpeed) * (this.input.aiming ? p.adsSpeedMultiplier : 1);
     this.wish.set(side * Math.cos(this.input.yaw) - forward * Math.sin(this.input.yaw), 0,
       -forward * Math.cos(this.input.yaw) - side * Math.sin(this.input.yaw));
-    if (this.wish.lengthSq() > 0) this.wish.normalize().multiplyScalar(speed);
+    if (this.wish.lengthSq() > 0) this.wish.clampLength(0, 1).multiplyScalar(speed);
     this.oldVelocity.copy(this.velocity);
     const live = this.body.linvel();
     this.velocity.set(live.x, live.y, live.z);

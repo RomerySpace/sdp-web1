@@ -44,11 +44,11 @@ export class ShooterMode {
   private lastInput?: ShooterInput;
   private lastInputSent = 0;
   constructor(container: HTMLElement, private readonly renderer: WebGLRenderer, private readonly network: ColyseusNetworkAdapter,
-    private readonly onPaused: () => void, private readonly onResumed: () => void, settings = new PlayerSettings()) {
+    private readonly onPaused: () => void, private readonly onResumed: () => void, settings = new PlayerSettings(), readonly touch = false) {
     this.previousRenderer = { toneMapping: renderer.toneMapping, exposure: renderer.toneMappingExposure,
       autoClear: renderer.autoClear, autoReset: renderer.info.autoReset, shadowType: renderer.shadowMap.type,
       shadowAutoUpdate: renderer.shadowMap.autoUpdate, pixelRatio: renderer.getPixelRatio() };
-    this.input = new InputManager(renderer.domElement); this.camera = new FirstPersonCamera(this.input);
+    this.input = new InputManager(renderer.domElement, touch); this.camera = new FirstPersonCamera(this.input);
     this.scene.add(this.camera.root); this.camera.camera.add(this.weapon.root);
     this.environment = new Environment(this.scene, renderer); this.contactShading = new ContactShading(this.scene, this.camera.camera);
     this.scene.traverse(object => { if ('isLight' in object) object.layers.enable(1); });
@@ -60,7 +60,7 @@ export class ShooterMode {
     this.feedback = new CombatFeedback(container);
     const signal = this.events.signal;
     document.addEventListener('pointerlockchange', () => {
-      if (!this.active) return;
+      if (!this.active || this.touch) return;
       if (this.input.locked && !this.roundComplete) { this.paused = false; this.suppressPauseMenu = false; this.input.enabled = !this.dead; this.accumulator = 0; this.onResumed(); }
       else this.pause(this.suppressPauseMenu);
     }, { signal });
@@ -121,7 +121,7 @@ export class ShooterMode {
     this.accumulator = this.stepDistance = 0;
     this.player?.correct(player); this.input.yaw = player.yaw; this.input.pitch = player.pitch; this.input.clear();
     this.sequence = Math.max(this.sequence, player.lastProcessedInput + 1); this.actionSequence = player.weaponSeq ?? 0;
-    this.input.enabled = this.active && !this.paused && !this.roundComplete && this.input.locked;
+    this.input.enabled = this.active && !this.paused && !this.roundComplete && this.input.controlling;
     if (player.dead) this.die();
   }
   private applyHealth(health: number): void {
@@ -147,7 +147,9 @@ export class ShooterMode {
   resume(): void {
     if (!this.active || this.disposed || this.roundComplete || this.network.status.state !== 'connected') return;
     this.audio.enter(); this.audio.setVisible(true);
-    this.input.requestLock(this.onPaused);
+    if (this.touch) {
+      this.paused = false; this.suppressPauseMenu = false; this.input.enabled = !this.dead; this.accumulator = 0; this.onResumed();
+    } else this.input.requestLock(this.onPaused);
   }
   pause(hideMenu = false): void {
     if (!this.active) return;

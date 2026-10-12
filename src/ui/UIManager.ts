@@ -12,6 +12,7 @@ interface UIActions {
   inspect(): void;
   closeInspection(): void;
   menu(): void;
+  closeChat(): void;
 }
 
 export class UIManager {
@@ -48,7 +49,7 @@ export class UIManager {
     if (limited) { this.inspection.inspect.setAttribute('aria-label', 'Inspect sculpture'); this.inspection.inspect.querySelector('span')!.textContent = 'INSPECT'; }
     this.element.querySelector('.resume-button')!.addEventListener('click', actions.resume);
     this.intro = new IntroScreen(this.element, actions.enter, limited, savedName);
-    this.chat = new ChatInterface(this.element, actions.submit);
+    this.chat = new ChatInterface(this.element, actions.submit, actions.closeChat);
     this.controls = new ControlsOverlay(this.element, limited, actions.menu);
     container.append(this.element);
   }

@@ -37,6 +37,16 @@ test('fixed server steps limit speed, normalize diagonals, and stop paused input
   assert.equal(simulation.step('straight', input), undefined);
   simulation.clear();
 });
+test('analog joystick inputs retain proportional speed and cannot exceed the validated speed cap', () => {
+  assert.equal(validateMovementInput({ ...input, f: .5, r: -.25 })?.f, .5);
+  for (const axis of [NaN, Infinity, -Infinity, 1.001, -1.001, '0.5']) assert.equal(validateMovementInput({ ...input, f: axis }), null);
+  const simulation = new MovementSimulation(); simulation.add('full', { x: 20, z: 20 }); simulation.add('half', { x: 20, z: 20 });
+  let full!: MotionState, half!: MotionState;
+  for (let i = 0; i < 40; i++) { full = simulation.step('full', input)!; half = simulation.step('half', { ...input, f: .5 })!; }
+  assert.ok(Math.abs((20 - half.z) / (20 - full.z) - .5) < 1e-6);
+  assert.ok(Math.abs(full.velocityZ) <= 3); assert.ok(Math.abs(half.velocityZ) <= 1.5);
+  simulation.clear();
+});
 
 test('shared local and server movement agree and preserve pedestal collisions', () => {
   const simulation = new MovementSimulation();

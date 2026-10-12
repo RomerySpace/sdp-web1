@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
 import { enterExhibition } from './entry';
+import { walkToSculpture } from './touch-driver';
 import { sessionRanking } from '../src/modes/shooter/ui/SessionRanking';
 import type { NetworkPlayer } from '../shared/MultiplayerProtocol';
 import type { GameModeManager } from '../src/modes/GameModeManager';
@@ -507,11 +508,11 @@ test('failed assets allow retry and returning; mobile Limbo remains framed', asy
   try {
     const mobile = await context.newPage(); await mobile.goto('/'); await enterExhibition(mobile);
     await expect(mobile.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
-    await mobile.getByRole('button', { name: 'Inspect sculpture', exact: true }).click();
+    await walkToSculpture(mobile);
     await expect(mobile.locator('.ui')).toHaveAttribute('data-state', 'INSPECTING'); expect(await visiblePixels(mobile)).toBeGreaterThan(1000);
     const button = await mobile.getByRole('button', { name: 'JOIN SHOOTER TEST', exact: true }).boundingBox();
-    const controls = await mobile.locator('.controls-overlay').boundingBox();
-    expect(button!.y + button!.height).toBeLessThan(controls!.y);
+    expect(button!.y + button!.height).toBeLessThanOrEqual(844);
+    await expect(mobile.locator('.touch-stick')).toBeHidden();
     await mobile.screenshot({ path: info.outputPath('limbo-mobile-inspection.png') });
     await mobile.getByRole('button', { name: 'Close inspection' }).click(); await expect(mobile.locator('canvas')).toHaveCount(1);
   } finally { await context.close(); }

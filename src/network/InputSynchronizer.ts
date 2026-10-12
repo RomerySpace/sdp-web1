@@ -13,7 +13,7 @@ export class InputSynchronizer {
 
   private send(forceStopped = false): void {
     if (!this.enabled || this.network.status.state !== 'connected') return;
-    const active = !forceStopped && this.player.enabled && this.player.locked && !document.hidden;
+    const active = !forceStopped && this.player.enabled && this.player.controlling && !document.hidden;
     this.input.seq++;
     this.input.f = active ? this.player.input.forward : 0;
     this.input.r = active ? this.player.input.sideways : 0;

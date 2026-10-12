@@ -4,6 +4,7 @@ import type { MovementInput, NetworkPlayer } from '../../shared/MultiplayerProto
 import { CollisionManager } from './CollisionManager';
 import { InputManager } from './InputManager';
 import { gameplayConfig } from '../../shared/GameplayConfig';
+import { touchConfig } from '../input/InputCapabilities';
 
 export class FirstPersonController {
   readonly input = new InputManager();
@@ -17,7 +18,7 @@ export class FirstPersonController {
   sensitivity = 1;
   private readonly baseFov: number;
 
-  constructor(readonly camera: PerspectiveCamera, private readonly canvas: HTMLCanvasElement) {
+  constructor(readonly camera: PerspectiveCamera, private readonly canvas: HTMLCanvasElement, readonly touch = false) {
     this.baseFov = camera.fov;
     camera.rotation.order = 'YXZ';
     camera.position.set(0, 1.7, 9);
@@ -33,6 +34,13 @@ export class FirstPersonController {
 
   get locked(): boolean { return document.pointerLockElement === this.canvas; }
   get enabled(): boolean { return this.active; }
+  get controlling(): boolean { return this.touch || this.locked; }
+  touchLook(dx: number, dy: number): void {
+    if (!this.touch || !this.active) return;
+    this.yaw -= dx * touchConfig.lookSensitivity * this.sensitivity;
+    this.pitch = MathUtils.clamp(this.pitch - dy * touchConfig.lookSensitivity * this.sensitivity, -Math.PI / 2 + .03, Math.PI / 2 - .03);
+    this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
+  }
 
   setSpawn(player: NetworkPlayer): void {
     this.input.clear();
@@ -61,10 +69,10 @@ export class FirstPersonController {
   releaseLock(): void { if (this.locked) document.exitPointerLock(); }
 
   update(dt: number): void {
-    const sprint = this.active && this.locked && this.input.sprinting && (this.input.forward || this.input.sideways);
+    const sprint = this.active && this.controlling && this.input.sprinting && (this.input.forward || this.input.sideways);
     const fov = MathUtils.damp(this.camera.fov, this.baseFov + (sprint ? gameplayConfig.limbo.sprintFovAdjustment : 0), 6, dt);
     if (Math.abs(fov - this.camera.fov) > .001) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
-    if (!this.active || !this.locked) return;
+    if (!this.active || !this.controlling) return;
     this.motion.x = this.camera.position.x;
     this.motion.z = this.camera.position.z;
     this.movementInput.f = this.input.forward;

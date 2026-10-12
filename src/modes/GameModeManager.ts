@@ -23,7 +23,7 @@ export class GameModeManager {
   private returning = false;
   private haze = 0;
   constructor(private readonly container: HTMLElement, private readonly renderer: WebGLRenderer,
-    private readonly network: ColyseusNetworkAdapter, private readonly hooks: Hooks, private readonly settings = new PlayerSettings()) {
+    private readonly network: ColyseusNetworkAdapter, private readonly hooks: Hooks, private readonly settings = new PlayerSettings(), private readonly touch = false) {
     this.ui = new ModeInterface(container, { join: () => void this.joinShooter(), back: () => void this.returnToLimbo(),
       resume: () => this.shooter?.resume() });
   }
@@ -51,7 +51,7 @@ export class GameModeManager {
       abort.signal.throwIfAborted();
       candidate = new ShooterMode(this.container, this.renderer, this.network, () => {
         this.hooks.pauseChat(); this.showShooterMenu();
-      }, () => this.ui.hide(), this.settings);
+      }, () => this.ui.hide(), this.settings, this.touch);
       await candidate.initialize(text => { if (generation === this.generation) this.ui.loading(text); }, abort.signal);
       abort.signal.throwIfAborted();
       this.ui.loading('Joining Shooter room');

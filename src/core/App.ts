@@ -19,6 +19,10 @@ import { ENABLE_SHOOTER_TEST } from '../../shared/GameplayConfig';
 import { PlayerSettings } from './PlayerSettings';
 import { SettingsMenu } from '../ui/SettingsMenu';
 import { toggleFullscreen } from '../ui/Fullscreen';
+import { usesTouchControls } from '../input/InputCapabilities';
+import { TouchControls, type TouchAction } from '../ui/TouchControls';
+import type { VoiceState } from '../audio/VoiceChatManager';
+import type { VoiceConnectionState } from '../audio/LiveKitVoiceTransport';
 
 export class App {
   readonly state = new ExperienceStateMachine();
@@ -33,6 +37,9 @@ export class App {
   private readonly chat: ChatManager;
   private readonly ui: UIManager;
   private readonly settingsMenu: SettingsMenu;
+  private readonly touchControls?: TouchControls;
+  private microphone: VoiceState = 'idle';
+  private voiceConnection: VoiceConnectionState = 'disconnected';
   readonly modes: GameModeManager;
   private readonly interactionTarget = new Vector3();
   private readonly interactionDirection = new Vector3();
@@ -43,7 +50,8 @@ export class App {
   private fps = 60;
   private readonly events = new AbortController();
   private readonly unsubscribers: (() => void)[] = [];
-  private readonly limited = matchMedia('(pointer: coarse)').matches || !('requestPointerLock' in HTMLElement.prototype);
+  private readonly touch = usesTouchControls();
+  private readonly limited = !this.touch && !('requestPointerLock' in HTMLElement.prototype);
   private ready = false;
   private disposed = false;
   private contextLost = false;
@@ -56,7 +64,8 @@ export class App {
 
   constructor(container: HTMLElement) {
     this.scene = new SceneManager(container);
-    this.player = new FirstPersonController(this.scene.camera, this.scene.renderer.domElement);
+    container.dataset.input = this.touch ? 'touch' : 'mouse';
+    this.player = new FirstPersonController(this.scene.camera, this.scene.renderer.domElement, this.touch);
     this.inputs = new InputSynchronizer(this.network, this.player);
     this.voiceTransport = new LiveKitVoiceTransport(this.network, () => this.voice?.release());
     this.voice = new VoiceChatManager(this.voiceTransport);
@@ -65,18 +74,28 @@ export class App {
       enter: (name) => this.enter(name), resume: () => this.resume(), submit: (text) => this.submitChat(text),
       inspect: () => this.limited ? this.inspectSculpture() : this.interact(), closeInspection: () => this.closeInspection(),
       menu: () => this.openSettings(),
+      closeChat: () => this.closeChat(),
     }, this.limited, this.network.displayName);
     this.settingsMenu = new SettingsMenu(container, this.settings, () => this.closeSettings());
     this.modes = new GameModeManager(container, this.scene.renderer, this.network, {
       pauseLimbo: () => { this.pause(); this.player.setEnabled(false); },
       suspendCommunication: () => { this.inputs.setEnabled(false); this.voice.release(); this.voiceTransport.setEnabled(false); this.audio.setActive(false); },
       restoreCommunication: () => { this.inputs.setEnabled(true); this.voiceTransport.setEnabled(true); this.audio.setActive(true); },
-      restoreLimbo: () => { this.scene.resize(); this.state.set('PAUSED'); this.ui.setState(this.state.value); if (this.limited) this.state.set('EXPLORING'); },
+      restoreLimbo: () => { this.scene.resize(); this.state.set('PAUSED'); this.ui.setState(this.state.value); if (this.limited || this.touch) this.state.set('EXPLORING'); },
       resetChat: () => { this.chat.reset(); this.ui.chat.reset(); },
       pauseChat: () => { if (this.state.value === 'CHATTING') this.state.set('PAUSED'); },
       changed: mode => { this.ui.element.inert = mode !== 'LIMBO' && mode !== 'SHOOTER'; if (mode !== 'LIMBO') this.ui.inspection.update(false, false); },
       inspect: () => this.inspectSculpture(),
-    }, this.settings);
+    }, this.settings, this.touch);
+    if (this.touch) this.touchControls = new TouchControls(container, {
+      move: (f, r) => {
+        if (this.modes.value === 'SHOOTER') this.modes.shooter?.input.setTouchMovement(f, r);
+        else if (this.modes.value === 'LIMBO') this.player.input.setTouchMovement(f, r);
+      },
+      look: (dx, dy) => { if (this.modes.value === 'SHOOTER') this.modes.shooter?.input.touchLook(dx, dy); else this.player.touchLook(dx, dy); },
+      action: (action, active) => this.touchAction(action, active),
+      reset: () => { this.player.input.clear(); this.modes.shooter?.input.clear(); this.voice.release(); },
+    });
     container.dataset.mode = 'LIMBO';
     this.unsubscribers.push(
       this.settings.subscribe(state => {
@@ -84,6 +103,7 @@ export class App {
       }),
       this.state.subscribe((state) => {
         this.player.setEnabled(this.modes.value === 'LIMBO' && state === 'EXPLORING' && !this.limited);
+        this.touchControls?.reset();
         if (state !== 'EXPLORING') this.inputs.stop();
         if (state !== 'EXPLORING' && state !== 'INSPECTING') this.voice.release();
         if (state !== 'INSPECTING') this.scene.inspection.close();
@@ -91,8 +111,8 @@ export class App {
         this.modes.setInspection(state === 'INSPECTING');
       }),
       this.chat.subscribe((message) => this.ui.chat.add(message)),
-      this.voice.subscribe((state) => this.ui.controls.setVoiceState(state)),
-      this.voiceTransport.subscribe((state) => this.ui.controls.setVoiceConnection(state)),
+      this.voice.subscribe((state) => { this.microphone = state; this.ui.controls.setVoiceState(state); this.touchControls?.voice(state, this.voiceConnection); }),
+      this.voiceTransport.subscribe((state) => { this.voiceConnection = state; this.ui.controls.setVoiceConnection(state); this.touchControls?.voice(this.microphone, state); }),
       this.network.subscribeToNotice((message) => this.ui.notify(message)),
       this.network.subscribeToStatus((status) => this.ui.connection.update(status)),
       this.network.subscribeToSpawn((player) => { if (this.network.roomType === LOBBY_NAME) this.player.setSpawn(player); }),
@@ -156,7 +176,7 @@ export class App {
       else { this.lastTime = 0; this.frame = requestAnimationFrame(this.tick); }
     }, { signal });
     document.addEventListener('pointerlockchange', () => {
-      if (this.modes.value !== 'LIMBO') return;
+      if (this.modes.value !== 'LIMBO' || this.touch) return;
       if (this.player.locked && this.state.value === 'INSPECTING') this.player.releaseLock();
       else if (this.player.locked && this.state.value === 'PAUSED') this.state.set('EXPLORING');
       else if (!this.player.locked && this.state.value === 'EXPLORING' && !this.limited) this.state.set('PAUSED');
@@ -201,7 +221,7 @@ export class App {
       else if (event.code === 'Escape') { event.preventDefault(); this.modes.pause(); }
       else if (!this.modes.ui.element.hidden) return;
       else if (event.code === 'Enter' && !(event.target instanceof HTMLElement && event.target.closest('button'))) {
-        event.preventDefault(); this.modes.shooter?.pause(true); this.modes.ui.hide(); this.state.set('CHATTING');
+        event.preventDefault(); this.openChat();
       }
       return;
     }
@@ -223,8 +243,7 @@ export class App {
       event.preventDefault(); this.interact();
     } else if (event.code === 'Enter' && ['EXPLORING', 'PAUSED'].includes(this.state.value) && !this.limited) {
       event.preventDefault();
-      this.state.set('CHATTING');
-      this.player.releaseLock();
+      this.openChat();
     } else if (event.code === 'KeyV' && this.state.value === 'EXPLORING' && this.player.locked) {
       event.preventDefault(); this.voiceTransport.unlock(); void this.voice.press();
     }
@@ -236,7 +255,7 @@ export class App {
     this.network.setDisplayName(name); this.entering = true; this.ui.intro.connecting(true);
     // Both permission-sensitive calls happen in this same trusted gesture,
     // before fetching audio or waiting for the atmospheric reveal.
-    if (!this.limited) this.player.requestLock(this.pointerDenied);
+    if (!this.limited && !this.touch) this.player.requestLock(this.pointerDenied);
     this.audio.enter();
     this.voiceTransport.unlock();
     void this.network.connect().then(() => {
@@ -252,7 +271,7 @@ export class App {
     if (this.contextLost || this.state.value !== 'PAUSED') return;
     this.audio.setVisible(true);
     this.voiceTransport.unlock();
-    if (this.limited) this.state.set('EXPLORING');
+    if (this.limited || this.touch) this.state.set('EXPLORING');
     else this.player.requestLock(this.pointerDenied);
   }
 
@@ -261,6 +280,7 @@ export class App {
   };
 
   private pause(): void {
+    this.touchControls?.reset();
     if (this.modes?.value === 'SHOOTER') {
       if (this.state.value === 'CHATTING') this.state.set('PAUSED');
       this.modes.pause(); return;
@@ -293,7 +313,7 @@ export class App {
   private closeInspection(): void {
     if (this.state.value !== 'INSPECTING') return;
     this.state.set('PAUSED');
-    if (this.limited) this.state.set('EXPLORING');
+    if (this.limited || this.touch) this.state.set('EXPLORING');
     else this.player.requestLock(this.pointerDenied);
   }
 
@@ -308,16 +328,54 @@ export class App {
   }
 
   private closeChat(): void {
+    if (this.state.value !== 'CHATTING') return;
     this.state.set('PAUSED');
     if (this.modes.value === 'SHOOTER') { this.modes.shooter?.resume(); return; }
     // Enter/Escape are trusted keyboard gestures; denied relocking leaves the
     // existing pause prompt available for a fresh click.
-    this.player.requestLock(this.pointerDenied);
+    if (this.touch || this.limited) this.state.set('EXPLORING');
+    else this.player.requestLock(this.pointerDenied);
+  }
+  private openChat(): void {
+    if (this.state.value === 'CHATTING') return;
+    this.touchControls?.reset();
+    if (this.modes.value === 'SHOOTER') { this.modes.shooter?.pause(true); this.modes.ui.hide(); }
+    this.state.set('CHATTING'); this.player.releaseLock();
+  }
+  private touchAction(action: TouchAction, active: boolean): void {
+    if (action === 'voice') {
+      if (!active) { this.voice.release(); return; }
+      if (this.modes.value === 'LIMBO' && ['EXPLORING', 'INSPECTING'].includes(this.state.value)) { this.voiceTransport.unlock(); void this.voice.press(); }
+      return;
+    }
+    if (action === 'chat' && active) { this.openChat(); return; }
+    if (action === 'menu' && active) { if (this.modes.value === 'SHOOTER') this.modes.pause(); else this.openSettings(); return; }
+    if (this.modes.value === 'LIMBO') { if (action === 'sprint') this.player.input.setTouchSprint(active); return; }
+    const input = this.modes.shooter?.input; if (this.modes.value !== 'SHOOTER' || !input) return;
+    if (action === 'fire') input.touchFire(active);
+    else if (action === 'aim') input.aiming = active && input.enabled;
+    else {
+      const keys: Partial<Record<TouchAction, string>> = { jump: 'Space', crouch: 'ControlLeft', sprint: 'ShiftLeft', reload: 'KeyR', mode: 'KeyB' };
+      const key = keys[action];
+      if (key) input.touchKey(key, active);
+    }
+  }
+  private updateTouchControls(): void {
+    if (!this.touchControls) return;
+    const shooter = this.modes.shooter;
+    if (this.contextLost || this.settingsMenu.visible || (this.modes.value === 'SHOOTER' && (this.state.value === 'CHATTING' || !shooter || shooter.paused || shooter.roundComplete))) {
+      this.touchControls.update('hidden', '');
+    } else if (this.modes.value === 'SHOOTER' && shooter) {
+      this.touchControls.update(shooter.dead ? 'dead' : 'shooter', String(shooter.life), shooter.weapon.automatic);
+    } else if (this.modes.value === 'LIMBO' && ['EXPLORING', 'INSPECTING'].includes(this.state.value)) {
+      this.touchControls.update(this.state.value === 'INSPECTING' ? 'inspection' : 'limbo', '');
+    } else this.touchControls.update('hidden', '');
   }
 
   private openSettings(): void {
     if (this.modes.value !== 'LIMBO' || this.state.value === 'ENTERING' || this.settingsMenu.visible) return;
     if (this.state.value === 'EXPLORING' || this.state.value === 'CHATTING') this.pause();
+    this.touchControls?.reset();
     this.voice.release(); this.player.input.clear(); this.scene.inspection.controls.enabled = false;
     this.ui.element.inert = true; this.ui.element.classList.add('is-settings-open'); this.settingsMenu.open(); this.modes.setInspection(false);
   }
@@ -338,9 +396,10 @@ export class App {
       // Quintic smoothstep has zero velocity/acceleration at both endpoints.
       const t = this.entryProgress;
       this.reveal = t * t * t * (t * (t * 6 - 15) + 10);
-      if (t >= 1) this.state.set(this.limited || this.player.locked ? 'EXPLORING' : 'PAUSED');
+      if (t >= 1) this.state.set(this.touch || this.limited || this.player.locked ? 'EXPLORING' : 'PAUSED');
     }
     if (!this.contextLost) {
+      this.updateTouchControls();
       // Shooter catches up bounded fixed steps after a slow render frame.
       this.modes.update(this.modes.value === 'SHOOTER' ? Math.min(frameDt, .125) : dt);
       if (this.modes.value !== 'SHOOTER' && this.modes.value !== 'RETURNING_TO_LIMBO') {
@@ -374,7 +433,7 @@ export class App {
     this.modes.dispose(); this.diagnostics?.remove();
     this.inputs.dispose();
     this.voice.dispose(); this.audio.dispose(); this.chat.dispose(); this.network.disconnect();
-    this.player.dispose(); this.scene.dispose(); this.ui.dispose(); this.settingsMenu.dispose();
+    this.touchControls?.dispose(); this.player.dispose(); this.scene.dispose(); this.ui.dispose(); this.settingsMenu.dispose();
     disposeAudioContext();
   }
 }

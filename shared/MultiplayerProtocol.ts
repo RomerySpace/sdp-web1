@@ -66,6 +66,9 @@ export interface ConnectionStatus {
   capacity: number;
   roomId: string;
 }
+export function isMovementAxis(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= 1;
+}
 
 export function validateMovementInput(value: unknown): MovementInput | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -73,7 +76,7 @@ export function validateMovementInput(value: unknown): MovementInput | null {
   if (Object.keys(data).some(key => !['seq', 'f', 'r', 'y', 'p', 'active', 's'].includes(key)) ||
     ('s' in data && typeof data.s !== 'boolean') ||
     !Number.isSafeInteger(data.seq) || (data.seq as number) < 0 || (data.seq as number) > 0x7fffffff ||
-    ![-1, 0, 1].includes(data.f as number) || ![-1, 0, 1].includes(data.r as number) ||
+    !isMovementAxis(data.f) || !isMovementAxis(data.r) ||
     typeof data.y !== 'number' || !Number.isFinite(data.y) || Math.abs(data.y) > Math.PI * 2 ||
     typeof data.p !== 'number' || !Number.isFinite(data.p) || Math.abs(data.p) > Math.PI / 2 ||
     typeof data.active !== 'boolean') return null;

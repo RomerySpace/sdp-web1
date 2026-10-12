@@ -1,4 +1,5 @@
 import type { ChatMessage } from '../chat/ChatTypes';
+import { createElement, Send, X } from 'lucide';
 
 export class ChatInterface {
   readonly element: HTMLElement;
@@ -6,8 +7,9 @@ export class ChatInterface {
   private readonly history: HTMLElement;
   private readonly form: HTMLFormElement;
   private fadeTimer = 0;
+  private readonly events = new AbortController();
 
-  constructor(container: HTMLElement, onSubmit: (text: string) => void) {
+  constructor(container: HTMLElement, onSubmit: (text: string) => void, onClose: () => void) {
     this.element = document.createElement('section');
     this.element.className = 'chat';
     this.element.setAttribute('aria-label', 'Room text chat');
@@ -17,12 +19,23 @@ export class ChatInterface {
         <label for="chat-input">YOU</label>
         <input id="chat-input" name="message" type="text" placeholder="Say something into the space…" maxlength="500" aria-label="Chat message" autocomplete="off" />
         <span class="chat-input-hint" aria-hidden="true">↵</span>
+        <button class="chat-send" type="submit" aria-label="Send message" title="Send message"></button>
+        <button class="chat-close" type="button" aria-label="Close chat" title="Close chat"></button>
       </form>
       <p class="chat-note" hidden>Room chat <span>·</span> Enter to send <span>·</span> Esc to close</p>
     `;
     this.input = this.element.querySelector('input')!;
     this.history = this.element.querySelector('.chat-history')!;
     this.form = this.element.querySelector('form')!;
+    this.element.querySelector('.chat-send')!.append(createElement(Send));
+    this.element.querySelector('.chat-close')!.append(createElement(X));
+    this.element.querySelector('.chat-close')!.addEventListener('click', onClose, { signal: this.events.signal });
+    const viewport = () => {
+      const view = window.visualViewport;
+      this.element.style.setProperty('--chat-bottom', `${Math.max(18, view ? window.innerHeight - view.height - view.offsetTop + 18 : 18)}px`);
+    };
+    window.visualViewport?.addEventListener('resize', viewport, { signal: this.events.signal });
+    window.visualViewport?.addEventListener('scroll', viewport, { signal: this.events.signal }); viewport();
     this.form.addEventListener('submit', (event) => { event.preventDefault(); onSubmit(this.input.value); });
     container.append(this.element);
   }
@@ -55,5 +68,5 @@ export class ChatInterface {
     window.clearTimeout(this.fadeTimer);
     this.fadeTimer = window.setTimeout(() => this.element.classList.remove('show-history'), 14000);
   }
-  dispose(): void { window.clearTimeout(this.fadeTimer); }
+  dispose(): void { window.clearTimeout(this.fadeTimer); this.events.abort(); }
 }
