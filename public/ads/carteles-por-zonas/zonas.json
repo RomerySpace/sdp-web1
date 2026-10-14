@@ -1,0 +1,441 @@
+{
+  "map": "public/shooter/MAP/dust2plainmap.glb",
+  "purpose": "Catálogo de las 15 ubicaciones activas; configuración de renderizado en ../slots.json.",
+  "slots": [
+    {
+      "id": "01-muro-frente-a-la-cupula",
+      "zone": "01-calle",
+      "folder": "public/ads/carteles-por-zonas/01-calle/01-muro-frente-a-la-cupula",
+      "reference": "Captura de pantalla 2026-10-14 a las 10.30.18.png",
+      "description": "Muro bajo en primer plano frente al edificio con cúpula.",
+      "surface": "Tramo plano a la derecha del camino.",
+      "status": "activo",
+      "anchor": [
+        -15,
+        5,
+        -33
+      ],
+      "direction": [
+        1,
+        0,
+        0
+      ],
+      "size": [
+        1.6,
+        2.0020833333333337
+      ],
+      "image": "/ads/carteles-por-zonas/01-calle/01-muro-frente-a-la-cupula/cartel.avif",
+      "position": [
+        -6.501312089023811,
+        5,
+        -33
+      ]
+    },
+    {
+      "id": "02-fachada-con-antenas",
+      "zone": "01-calle",
+      "folder": "public/ads/carteles-por-zonas/01-calle/02-fachada-con-antenas",
+      "reference": "Captura de pantalla 2026-10-14 a las 10.30.27.png",
+      "description": "Fachada larga con ventanas y antenas.",
+      "surface": "Paño de pared sobre la acera, entre huecos y bajantes.",
+      "status": "activo",
+      "anchor": [
+        -20,
+        5,
+        -27
+      ],
+      "direction": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        1.6,
+        2.0020833333333337
+      ],
+      "image": "/ads/carteles-por-zonas/01-calle/02-fachada-con-antenas/cartel.avif",
+      "position": [
+        -25.807477467629447,
+        5,
+        -27
+      ]
+    },
+    {
+      "id": "03-pared-junto-a-puerta-con-escalones",
+      "zone": "01-calle",
+      "folder": "public/ads/carteles-por-zonas/01-calle/03-pared-junto-a-puerta-con-escalones",
+      "reference": "Captura de pantalla 2026-10-14 a las 10.30.35.png",
+      "description": "Pared junto a la puerta con pequeños escalones.",
+      "surface": "Paño a la derecha de la puerta, bajo las ventanas.",
+      "status": "activo",
+      "anchor": [
+        -20,
+        4.5,
+        -15
+      ],
+      "direction": [
+        1,
+        0,
+        0
+      ],
+      "size": [
+        1.6,
+        2.0020833333333337
+      ],
+      "image": "/ads/carteles-por-zonas/01-calle/03-pared-junto-a-puerta-con-escalones/cartel.avif",
+      "position": [
+        -16.256000518798828,
+        4.5,
+        -15
+      ]
+    },
+    {
+      "id": "04-muro-bajo-de-la-esquina",
+      "zone": "01-calle",
+      "folder": "public/ads/carteles-por-zonas/01-calle/04-muro-bajo-de-la-esquina",
+      "reference": "Captura de pantalla 2026-10-14 a las 10.30.41.png",
+      "description": "Muro bajo que gira en una esquina, junto al árbol.",
+      "surface": "Cara frontal plana; evitar el canto curvo.",
+      "status": "activo",
+      "anchor": [
+        -20,
+        4.2,
+        -3
+      ],
+      "direction": [
+        1,
+        0,
+        0
+      ],
+      "size": [
+        1.6,
+        2.0020833333333337
+      ],
+      "image": "/ads/carteles-por-zonas/01-calle/04-muro-bajo-de-la-esquina/cartel.avif",
+      "position": [
+        -12.19199892911299,
+        4.2,
+        -3
+      ]
+    },
+    {
+      "id": "05-pared-junto-al-hueco",
+      "zone": "02-muralla",
+      "folder": "public/ads/carteles-por-zonas/02-muralla/05-pared-junto-al-hueco",
+      "reference": "Captura de pantalla 2026-10-14 a las 10.30.58.png",
+      "description": "Muralla junto a un hueco estrecho y escombros.",
+      "surface": "Paño central a la derecha del hueco.",
+      "status": "activo",
+      "anchor": [
+        20,
+        2.4,
+        -7
+      ],
+      "direction": [
+        0,
+        0,
+        -1
+      ],
+      "size": [
+        1.6,
+        2.0020833333333337
+      ],
+      "image": "/ads/carteles-por-zonas/02-muralla/05-pared-junto-al-hueco/cartel.avif",
+      "position": [
+        20,
+        2.4,
+        -13.00671672821045
+      ]
+    },
+    {
+      "id": "06-pared-alta-junto-al-poste",
+      "zone": "02-muralla",
+      "folder": "public/ads/carteles-por-zonas/02-muralla/06-pared-alta-junto-al-poste",
+      "reference": "Captura de pantalla 2026-10-14 a las 10.31.02.png",
+      "description": "Pared alta junto al poste, con el portón al fondo.",
+      "surface": "Paño grande del centro, antes del poste.",
+      "status": "activo",
+      "anchor": [
+        24,
+        2.4,
+        -7
+      ],
+      "direction": [
+        0,
+        0,
+        -1
+      ],
+      "size": [
+        1.6,
+        2.0020833333333337
+      ],
+      "image": "/ads/carteles-por-zonas/02-muralla/06-pared-alta-junto-al-poste/cartel.avif",
+      "position": [
+        24,
+        2.4,
+        -13.819138784660897
+      ]
+    },
+    {
+      "id": "07-pared-a-la-izquierda-del-arco",
+      "zone": "02-muralla",
+      "folder": "public/ads/carteles-por-zonas/02-muralla/07-pared-a-la-izquierda-del-arco",
+      "reference": "Captura de pantalla 2026-10-14 a las 10.31.05.png",
+      "description": "Muralla con ventanas altas, arco estrecho y portón.",
+      "surface": "Tramo plano a la izquierda del arco; no tapar el paso.",
+      "status": "activo",
+      "anchor": [
+        27,
+        2.4,
+        -7
+      ],
+      "direction": [
+        0,
+        0,
+        -1
+      ],
+      "size": [
+        1.6,
+        2.0020833333333337
+      ],
+      "image": "/ads/carteles-por-zonas/02-muralla/07-pared-a-la-izquierda-del-arco/cartel.avif",
+      "position": [
+        27,
+        2.4,
+        -13.819139254101586
+      ]
+    },
+    {
+      "id": "08-pared-entre-torres-junto-al-porton",
+      "zone": "03-puertas-y-rampa",
+      "folder": "public/ads/carteles-por-zonas/03-puertas-y-rampa/08-pared-entre-torres-junto-al-porton",
+      "reference": "Captura de pantalla 2026-10-14 a las 10.31.14.png",
+      "description": "Pared entre torres, junto al portón abierto.",
+      "surface": "Panel plano central bajo las ventanas.",
+      "status": "activo",
+      "anchor": [
+        56,
+        2.4,
+        -21
+      ],
+      "direction": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        1.6,
+        2.0020833333333337
+      ],
+      "image": "/ads/carteles-por-zonas/03-puertas-y-rampa/08-pared-entre-torres-junto-al-porton/cartel.avif",
+      "position": [
+        52.01948547363281,
+        2.4,
+        -21
+      ]
+    },
+    {
+      "id": "09-muro-central-de-la-subida",
+      "zone": "03-puertas-y-rampa",
+      "folder": "public/ads/carteles-por-zonas/03-puertas-y-rampa/09-muro-central-de-la-subida",
+      "reference": "Captura de pantalla 2026-10-14 a las 10.31.39.png",
+      "description": "Muro central entre un portón inferior y otro superior.",
+      "surface": "Paño plano entre los pilares, sobre la rampa.",
+      "status": "activo",
+      "anchor": [
+        60,
+        2.4,
+        -27
+      ],
+      "direction": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        1.6,
+        2.0020833333333337
+      ],
+      "image": "/ads/carteles-por-zonas/03-puertas-y-rampa/09-muro-central-de-la-subida/cartel.avif",
+      "position": [
+        52.01948547363281,
+        2.4,
+        -27
+      ]
+    },
+    {
+      "id": "10-pared-junto-al-porton-y-la-escalera",
+      "zone": "03-puertas-y-rampa",
+      "folder": "public/ads/carteles-por-zonas/03-puertas-y-rampa/10-pared-junto-al-porton-y-la-escalera",
+      "reference": "Captura de pantalla 2026-10-14 a las 10.31.43.png",
+      "description": "Pared junto al portón, con escalera vertical a la derecha.",
+      "surface": "Tramo a la derecha del portón, antes de las rocas.",
+      "status": "activo",
+      "anchor": [
+        64,
+        2.4,
+        -28
+      ],
+      "direction": [
+        0,
+        0,
+        -1
+      ],
+      "size": [
+        1.6,
+        2.0020833333333337
+      ],
+      "image": "/ads/carteles-por-zonas/03-puertas-y-rampa/10-pared-junto-al-porton-y-la-escalera/cartel.avif",
+      "position": [
+        64,
+        2.4,
+        -32.512794494628906
+      ]
+    },
+    {
+      "id": "11-pantalla-sobre-las-cajas",
+      "zone": "04-patio",
+      "folder": "public/ads/carteles-por-zonas/04-patio/11-pantalla-sobre-las-cajas",
+      "reference": "Captura de pantalla 2026-10-14 a las 10.31.51.png",
+      "description": "Pantalla negra sobre las cajas del patio.",
+      "surface": "Referencia para el contenido de esa pantalla horizontal.",
+      "status": "activo",
+      "anchor": [
+        50,
+        2.4,
+        -40
+      ],
+      "direction": [
+        1,
+        0,
+        0
+      ],
+      "size": [
+        1.6,
+        0.9
+      ],
+      "image": "/ads/carteles-por-zonas/04-patio/11-pantalla-sobre-las-cajas/cartel.avif",
+      "position": [
+        73.15327453613281,
+        2.4,
+        -40
+      ]
+    },
+    {
+      "id": "12-cartel-junto-a-los-escalones",
+      "zone": "04-patio",
+      "folder": "public/ads/carteles-por-zonas/04-patio/12-cartel-junto-a-los-escalones",
+      "reference": "Captura de pantalla 2026-10-14 a las 10.31.57.png",
+      "description": "Cartel vertical junto a los escalones y el arco.",
+      "surface": "Referencia para sustituir el cartel de muestra visible.",
+      "status": "activo",
+      "anchor": [
+        50,
+        2.4,
+        -40
+      ],
+      "direction": [
+        0,
+        0,
+        -1
+      ],
+      "size": [
+        1.6,
+        2.0020833333333337
+      ],
+      "image": "/ads/carteles-por-zonas/04-patio/12-cartel-junto-a-los-escalones/cartel.avif",
+      "position": [
+        50,
+        2.4,
+        -55.269554138183594
+      ]
+    },
+    {
+      "id": "13-pared-larga-bajo-el-fluorescente",
+      "zone": "05-pasaje-y-arcos",
+      "folder": "public/ads/carteles-por-zonas/05-pasaje-y-arcos/13-pared-larga-bajo-el-fluorescente",
+      "reference": "Captura de pantalla 2026-10-14 a las 10.32.01.png",
+      "description": "Pasaje cubierto con fluorescente en el techo.",
+      "surface": "Pared larga de la derecha, entre los arcos.",
+      "status": "activo",
+      "anchor": [
+        40,
+        2.4,
+        -50
+      ],
+      "direction": [
+        0,
+        0,
+        -1
+      ],
+      "size": [
+        1.6,
+        2.0020833333333337
+      ],
+      "image": "/ads/carteles-por-zonas/05-pasaje-y-arcos/13-pared-larga-bajo-el-fluorescente/cartel.avif",
+      "position": [
+        40,
+        2.4,
+        -52.020233154296875
+      ]
+    },
+    {
+      "id": "14-pared-entre-columnas",
+      "zone": "05-pasaje-y-arcos",
+      "folder": "public/ads/carteles-por-zonas/05-pasaje-y-arcos/14-pared-entre-columnas",
+      "reference": "Captura de pantalla 2026-10-14 a las 10.32.08.png",
+      "description": "Interior con columnas y ventanas altas.",
+      "surface": "Paño central entre columnas, bajo la ventana.",
+      "status": "activo",
+      "anchor": [
+        30,
+        2.4,
+        -52
+      ],
+      "direction": [
+        0,
+        0,
+        -1
+      ],
+      "size": [
+        1.6,
+        2.0020833333333337
+      ],
+      "image": "/ads/carteles-por-zonas/05-pasaje-y-arcos/14-pared-entre-columnas/cartel.avif",
+      "position": [
+        30,
+        2.4,
+        -56.08470915295483
+      ]
+    },
+    {
+      "id": "15-pared-exterior-junto-al-arco",
+      "zone": "05-pasaje-y-arcos",
+      "folder": "public/ads/carteles-por-zonas/05-pasaje-y-arcos/15-pared-exterior-junto-al-arco",
+      "reference": "Captura de pantalla 2026-10-14 a las 10.32.16.png",
+      "description": "Exterior del pasaje, con cajas a la izquierda.",
+      "surface": "Pared plana inmediatamente a la izquierda del arco.",
+      "status": "activo",
+      "anchor": [
+        50,
+        2.9,
+        -48
+      ],
+      "direction": [
+        -1,
+        0,
+        0
+      ],
+      "size": [
+        1.6,
+        2.0020833333333337
+      ],
+      "image": "/ads/carteles-por-zonas/05-pasaje-y-arcos/15-pared-exterior-junto-al-arco/cartel.avif",
+      "position": [
+        45.51425552368164,
+        2.9,
+        -48
+      ]
+    }
+  ]
+}

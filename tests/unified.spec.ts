@@ -1,8 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
+import type { InstancedMesh, Mesh, MeshStandardMaterial, PlaneGeometry, ShaderMaterial } from 'three';
 import { enterExhibition } from './entry';
 import { walkToSculpture } from './touch-driver';
 import { sessionRanking } from '../src/modes/shooter/ui/SessionRanking';
+import { createMonolithGeometry } from '../src/scene/MonolithGeometry';
 import type { NetworkPlayer } from '../shared/MultiplayerProtocol';
 import type { GameModeManager } from '../src/modes/GameModeManager';
 import type { ColyseusNetworkAdapter } from '../src/network/ColyseusNetworkAdapter';
@@ -31,7 +33,7 @@ async function openProtocol(page: Page): Promise<void> {
   await expect(page.locator('.mode-overlay')).toBeHidden();
 }
 async function enterShooter(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'JOIN SHOOTER TEST', exact: true }).click();
+  await page.getByRole('button', { name: 'JOIN SHOOTER', exact: true }).click();
   await expect(page.locator('#app')).toHaveAttribute('data-mode', 'SHOOTER');
   await page.getByRole('button', { name: 'ENTER SIMULATION' }).click();
   await expect.poll(() => page.evaluate(() => window.sdpUnified.modes.shooter?.paused)).toBe(false);
@@ -53,6 +55,100 @@ async function canvasContrast(page: Page): Promise<number> {
     return contrast;
   });
 }
+for (const mobile of [false, true]) {
+  test(`white lobby ground and continuous grass fade into a dark horizon (${mobile ? 'mobile' : 'desktop'})`, async ({ browser }, info) => {
+    const context = await browser.newContext({
+      viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 },
+      isMobile: mobile, hasTouch: mobile,
+    });
+    try {
+      const page = await context.newPage(), errors: string[] = [], requests: string[] = [];
+      page.on('pageerror', error => errors.push(error.message));
+      page.on('console', message => { if (message.type() === 'error' && /shader|WebGLProgram|GL_INVALID/.test(message.text())) errors.push(message.text()); });
+      page.on('request', request => requests.push(request.url()));
+      await enterLimbo(page);
+      await expect.poll(() => page.evaluate(() => {
+        const backdrop = window.sdpUnified.scene.scene.children.find(object => object.renderOrder === -1000) as Mesh<PlaneGeometry, ShaderMaterial>;
+        return backdrop.material.uniforms.atmosphereReveal.value;
+      })).toBe(1);
+      const palette = await page.evaluate(() => {
+        const { scene, renderer, camera } = window.sdpUnified.scene;
+        const floor = scene.children.find(object => object.type === 'Mesh'
+          && (object as Mesh<PlaneGeometry>).geometry.parameters?.width === 2000) as Mesh<PlaneGeometry, MeshStandardMaterial>;
+        const grass = scene.children.filter(object => object.name.startsWith('White grass')) as InstancedMesh[];
+        const shaders: { vertex: string; horizon: number[] }[] = [];
+        // Capture the shaders actually compiled by WebGL, not a source-text fixture.
+        for (const field of grass) {
+          const material = field.material as MeshStandardMaterial, compile = material.onBeforeCompile.bind(material);
+          const cacheKey = material.customProgramCacheKey();
+          material.onBeforeCompile = (shader, webgl) => {
+            compile(shader, webgl);
+            shaders.push({ vertex: shader.vertexShader, horizon: shader.uniforms.atmosphereHorizon.value.toArray() });
+          };
+          material.customProgramCacheKey = () => `${cacheKey}-palette-test`;
+          material.needsUpdate = true;
+        }
+        renderer.render(scene, camera);
+        const base = scene.getObjectByName('Monolith / satin foundation') as Mesh<PlaneGeometry, MeshStandardMaterial>;
+        const column = scene.getObjectByName('Nebula / infinite upper monolith') as Mesh<PlaneGeometry, ShaderMaterial>;
+        return {
+          floor: floor.material.color.getHexString(), grass: grass.map(field => (field.material as MeshStandardMaterial).color.getHexString()), shaders,
+          base: { visible: base.visible, color: base.material.color.getHexString(), bottom: base.geometry.boundingBox!.min.y + base.position.y, top: base.geometry.boundingBox!.max.y + base.position.y },
+          sharedHorizon: column.material.uniforms.atmosphereHorizon === window.sdpUnified.scene.atmosphere.horizon,
+          lowerCloud: !!scene.getObjectByName('Nebula / lower monolith'),
+        };
+      });
+      expect(palette.floor).toBe('ffffff'); expect(palette.grass).toEqual(['ffffff', 'ffffff']);
+      expect(palette.base.visible).toBe(true); expect(palette.base.color).toBe(palette.floor);
+      expect(palette.base.bottom).toBeLessThan(0); expect(palette.base.top).toBeCloseTo(1.2, 5);
+      expect(palette.sharedHorizon).toBe(true); expect(palette.lowerCloud).toBe(false);
+      expect(palette.shaders).toHaveLength(2);
+      for (const shader of palette.shaders) {
+        expect(shader.vertex).toContain('transformed *= root * fieldFade;');
+        expect(shader.vertex).not.toMatch(/float path|root \* path/);
+        expect(shader.horizon).toEqual([.20, .23, .27]);
+      }
+      await page.addStyleTag({ content: '.mode-diagnostics { visibility: hidden !important; }' });
+      await page.screenshot({ path: info.outputPath('white-lobby.png') });
+      await page.addStyleTag({ content: '.ui, .touch-controls { visibility: hidden !important; }' });
+      const { data, info: pixels } = await sharp(await page.locator('canvas').screenshot()).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+      const brightness = (top: number, bottom: number): number => {
+        let sum = 0, count = 0;
+        for (let y = Math.floor(pixels.height * top); y < pixels.height * bottom; y++) {
+          for (let x = Math.floor(pixels.width * .75); x < pixels.width * .90; x++) {
+            const offset = (y * pixels.width + x) * pixels.channels;
+            sum += (data[offset] + data[offset + 1] + data[offset + 2]) / 3; count++;
+          }
+        }
+        return sum / count;
+      };
+      const foreground = brightness(.75, .90), horizon = brightness(.44, .49);
+      expect(foreground).toBeGreaterThan(170); expect(horizon).toBeLessThan(100);
+      expect(foreground - horizon).toBeGreaterThan(60);
+      expect(requests.filter(shooterRequest)).toEqual([]); expect(errors).toEqual([]);
+    } finally { await context.close(); }
+  });
+}
+test('organic monolith has a flared, buried foot, smooth normals and the original collision footprint', () => {
+  const geometry = createMonolithGeometry();
+  try {
+    const positions = geometry.getAttribute('position'), normals = geometry.getAttribute('normal');
+    const bounds = geometry.boundingBox!;
+    expect(bounds.min.y).toBeLessThan(0); expect(bounds.max.y).toBeCloseTo(1.2, 5);
+    expect(Math.max(Math.abs(bounds.min.x), Math.abs(bounds.min.z), bounds.max.x, bounds.max.z)).toBeLessThanOrEqual(1.2);
+    expect(positions.count).toBeLessThan(4000); expect(geometry.index!.count / 3).toBeLessThan(6500);
+    let foot = 0, waist = 0;
+    for (let i = 0; i < positions.count; i++) {
+      const x = positions.getX(i), y = positions.getY(i), z = positions.getZ(i);
+      expect([x, y, z].every(Number.isFinite)).toBe(true);
+      expect(Math.hypot(normals.getX(i), normals.getY(i), normals.getZ(i))).toBeCloseTo(1, 5);
+      if (y < .1) foot = Math.max(foot, Math.abs(x), Math.abs(z));
+      if (y > .45 && y < .85) waist = Math.max(waist, Math.abs(x), Math.abs(z));
+    }
+    expect(foot - waist).toBeGreaterThan(.15);
+    expect(normals.getY(positions.count - 1)).toBeCloseTo(1, 5);
+  } finally { geometry.dispose(); }
+});
 test('session ranking uses authoritative kills then deaths and excludes disconnected players', () => {
   const player = (playerId: string, kills: number, deaths: number, connected = true): NetworkPlayer => ({
     playerId, kills, deaths, connected, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, lastProcessedInput: 0,
@@ -149,7 +245,7 @@ test('shared settings and F work in entry, Limbo, inspection and Shooter without
   await page.keyboard.press('Escape'); await openProtocol(page);
   const distance = await page.evaluate(() => window.sdpUnified.scene.inspection.distance);
   await page.getByRole('button', { name: 'Open Limbo settings', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'JOIN SHOOTER TEST' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'JOIN SHOOTER' })).toBeHidden();
   await page.getByRole('button', { name: 'RETURN P', exact: true }).click();
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'INSPECTING');
   expect(await page.evaluate(() => window.sdpUnified.scene.inspection.distance)).toBeCloseTo(distance);
@@ -259,8 +355,8 @@ test('two actual browsers: authoritative hits, crouch, digital death and server 
     await first.mouse.down(); await first.mouse.up();
     await expect.poll(async () => (await targetState()).dead).toBe(true);
     const dead = await targetState(); const steps = await second.evaluate(() => window.sdpUnified.modes.shooter!.fixedSteps);
-    await expect(second.locator('.desynchronization-state')).toBeVisible(); await expect(first.locator('.combat-confirmation')).toBeVisible();
-    await expect(first.locator('.shooter-strike')).toContainText('STRIKE 01');
+    await expect(second.locator('.desynchronization-state')).toBeVisible(); await expect(first.locator('.kill-announcement')).toBeVisible();
+    await expect(first.locator('.shooter-strike')).toContainText('STREAK 01');
     await expect(first.locator('.shooter-kill-feed .kill-player')).toHaveText(['SDP Tester', 'SDP Tester #2']);
     await expect.poll(() => first.evaluate(() => window.sdpUnified.modes.shooter!.remotes.group.children[0].userData.coherence)).toBeLessThan(.95);
     await first.screenshot({ path: info.outputPath('avatar-desynchronizing.png') });
@@ -386,8 +482,12 @@ test('Limbo sprint is immediate, smooth and visible in authoritative movement', 
   await page.keyboard.down('ShiftLeft'); await page.keyboard.down('KeyW'); await page.waitForTimeout(800); await page.keyboard.up('KeyW'); await page.keyboard.up('ShiftLeft');
   const z2 = await page.evaluate(() => window.sdpUnified.player.camera.position.z);
   expect(z1 - z2).toBeGreaterThan((z0 - z1) * 1.25);
-  const server = await page.evaluate(() => { const s = window.sdpUnified.network.snapshot!; return s.players.find(p => p.playerId === s.localPlayerId)!.z; });
-  expect(Math.abs(server - z2)).toBeLessThan(.5);
+  // Input and room patches run at 20 Hz; compare fresh positions after key release.
+  await expect.poll(() => page.evaluate(() => {
+    const app = window.sdpUnified, snapshot = app.network.snapshot!;
+    const server = snapshot.players.find(player => player.playerId === snapshot.localPlayerId)!;
+    return Math.abs(server.z - app.player.camera.position.z);
+  }), { timeout: 2500 }).toBeLessThan(.5);
 });
 test('actual requests stay lazy; both scenes render; controls and repeated return work', async ({ page }, info) => {
   const requests: string[] = [], errors: string[] = [];
@@ -501,7 +601,7 @@ test('two browsers synchronize in Shooter and stay isolated from Limbo voice and
 });
 test('failed assets allow retry and returning; mobile Limbo remains framed', async ({ page, browser }, info) => {
   await page.route('**/shooter/MAP/dust2plainmap.glb', route => route.abort());
-  await enterLimbo(page); await openProtocol(page); await page.getByRole('button', { name: 'JOIN SHOOTER TEST', exact: true }).click();
+  await enterLimbo(page); await openProtocol(page); await page.getByRole('button', { name: 'JOIN SHOOTER', exact: true }).click();
   await expect(page.getByRole('button', { name: 'RETRY', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'RETURN TO LIMBO' }).click(); await expect(page.locator('#app')).toHaveAttribute('data-mode', 'LIMBO');
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
@@ -510,7 +610,7 @@ test('failed assets allow retry and returning; mobile Limbo remains framed', asy
     await expect(mobile.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
     await walkToSculpture(mobile);
     await expect(mobile.locator('.ui')).toHaveAttribute('data-state', 'INSPECTING'); expect(await visiblePixels(mobile)).toBeGreaterThan(1000);
-    const button = await mobile.getByRole('button', { name: 'JOIN SHOOTER TEST', exact: true }).boundingBox();
+    const button = await mobile.getByRole('button', { name: 'JOIN SHOOTER', exact: true }).boundingBox();
     expect(button!.y + button!.height).toBeLessThanOrEqual(844);
     await expect(mobile.locator('.touch-stick')).toBeHidden();
     await mobile.screenshot({ path: info.outputPath('limbo-mobile-inspection.png') });

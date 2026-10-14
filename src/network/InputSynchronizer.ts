@@ -21,6 +21,8 @@ export class InputSynchronizer {
     this.input.p = this.player.camera.rotation.x;
     this.input.active = active;
     this.input.s = active && this.player.input.sprinting;
+    this.input.j = active && this.player.input.jumping;
+    this.input.c = active && this.player.input.crouching;
     this.network.sendInput(this.input);
   }
 

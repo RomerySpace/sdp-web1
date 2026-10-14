@@ -63,6 +63,7 @@ export class App {
   private entering = false;
 
   constructor(container: HTMLElement) {
+    this.audio.attach(container);
     this.scene = new SceneManager(container);
     container.dataset.input = this.touch ? 'touch' : 'mouse';
     this.player = new FirstPersonController(this.scene.camera, this.scene.renderer.domElement, this.touch);
@@ -79,8 +80,8 @@ export class App {
     this.settingsMenu = new SettingsMenu(container, this.settings, () => this.closeSettings());
     this.modes = new GameModeManager(container, this.scene.renderer, this.network, {
       pauseLimbo: () => { this.pause(); this.player.setEnabled(false); },
-      suspendCommunication: () => { this.inputs.setEnabled(false); this.voice.release(); this.voiceTransport.setEnabled(false); this.audio.setActive(false); },
-      restoreCommunication: () => { this.inputs.setEnabled(true); this.voiceTransport.setEnabled(true); this.audio.setActive(true); },
+      suspendCommunication: () => { this.inputs.setEnabled(false); this.voice.release(); this.voiceTransport.setEnabled(false); },
+      restoreCommunication: () => { this.inputs.setEnabled(true); this.voiceTransport.setEnabled(true); },
       restoreLimbo: () => { this.scene.resize(); this.state.set('PAUSED'); this.ui.setState(this.state.value); if (this.limited || this.touch) this.state.set('EXPLORING'); },
       resetChat: () => { this.chat.reset(); this.ui.chat.reset(); },
       pauseChat: () => { if (this.state.value === 'CHATTING') this.state.set('PAUSED'); },
@@ -116,7 +117,7 @@ export class App {
       this.network.subscribeToNotice((message) => this.ui.notify(message)),
       this.network.subscribeToStatus((status) => this.ui.connection.update(status)),
       this.network.subscribeToSpawn((player) => { if (this.network.roomType === LOBBY_NAME) this.player.setSpawn(player); }),
-      this.network.subscribeToState((snapshot) => { if (this.network.roomType === LOBBY_NAME || !snapshot.players.length) this.scene.remotePlayers.receive(snapshot); }),
+      this.network.subscribeToState((snapshot) => { this.audio.receive(snapshot); if (this.network.roomType === LOBBY_NAME || !snapshot.players.length) this.scene.remotePlayers.receive(snapshot); }),
     );
     this.bindEvents();
     void this.initialize();
@@ -350,7 +351,12 @@ export class App {
     }
     if (action === 'chat' && active) { this.openChat(); return; }
     if (action === 'menu' && active) { if (this.modes.value === 'SHOOTER') this.modes.pause(); else this.openSettings(); return; }
-    if (this.modes.value === 'LIMBO') { if (action === 'sprint') this.player.input.setTouchSprint(active); return; }
+    if (this.modes.value === 'LIMBO') {
+      if (action === 'sprint') this.player.input.setTouchSprint(active);
+      if (action === 'crouch') this.player.input.setTouchKey('ControlLeft', active);
+      if (action === 'jump' && active) { this.player.input.setTouchKey('Space', true); window.setTimeout(() => this.player.input.setTouchKey('Space', false), 100); }
+      return;
+    }
     const input = this.modes.shooter?.input; if (this.modes.value !== 'SHOOTER' || !input) return;
     if (action === 'fire') input.touchFire(active);
     else if (action === 'aim') input.aiming = active && input.enabled;

@@ -2,7 +2,7 @@ import { MathUtils } from 'three';
 import { shooterNetworkConfig } from '../../../../shared/ShooterProtocol';
 import { gameConfig } from '../config/gameConfig';
 
-export interface MotionSample { time: number; x: number; y: number; z: number; yaw: number; pitch: number; height: number }
+export interface MotionSample { time: number; x: number; y: number; z: number; yaw: number; pitch: number; height: number; lean?: number }
 export class SnapshotClock {
   private offset?: number;
   private previous?: { server: number; received: number };
@@ -59,6 +59,7 @@ export class MotionBuffer {
     return { time, x: MathUtils.lerp(before.x, after.x, t), y: MathUtils.lerp(before.y, after.y, t),
       z: MathUtils.lerp(before.z, after.z, t), pitch: MathUtils.lerp(before.pitch, after.pitch, t),
       height: MathUtils.lerp(before.height, after.height, t),
+      lean: MathUtils.lerp(before.lean ?? 0, after.lean ?? 0, t),
       yaw: before.yaw + Math.atan2(Math.sin(after.yaw - before.yaw), Math.cos(after.yaw - before.yaw)) * t };
   }
 }

@@ -10,7 +10,7 @@ test('backend flag hides inspection access and blocks debug, direct UI calls and
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
   await page.evaluate(() => { const camera = window.sdpUnified.player.camera; camera.position.set(0, 1.7, 2.7); camera.rotation.set(0, 0, 0); });
   await page.keyboard.press('KeyE'); await expect(page.locator('.ui')).toHaveAttribute('data-state', 'INSPECTING');
-  await expect(page.getByRole('button', { name: 'JOIN SHOOTER TEST', exact: true })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'JOIN SHOOTER', exact: true })).toBeHidden();
   await page.evaluate(() => window.sdpUnified.modes.joinShooter());
   await expect(page.locator('#app')).toHaveAttribute('data-mode', 'LIMBO');
   expect(requests.filter(url => /\/shooter\/|\/modes\/shooter\/|rapier3d/.test(url))).toEqual([]);

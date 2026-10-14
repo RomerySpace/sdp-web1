@@ -117,6 +117,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
   }
 
   private updatePlayers(): void {
+    this.state.wallTime = Date.now();
     for (const [id, entry] of this.inputs) {
       const player = this.state.players.get(id);
       if (!player?.connected) continue;
@@ -124,6 +125,8 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
       const position = this.simulation.step(id, entry.value)!;
       player.x = position.x;
       player.z = position.z;
+      player.y = 1.7 + (position.elevation ?? 0);
+      player.crouching = Boolean(entry.value.active && entry.value.c);
       player.yaw = entry.value.y;
       player.pitch = entry.value.p;
       player.lastProcessedInput = Math.max(0, entry.value.seq);

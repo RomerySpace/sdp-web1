@@ -10,8 +10,8 @@ export class Lighting {
   private readonly key: DirectionalLight;
 
   constructor(private readonly scene: Scene) {
-    scene.add(new HemisphereLight(0xf1f7fc, 0xe3e0da, 0.75));
-    this.key = new DirectionalLight(0xfffcf7, 2.1);
+    scene.add(new HemisphereLight(0xf1f7fc, 0x9da4ad, 0.4));
+    this.key = new DirectionalLight(0xfffcf7, 1.15);
     this.key.position.set(-5, 9, 6);
     this.key.castShadow = true;
     this.key.shadow.mapSize.set(1024, 1024);
@@ -45,7 +45,7 @@ export class Lighting {
       texture.mapping = EquirectangularReflectionMapping;
       this.environment = pmrem.fromEquirectangular(texture);
       this.scene.environment = this.environment.texture;
-      this.scene.environmentIntensity = 0.75;
+      this.scene.environmentIntensity = 0.38;
       this.scene.environmentRotation.y = 0.6;
       texture.dispose();
       return true;

@@ -11,6 +11,8 @@ export interface MovementInput {
   p: number;
   active: boolean;
   s?: boolean;
+  j?: boolean;
+  c?: boolean;
 }
 
 export interface NetworkPlayer {
@@ -32,6 +34,7 @@ export interface NetworkPlayer {
   sprinting?: boolean;
   grounded?: boolean;
   height?: number;
+  lean?: number;
   ammo?: number;
   reserve?: number;
   reloading?: boolean;
@@ -54,6 +57,7 @@ export interface LobbySnapshot {
   tick: number;
   receivedAt: number;
   players: readonly NetworkPlayer[];
+  wallTime?: number;
   serverTime?: number;
   shooterEnabled?: boolean;
   killFeed?: readonly KillRecord[];
@@ -73,8 +77,8 @@ export function isMovementAxis(value: unknown): value is number {
 export function validateMovementInput(value: unknown): MovementInput | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const data = value as Record<string, unknown>;
-  if (Object.keys(data).some(key => !['seq', 'f', 'r', 'y', 'p', 'active', 's'].includes(key)) ||
-    ('s' in data && typeof data.s !== 'boolean') ||
+  if (Object.keys(data).some(key => !['seq', 'f', 'r', 'y', 'p', 'active', 's', 'j', 'c'].includes(key)) ||
+    (['s', 'j', 'c'].some(k => k in data && typeof data[k] !== 'boolean')) ||
     !Number.isSafeInteger(data.seq) || (data.seq as number) < 0 || (data.seq as number) > 0x7fffffff ||
     !isMovementAxis(data.f) || !isMovementAxis(data.r) ||
     typeof data.y !== 'number' || !Number.isFinite(data.y) || Math.abs(data.y) > Math.PI * 2 ||
@@ -86,6 +90,8 @@ export function validateMovementInput(value: unknown): MovementInput | null {
     p: Math.max(-Math.PI / 2 + 0.03, Math.min(Math.PI / 2 - 0.03, data.p)),
     active: data.active,
     ...('s' in data ? { s: data.s as boolean } : {}),
+    ...('j' in data ? { j: data.j as boolean } : {}),
+    ...('c' in data ? { c: data.c as boolean } : {}),
   };
 }
 import type { KillRecord, ShooterMatchSnapshot } from './ShooterProtocol';

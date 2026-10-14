@@ -20,6 +20,8 @@ class ServerInput implements CharacterInput {
     if (input.active && input.s) this.keys.add('ShiftLeft');
     if (input.active && input.c) this.keys.add('ControlLeft');
     if (input.active && input.j) this.jump = true;
+    if (input.active && (input.l ?? 0) < 0) this.keys.add('KeyQ');
+    if (input.active && (input.l ?? 0) > 0) this.keys.add('KeyE');
   }
   consume(code: string): boolean { if (code !== 'Space') return false; const value = this.jump; this.jump = false; return value; }
   clear(): void { this.forward = this.sideways = 0; this.keys.clear(); this.jump = false; }

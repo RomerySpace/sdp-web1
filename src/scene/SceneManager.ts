@@ -2,6 +2,7 @@ import {
   NeutralToneMapping, PerspectiveCamera, Scene, SRGBColorSpace,
   VSMShadowMap, WebGLRenderer,
 } from 'three';
+import { LiminalGarden } from './LiminalGarden';
 import { Atmosphere } from './Atmosphere';
 import { Environment } from './Environment';
 import { Lighting } from './Lighting';
@@ -15,6 +16,7 @@ export class SceneManager {
   readonly camera = new PerspectiveCamera(52, 1, 0.08, 650);
   readonly renderer: WebGLRenderer;
   readonly atmosphere: Atmosphere;
+  readonly garden: LiminalGarden;
   readonly environment: Environment;
   readonly lighting: Lighting;
   readonly sculpture: Sculpture;
@@ -26,7 +28,7 @@ export class SceneManager {
     this.renderer = new WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.toneMapping = NeutralToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = .82;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = VSMShadowMap;
     this.renderer.domElement.className = 'scene-canvas';
@@ -35,6 +37,7 @@ export class SceneManager {
     this.atmosphere = new Atmosphere(this.scene);
     this.lighting = new Lighting(this.scene);
     this.environment = new Environment(this.scene, this.atmosphere);
+    this.garden = new LiminalGarden(this.scene, this.atmosphere);
     this.sculpture = new Sculpture(this.scene, this.atmosphere);
     this.inspection = new SculptureInspection(this.renderer.domElement);
     this.graphics = new DigitalFragmentManager(this.scene, this.camera);
@@ -54,6 +57,7 @@ export class SceneManager {
   }
 
   render(dt: number, time: number, reveal: number): void {
+    this.garden.update(time, reveal, this.camera.position);
     this.sculpture.update(dt);
     this.atmosphere.update(time, reveal);
     this.environment.update(reveal);
@@ -64,6 +68,7 @@ export class SceneManager {
   }
 
   dispose(): void {
+    this.garden.dispose();
     this.graphics.dispose();
     this.remotePlayers.dispose();
     this.inspection.dispose();

@@ -1,0 +1,2 @@
+import { defineConfig } from '@playwright/test';
+export default defineConfig({ testDir:'./tests',testMatch:'liminal-update.spec.ts',workers:1,timeout:180000,expect:{timeout:30000},outputDir:'test-results/liminal',use:{baseURL:process.env.SDP_LIMINAL_TEST_URL || 'http://localhost:5483',viewport:{width:1440,height:1000},launchOptions:{channel:'chrome'},screenshot:'only-on-failure',trace:'retain-on-failure'} });

@@ -65,3 +65,5 @@
   .touch-fire { bottom: 160px; }
   .touch-jump, .touch-crouch { bottom: 92px; }
 }
+
+.touch-controls[data-context="limbo"] :is(.touch-jump, .touch-crouch) { display: grid; }

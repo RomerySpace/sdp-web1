@@ -11,7 +11,7 @@ const own = (page: Page) => page.evaluate(() => { const s = (window as unknown a
 async function open(page: Page, name: string) { await page.goto('/?debugMode=limbo'); await enterExhibition(page, name); await expect(page.locator('#app')).toHaveAttribute('data-input', 'touch'); }
 async function shooter(page: Page, name = 'Touch Shooter') {
   await open(page, name); await walkToSculpture(page);
-  await page.getByRole('button', { name: 'JOIN SHOOTER TEST' }).tap();
+  await page.getByRole('button', { name: 'JOIN SHOOTER' }).tap();
   await expect(page.locator('#app')).toHaveAttribute('data-mode', 'SHOOTER');
   await page.getByRole('button', { name: 'ENTER SIMULATION' }).tap();
   await expect(page.locator('.touch-controls')).toHaveAttribute('data-context', 'shooter');
@@ -72,7 +72,7 @@ test('mobile Shooter: real simultaneous movement/look/fire, ADS, crouch, jump, r
     const page = await a.newPage(), peer = await b.newPage(), errors: string[] = [], requests: string[] = [];
     page.on('pageerror', e => errors.push(e.message)); page.on('request', r => requests.push(r.url()));
     await open(page, 'Touch Alpha'); await walkToSculpture(page); expect(requests.filter(u => /\/shooter\/|ShooterMode-|shooter-physics-|rapier3d/.test(u))).toEqual([]);
-    await page.getByRole('button', { name: 'JOIN SHOOTER TEST' }).tap(); await expect(page.locator('#app')).toHaveAttribute('data-mode', 'SHOOTER'); await page.getByRole('button', { name: 'ENTER SIMULATION' }).tap();
+    await page.getByRole('button', { name: 'JOIN SHOOTER' }).tap(); await expect(page.locator('#app')).toHaveAttribute('data-mode', 'SHOOTER'); await page.getByRole('button', { name: 'ENTER SIMULATION' }).tap();
     await shooter(peer, 'Touch Beta'); await page.bringToFront();
     if (await page.getByRole('button', { name: 'RESUME', exact: true }).isVisible()) await page.getByRole('button', { name: 'RESUME', exact: true }).tap();
     expect((await debug(page)).roomId).toBe((await debug(peer)).roomId);

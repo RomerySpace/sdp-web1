@@ -20,7 +20,11 @@ export class AvatarLayout {
   private readonly direction = new Vector3();
   private readonly axis = new Vector3(0, 1, 0);
   private readonly euler = new Euler();
-  update(height: number, pitch: number, reload = 0): void {
+  private readonly tilt = new Quaternion();
+  private readonly weaponQuaternion = new Quaternion();
+  private readonly leanAxis = new Vector3(0, 0, 1);
+  update(height: number, pitch: number, reload = 0, lean = 0): void {
+    this.head.rotation.identity(); this.torso.rotation.identity();
     const crouch = MathUtils.clamp((1.8 - height) / .64, 0, 1);
     this.head.center.set(0, height - .19, 0);
     this.torso.center.set(0, 1.14 - crouch * .56, 0); this.torso.height = .88 * (1 - crouch * .12);
@@ -37,5 +41,18 @@ export class AvatarLayout {
       arm.center.copy(this.shoulder).add(this.hand).multiplyScalar(.5); arm.height = this.direction.length();
       arm.rotation.setFromUnitVectors(this.axis, this.direction.normalize());
     }
+    // Upper body bends from the waist; feet remain planted. The head matches the
+    // authoritative eye displacement and the same layout is used by hit detection.
+    const pivot = .68 - crouch * .34, length = height - .19 - pivot;
+    const tilt = this.tilt.setFromAxisAngle(this.leanAxis, -Math.atan2(lean, length));
+    for (const part of [this.head, this.torso, ...this.arms]) {
+      const weight = MathUtils.clamp((part.center.y - pivot) / length, 0, 1);
+      part.center.x += lean * weight; part.center.y -= Math.abs(lean) * .12 * weight;
+      part.rotation.premultiply(tilt);
+    }
+    const weight = MathUtils.clamp((this.weaponPosition.y - pivot) / length, 0, 1);
+    this.weaponPosition.x += lean * weight; this.weaponPosition.y -= Math.abs(lean) * .12 * weight;
+    this.weaponRotation.setFromQuaternion(tilt.multiply(this.weaponQuaternion.setFromEuler(this.weaponRotation)));
+
   }
 }

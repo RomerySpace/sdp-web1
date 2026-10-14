@@ -1,109 +1,72 @@
-const MUTE_KEY = 'sdp:muted';
 import { sharedAudioContext } from './AudioContextHub';
+import { musicPosition, validMusicTracks, type MusicTrack } from '../../shared/MusicTimeline';
+import type { LobbySnapshot } from '../../shared/MultiplayerProtocol';
+const MUTE_KEY = 'sdp:muted';
 
+/** Stream only the current track. One player persists across room transitions. */
 export class AudioManager {
+  private readonly media = new Audio();
+  private readonly abort = new AbortController();
   private context?: AudioContext;
   private gain?: GainNode;
-  private source?: AudioBufferSourceNode;
-  private readonly abort = new AbortController();
+  private source?: MediaElementAudioSourceNode;
+  private tracks: MusicTrack[] = [];
+  private current = '';
   private started = false;
-  private disposed = false;
-  private volume = 0.5;
-  private active = true;
+  private volume = .5;
+  private serverAnchor?: { time: number; received: number };
+  private readonly label = document.createElement('aside');
+  private readonly title = document.createElement('span');
+  private readonly artist = document.createElement('span');
+  private readonly timer: number;
   muted = false;
-
   constructor() {
-    try { this.muted = localStorage.getItem(MUTE_KEY) === 'true'; } catch { /* Private/storage-restricted browsing. */ }
+    try { this.muted = localStorage.getItem(MUTE_KEY) === 'true'; } catch {}
+    this.media.crossOrigin = 'anonymous'; this.media.preload = 'metadata';
+    this.label.className = 'now-playing'; this.label.hidden = true; this.label.setAttribute('aria-label', 'Now playing');
+    this.title.className = 'music-title'; this.artist.className = 'music-artist'; this.label.append(this.title, this.artist);
+    const signal = this.abort.signal;
+    this.media.addEventListener('loadedmetadata', () => this.sync(), { signal });
+    this.media.addEventListener('playing', () => { this.label.hidden = false; }, { signal });
+    for (const event of ['error', 'waiting', 'pause']) this.media.addEventListener(event, () => { this.label.hidden = true; }, { signal });
+    document.addEventListener('pointerdown', () => { if (this.started && this.media.paused) { void this.context?.resume(); this.sync(); } }, { signal });
+    void fetch('/audio/playlist.json', { signal }).then(r => r.ok ? r.json() : []).then(raw => {
+      this.tracks = validMusicTracks(raw); this.sync();
+    }).catch(() => {});
+    this.timer = window.setInterval(() => this.sync(), 1000);
   }
-
-  /** Create/resume the context immediately inside the entry gesture. */
+  attach(container: HTMLElement): void { container.append(this.label); }
+  receive(snapshot: LobbySnapshot): void {
+    if (snapshot.wallTime) this.serverAnchor = { time: snapshot.wallTime, received: snapshot.receivedAt };
+  }
   enter(): void {
-    if (this.started) return;
-    this.started = true;
-    if (!__HAS_AMBIENT_AUDIO__) {
-      console.warn('[SDP] Optional /audio/ambient.mp3 is absent. Ambience is disabled. Add the file and restart Vite.');
-      return;
+    if (!this.started) {
+      this.started = true; this.context = sharedAudioContext();
+      this.source = this.context.createMediaElementSource(this.media); this.gain = this.context.createGain();
+      this.source.connect(this.gain); this.gain.connect(this.context.destination); this.updateGain();
     }
-    try {
-      this.context = sharedAudioContext();
-      void this.context.resume().catch(() => {});
-      void this.load();
-    } catch (error) { console.warn('[SDP] Web Audio is unavailable; continuing silently.', error); }
+    void this.context?.resume().catch(() => {}); this.sync();
   }
-
-  private async load(): Promise<void> {
-    const context = this.context!;
-    try {
-      const response = await fetch('/audio/ambient.mp3', { signal: this.abort.signal });
-      if (!response.ok || response.headers.get('content-type')?.includes('text/html')) throw new Error('Ambient asset is missing');
-      const buffer = await context.decodeAudioData(await response.arrayBuffer());
-      if (this.disposed) return;
-      const filter = context.createBiquadFilter();
-      filter.type = 'lowpass'; filter.frequency.value = 2600; filter.Q.value = 0.45;
-      this.gain = context.createGain();
-      this.gain.gain.value = 0;
-      this.gain.connect(context.destination);
-      filter.connect(this.gain);
-
-      const reverb = context.createConvolver();
-      reverb.buffer = this.createImpulse(context);
-      const wet = context.createGain();
-      wet.gain.value = 0.18;
-      filter.connect(reverb); reverb.connect(wet); wet.connect(this.gain);
-
-      this.source = context.createBufferSource();
-      this.source.buffer = buffer;
-      this.source.loop = true;
-      this.source.connect(filter);
-      this.source.start();
-      this.gain.gain.linearRampToValueAtTime(this.muted || !this.active ? 0 : this.volume * 0.28, context.currentTime + 3.4);
-    } catch (error) {
-      if (!this.disposed) console.warn('[SDP] Optional ambience could not be decoded; continuing silently.', error);
+  private sync(): void {
+    if (!this.started || document.hidden) return;
+    const now = this.serverAnchor ? this.serverAnchor.time + performance.now() - this.serverAnchor.received : Date.now();
+    const position = musicPosition(this.tracks, now);
+    if (!position) return;
+    const { track, offset } = position;
+    if (this.current !== track.id) {
+      this.current = track.id; this.label.hidden = true;
+      this.title.textContent = track.title; this.artist.textContent = track.artist;
+      this.media.src = track.url; this.media.load();
     }
-  }
-
-  private createImpulse(context: AudioContext): AudioBuffer {
-    const length = Math.floor(context.sampleRate * 2.6);
-    const impulse = context.createBuffer(2, length, context.sampleRate);
-    let seed = 23;
-    for (let channel = 0; channel < 2; channel++) {
-      const samples = impulse.getChannelData(channel);
-      for (let i = 0; i < length; i++) {
-        seed = (seed * 16807) % 2147483647;
-        samples[i] = (seed / 2147483647 * 2 - 1) * Math.pow(1 - i / length, 3.3);
-      }
+    if (this.media.readyState >= 1 && Number.isFinite(this.media.duration) && Math.abs(this.media.currentTime - offset) > .6) {
+      this.media.currentTime = Math.min(offset, Math.max(0, this.media.duration - .05));
     }
-    return impulse;
+    if (this.media.paused && !this.media.error) void this.media.play().catch(() => { this.label.hidden = true; });
   }
-
-  toggleMute(): boolean {
-    this.setMuted(!this.muted);
-    try { localStorage.setItem(MUTE_KEY, String(this.muted)); } catch { /* Preference is optional. */ }
-    return this.muted;
-  }
-  setMuted(muted: boolean): void {
-    this.muted = muted;
-    if (!muted && !document.hidden) void this.context?.resume().catch(() => {});
-    this.updateGain();
-  }
-
+  toggleMute(): boolean { this.setMuted(!this.muted); try { localStorage.setItem(MUTE_KEY, String(this.muted)); } catch {} return this.muted; }
+  setMuted(muted: boolean): void { this.muted = muted; this.updateGain(); }
   setVolume(volume: number): void { this.volume = Math.max(0, Math.min(1, volume)); this.updateGain(); }
-  setActive(active: boolean): void { this.active = active; this.updateGain(); }
-
-  private updateGain(): void {
-    if (!this.context || !this.gain) return;
-    const now = this.context.currentTime;
-    this.gain.gain.cancelAndHoldAtTime(now);
-    this.gain.gain.setTargetAtTime(this.muted || !this.active ? 0 : this.volume * 0.28, now, 0.18);
-  }
-
-  setVisible(visible: boolean): void {
-    if (!this.context || this.disposed) return;
-    void (visible ? this.context.resume() : this.context.suspend()).catch(() => {});
-  }
-
-  dispose(): void {
-    this.disposed = true; this.abort.abort(); this.source?.stop(); this.source?.disconnect();
-    this.gain?.disconnect();
-  }
+  private updateGain(): void { if (this.gain && this.context) this.gain.gain.setTargetAtTime(this.muted ? 0 : this.volume * .6, this.context.currentTime, .1); }
+  setVisible(visible: boolean): void { if (!visible) this.media.pause(); else { void this.context?.resume().catch(() => {}); this.sync(); } }
+  dispose(): void { this.abort.abort(); window.clearInterval(this.timer); this.media.pause(); this.media.removeAttribute('src'); this.media.load(); this.source?.disconnect(); this.gain?.disconnect(); this.label.remove(); }
 }

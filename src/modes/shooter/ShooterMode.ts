@@ -3,6 +3,7 @@ import type { ColyseusNetworkAdapter } from '../../network/ColyseusNetworkAdapte
 import { SHOOTER_ROOM, shooterNetworkConfig, type ShooterInput } from '../../../shared/ShooterProtocol';
 import type { NetworkPlayer } from '../../../shared/MultiplayerProtocol';
 import { gameConfig } from './config/gameConfig';
+import { MediaSurfaces } from './media/MediaSurfaces';
 import { AudioManager } from './audio/AudioManager';
 import { CharacterController, findSpawn } from './physics/CharacterController';
 import { PhysicsWorld } from './physics/PhysicsWorld';
@@ -25,6 +26,7 @@ import './styles/shooter.css';
 
 export class ShooterMode {
   readonly scene = new Scene(); readonly input: InputManager; readonly camera: FirstPersonCamera;
+  readonly media = new MediaSurfaces();
   readonly map = new MapLoader(); readonly weapon = new Weapon(); readonly audio = new AudioManager();
   readonly environment: Environment; readonly contactShading: ContactShading; readonly hud: ShooterHUD;
   readonly remotes: RemoteShooterPlayers;
@@ -70,6 +72,7 @@ export class ShooterMode {
         if (network.roomType !== SHOOTER_ROOM) return;
         this.remotes.receive(snapshot);
         this.hud.receive(snapshot);
+        this.environment.setLighting(snapshot.match?.lighting ?? 'day');
         const finished = snapshot.match?.phase === 'results';
         if (finished !== this.roundComplete) { this.roundComplete = finished; if (this.active) this.pause(); }
         const local = snapshot.players.find(player => player.playerId === snapshot.localPlayerId);
@@ -92,7 +95,7 @@ export class ShooterMode {
         }
       }), network.subscribeToWeapons(event => this.remotes.action(event)),
       network.subscribeToCombat(event => {
-        if (event.type === 'death' && event.attackerId === network.snapshot?.localPlayerId) this.feedback.eliminated();
+
         if (event.playerId !== network.snapshot?.localPlayerId || event.life !== this.life) return;
         if (event.type === 'damage') this.applyHealth(event.health);
         if (event.type === 'death') this.die();
@@ -102,6 +105,8 @@ export class ShooterMode {
   async initialize(progress: (text: string) => void, signal: AbortSignal): Promise<void> {
     progress('Initializing physics'); this.physics = await PhysicsWorld.initialize(); signal.throwIfAborted();
     await this.map.load(progress); signal.throwIfAborted(); this.scene.add(this.map.root);
+    this.scene.add(this.media.root);
+    await this.media.load(this.map).catch(error => { if (!signal.aborted) console.warn('[SDP] Media slots unavailable', error); }); signal.throwIfAborted();
     progress('Loading SDP weapon'); await this.weapon.load(); signal.throwIfAborted();
     progress('Loading environment light'); await this.environment.load(); signal.throwIfAborted();
     this.colliderCount = await buildMapColliders(this.physics, this.map.geometries, progress); signal.throwIfAborted();
@@ -141,11 +146,14 @@ export class ShooterMode {
     r.autoClear = false; r.info.autoReset = false;
     this.resize(); this.hud.element.hidden = false;
     const local = this.network.snapshot?.players.find(p => p.playerId === this.network.snapshot?.localPlayerId);
+    this.environment.update();
+    this.environment.setLighting(this.network.snapshot?.match?.lighting ?? 'day');
     this.roundComplete = this.network.snapshot?.match?.phase === 'results';
     if (local) this.spawn(local);
   }
   resume(): void {
     if (!this.active || this.disposed || this.roundComplete || this.network.status.state !== 'connected') return;
+    this.media.setActive(true);
     this.audio.enter(); this.audio.setVisible(true);
     if (this.touch) {
       this.paused = false; this.suppressPauseMenu = false; this.input.enabled = !this.dead; this.accumulator = 0; this.onResumed();
@@ -153,6 +161,7 @@ export class ShooterMode {
   }
   pause(hideMenu = false): void {
     if (!this.active) return;
+    this.media.setActive(false);
     this.suppressPauseMenu = hideMenu;
     this.paused = true; this.input.enabled = false; this.input.clear(); this.accumulator = 0;
     this.player?.stopHorizontal(); this.sendInput(false, true);
@@ -162,9 +171,10 @@ export class ShooterMode {
     const now = performance.now(), input: ShooterInput = { seq: this.sequence + 1, life: this.life, f: active ? this.input.forward : 0, r: active ? this.input.sideways : 0,
       y: Math.atan2(Math.sin(this.input.yaw), Math.cos(this.input.yaw)), p: this.input.pitch,
       s: active && this.input.keys.has('ShiftLeft'), c: active && (this.input.keys.has('ControlLeft') || this.input.keys.has('ControlRight')),
+      l: active ? Number(this.input.keys.has('KeyE')) - Number(this.input.keys.has('KeyQ')) : 0,
       j: active && this.input.pending('Space'), a: active && this.input.aiming, active };
     const previous = this.lastInput;
-    const changed = !previous || ['f', 'r', 's', 'c', 'j', 'a', 'active'].some(key => input[key as keyof ShooterInput] !== previous[key as keyof ShooterInput]);
+    const changed = !previous || ['f', 'r', 's', 'c', 'j', 'a', 'l', 'active'].some(key => input[key as keyof ShooterInput] !== previous[key as keyof ShooterInput]);
     if (!force && !changed && now - this.lastInputSent < 1000 / shooterNetworkConfig.inputHz) return;
     this.sequence = input.seq; this.lastInput = input; this.lastInputSent = now;
     this.network.sendShooterInput(input);
@@ -224,7 +234,7 @@ export class ShooterMode {
     if (this.active) { this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, gameConfig.rendering.maxPixelRatio)); this.renderer.setSize(window.innerWidth, window.innerHeight); }
     this.camera.camera.aspect = window.innerWidth / window.innerHeight; this.camera.camera.updateProjectionMatrix(); this.contactShading.resize(this.renderer);
   }
-  get snapshot() { return { paused: this.paused, physicsSteps: this.fixedSteps, position: this.player?.current.toArray(),
+  get snapshot() { return { media: this.media.placements, lighting: this.network.snapshot?.match?.lighting, paused: this.paused, physicsSteps: this.fixedSteps, position: this.player?.current.toArray(),
     grounded: this.player?.grounded, movement: this.player?.state, colliders: this.colliderCount, map: this.map.stats,
     ammo: this.weapon.ammo, reserve: this.weapon.reserve, shots: this.shooting?.shotsFired, reloading: this.weapon.reloading,
     health: this.health, dead: this.dead, life: this.life, automatic: this.weapon.automatic,
@@ -234,7 +244,7 @@ export class ShooterMode {
   dispose(): void {
     if (this.disposed) return;
     this.active = false; this.disposed = true; this.events.abort(); this.unsubscribers.forEach(fn => fn());
-    this.input.dispose(); this.audio.dispose(); this.hud.dispose(); this.menu.dispose(); this.feedback.dispose(); this.shooting?.dispose(); this.remotes.dispose();
+    this.media.dispose(); this.input.dispose(); this.audio.dispose(); this.hud.dispose(); this.menu.dispose(); this.feedback.dispose(); this.shooting?.dispose(); this.remotes.dispose();
     this.contactShading.dispose(); this.weapon.dispose(); this.map.dispose(); this.environment.dispose(); this.physics?.dispose(); this.scene.clear();
     const r = this.renderer, previous = this.previousRenderer;
     r.toneMapping = previous.toneMapping; r.toneMappingExposure = previous.exposure; r.autoClear = previous.autoClear;

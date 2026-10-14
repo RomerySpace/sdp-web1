@@ -1,3 +1,4 @@
+import { leanConfig, leanOffset } from '../../../shared/Lean';
 import { gameplayConfig } from '../../../shared/GameplayConfig';
 import { RAPIER, identityRotation } from '../../../src/modes/shooter/physics/PhysicsWorld';
 import { Quaternion, Vector3 } from 'three';
@@ -5,7 +6,7 @@ import { AvatarLayout } from '../../../shared/AvatarLayout';
 import type { HitRegion } from '../../../shared/ShooterProtocol';
 import type { ShooterWorld } from './ShooterWorld';
 export interface CombatPose { id: string; life: number; x: number; y: number; z: number; height: number;
-  dead: boolean; connected: boolean; protectedUntil: number; time: number; yaw?: number; pitch?: number; reload?: number }
+  dead: boolean; connected: boolean; protectedUntil: number; time: number; yaw?: number; pitch?: number; reload?: number; lean?: number }
 export interface PlayerHit { playerId: string; region: HitRegion; distance: number }
 const layout = new AvatarLayout(), center = new Vector3(), rotation = new Quaternion(), yawRotation = new Quaternion(), axis = new Vector3(0, 1, 0);
 
@@ -16,7 +17,7 @@ export function hitboxDistance(pose: CombatPose, ray: RAPIER.Ray, range: number)
 export function regionalHit(pose: CombatPose, ray: RAPIER.Ray, range: number): PlayerHit | null {
   const broad = new RAPIER.Ball(1.5).castRay(ray, { x: pose.x, y: pose.y + pose.height / 2, z: pose.z }, identityRotation, range, true);
   if (broad < 0 || broad > range) return null;
-  layout.update(pose.height, pose.pitch ?? 0, pose.reload ?? 0);
+  layout.update(pose.height, pose.pitch ?? 0, pose.reload ?? 0, pose.lean ?? 0);
   yawRotation.setFromAxisAngle(axis, pose.yaw ?? 0);
   let nearest = range, hit: PlayerHit | null = null;
   for (const part of layout.parts) {
@@ -54,6 +55,7 @@ export class CombatSimulation {
           z: before.z + (after.z - before.z) * t, height: before.height + (after.height - before.height) * t,
           yaw: (before.yaw ?? 0) + Math.atan2(Math.sin((after.yaw ?? 0) - (before.yaw ?? 0)), Math.cos((after.yaw ?? 0) - (before.yaw ?? 0))) * t,
           pitch: (before.pitch ?? 0) + ((after.pitch ?? 0) - (before.pitch ?? 0)) * t,
+          lean: (before.lean ?? 0) + ((after.lean ?? 0) - (before.lean ?? 0)) * t,
           reload: (before.reload ?? 0) + ((after.reload ?? 0) - (before.reload ?? 0)) * t };
       }
       before = after;
@@ -63,7 +65,13 @@ export class CombatSimulation {
   fire(world: ShooterWorld, shooter: CombatPose, yaw: number, pitch: number, now: number, measuredRtt: number,
     current: Iterable<CombatPose>): PlayerHit | null {
     const c = gameplayConfig.combat;
-    const origin = { x: shooter.x, y: shooter.y + shooter.height - .1, z: shooter.z };
+    const offset = leanOffset(shooter.lean ?? 0, yaw);
+    const eye = { x: shooter.x, y: shooter.y + shooter.height - .1, z: shooter.z };
+    const body = world.player(shooter.id);
+    const obstruction = world.physics.world.castShape(eye, identityRotation, offset, new RAPIER.Ball(leanConfig.radius),
+      1, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, body?.collider, body?.body);
+    const fraction = obstruction ? Math.max(0, obstruction.toi - .025) : 1;
+    const origin = { x: eye.x + offset.x * fraction, y: eye.y + offset.y * fraction, z: eye.z + offset.z * fraction };
     const direction = { x: -Math.sin(yaw) * Math.cos(pitch), y: Math.sin(pitch), z: -Math.cos(yaw) * Math.cos(pitch) };
     const ray = new RAPIER.Ray(origin, direction);
     // The client cannot choose a rewind timestamp. Delay comes from server-issued RTT probes.

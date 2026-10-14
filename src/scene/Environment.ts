@@ -2,15 +2,15 @@ import {
   CanvasTexture, Mesh, MeshBasicMaterial, MeshStandardMaterial,
   PlaneGeometry, Scene,
 } from 'three';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import type { Atmosphere } from './Atmosphere';
+import { createMonolithGeometry } from './MonolithGeometry';
 
 export class Environment {
   private readonly meshes: Mesh[] = [];
   private readonly shadowTexture: CanvasTexture;
 
   constructor(scene: Scene, atmosphere: Atmosphere) {
-    const floorMaterial = new MeshStandardMaterial({ color: 0xf9faf9, roughness: 0.94, metalness: 0 });
+    const floorMaterial = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.94, metalness: 0 });
     atmosphere.apply(floorMaterial);
     const floor = new Mesh(new PlaneGeometry(2000, 2000), floorMaterial);
     floor.rotation.x = -Math.PI / 2;
@@ -18,11 +18,11 @@ export class Environment {
     this.meshes.push(floor);
 
     const pedestalMaterial = new MeshStandardMaterial({
-      color: 0xf0eee8, roughness: 0.8, metalness: 0.015, envMapIntensity: 0.4,
+      color: 0xffffff, roughness: 0.62, metalness: 0, envMapIntensity: 0.3,
     });
     atmosphere.apply(pedestalMaterial);
-    const pedestal = new Mesh(new RoundedBoxGeometry(2.4, 1.2, 2.4, 3, 0.018), pedestalMaterial);
-    pedestal.position.y = 0.6;
+    const pedestal = new Mesh(createMonolithGeometry(), pedestalMaterial);
+    pedestal.name = 'Monolith / satin foundation';
     pedestal.castShadow = true;
     pedestal.receiveShadow = true;
     this.meshes.push(pedestal);
@@ -41,7 +41,7 @@ export class Environment {
         image.data[index] = 111;
         image.data[index + 1] = 124;
         image.data[index + 2] = 133;
-        image.data[index + 3] = Math.round(Math.exp(-(dx * dx + dz * dz) * 8) * 54);
+        image.data[index + 3] = Math.round(Math.exp(-(dx * dx + dz * dz) * 6) * 28);
       }
     }
     context.putImageData(image, 0, 0);

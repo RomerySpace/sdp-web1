@@ -43,6 +43,11 @@ test('two real WebSocket clients receive authoritative results, blocked inputs a
     const own = () => a.state.players.get(a.sessionId)!, target = () => a.state.players.get(b.sessionId)!;
     const endsAt = a.state.matchEndsAt;
     assert.equal(a.state.match, 'playing'); assert.equal(a.state.round, 1);
+    await waitFor(() => Boolean(b.state.lighting));
+    assert.ok(['day', 'night'].includes(a.state.lighting));
+    assert.equal(a.state.lighting, b.state.lighting);
+    const firstLighting = a.state.lighting;
+    assert.ok(Math.abs(a.state.wallTime - Date.now()) < 1000);
     assert.ok(endsAt - a.state.serverTime > 299000, 'Client duration options must not shorten the server round.');
     await waitFor(() => a.state.serverTime > target().protectedUntil + 200);
     const dx = target().x - own().x, dz = target().z - own().z;
@@ -55,6 +60,7 @@ test('two real WebSocket clients receive authoritative results, blocked inputs a
     await waitFor(() => a.state.match === 'results' && b.state.match === 'results');
     assert.equal(a.state.results[0].playerId, a.sessionId); assert.equal(a.state.results[0].kills, 1);
     assert.equal(a.state.results[1].deaths, 1); assert.equal(b.state.results[0].displayName, 'Round Winner');
+    assert.equal(a.state.lighting, firstLighting);
     const frozen = { x: own().x, y: own().y, z: own().z, ammo: own().ammo, life: target().life };
     a.send('shooter:input', { ...input, seq: 2, f: 1, s: true });
     a.send('weapon:action', { seq: 2, life: own().life, action: 'fire' });
@@ -69,6 +75,7 @@ test('two real WebSocket clients receive authoritative results, blocked inputs a
     local.clock.elapsedTime = a.state.nextRoundAt - 50; await sleep(20); assert.equal(a.state.match, 'results');
     local.clock.elapsedTime = a.state.nextRoundAt;
     await waitFor(() => a.state.round === 2 && b.state.round === 2 && c.state.round === 2);
+    assert.equal(a.state.lighting, b.state.lighting); assert.equal(a.state.lighting, c.state.lighting);
     assert.equal(a.state.match, 'playing'); assert.equal(a.state.results.length, 0); assert.equal(a.state.killFeed.length, 0);
     for (const p of a.state.players.values()) {
       assert.equal(p.kills, 0); assert.equal(p.deaths, 0); assert.equal(p.streak, 0); assert.equal(p.health, 100);

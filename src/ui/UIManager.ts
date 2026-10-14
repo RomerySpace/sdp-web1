@@ -31,7 +31,7 @@ export class UIManager {
     this.element.className = 'ui';
     this.element.dataset.state = 'INTRO';
     this.element.innerHTML = `
-      <header class="exhibition-mark" aria-label="SDP infinite exhibition"><span>SDP</span><span>INFINITE EXHIBITION</span></header>
+
       <div class="top-controls" aria-label="Multiplayer status"></div>
       <div class="crosshair" aria-hidden="true"></div>
       <div class="pause-prompt" hidden>
@@ -40,7 +40,7 @@ export class UIManager {
         <span class="pause-hint">Cursor released · Take your time</span>
       </div>
       <p class="ui-notice" role="status"></p>
-      <div class="exhibit-caption"><span>UNTITLED — 001</span><span>A STUDY IN LIGHT &amp; PRESENCE</span></div>
+
     `;
     this.pause = this.element.querySelector('.pause-prompt')!;
     this.notice = this.element.querySelector('.ui-notice')!;
@@ -68,5 +68,5 @@ export class UIManager {
     this.noticeTimer = window.setTimeout(() => this.notice.classList.remove('is-visible'), 7000);
   }
 
-  dispose(): void { window.clearTimeout(this.noticeTimer); this.chat.dispose(); this.element.remove(); }
+  dispose(): void { this.controls.dispose(); window.clearTimeout(this.noticeTimer); this.chat.dispose(); this.element.remove(); }
 }

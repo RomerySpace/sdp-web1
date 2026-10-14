@@ -136,7 +136,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
   }
   private step(): void {
     const now = this.clock.elapsedTime;
-    this.state.serverTime = now;
+    this.state.wallTime = Date.now(); this.state.serverTime = now;
     this.state.tick = (this.state.tick + 1) >>> 0;
     if (this.match.phase === 'playing' && !this.match.active(now)) this.finishMatch(now);
     if (this.match.phase === 'results' && now >= this.match.nextRoundAt) {
@@ -162,7 +162,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
       const player = this.state.players.get(id)!, body = this.world.player(id)!;
       if (player.dead) continue;
       player.x = body.current.x; player.y = body.current.y - body.height / 2; player.z = body.current.z;
-      player.yaw = entry.input.y; player.pitch = entry.input.p; player.height = body.height;
+      player.yaw = entry.input.y; player.pitch = entry.input.p; player.height = body.height; player.lean = body.lean;
       player.crouching = body.crouching; player.sprinting = body.sprinting; player.grounded = body.grounded;
       player.lastProcessedInput = Math.max(0, entry.input.seq);
     }
@@ -170,6 +170,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     this.combat.record(this.poses(now));
   }
   private syncMatch(): void {
+    this.state.lighting = this.match.lighting;
     this.state.match = this.match.phase; this.state.round = this.match.round;
     this.state.matchEndsAt = this.match.endsAt; this.state.nextRoundAt = this.match.nextRoundAt;
   }
@@ -196,7 +197,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     const p = this.state.players.get(id)!;
     const entry = this.entries.get(id)!;
     const reload = p.reloading ? Math.sin(Math.max(0, 1 - (entry.reloadUntil - time) / (gameConfig.weapon.reloadDuration * 1000)) * Math.PI) : 0;
-    return { id, time, life: p.life, x: p.x, y: p.y, z: p.z, height: p.height, yaw: p.yaw, pitch: p.pitch, reload,
+    return { id, time, life: p.life, x: p.x, y: p.y, z: p.z, height: p.height, yaw: p.yaw, pitch: p.pitch, lean: p.lean, reload,
       dead: p.dead, connected: p.connected, protectedUntil: p.protectedUntil };
   }
   private poses(time: number): CombatPose[] { return [...this.state.players.keys()].map(id => this.pose(id, time)); }
@@ -233,7 +234,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
       dead: false, life: p.life + 1, diedAt: 0, respawnAt: 0, bornAt: now,
       protectedUntil: now + gameplayConfig.combat.spawnProtection * 1000,
       health: gameplayConfig.combat.maxHealth, lastDamageAt: now, ammo: gameConfig.weapon.magazineSize, reserve: gameConfig.weapon.reserveAmmo,
-      reloading: false, crouching: false, sprinting: false, grounded: false, height: gameConfig.player.height });
+      reloading: false, crouching: false, sprinting: false, grounded: false, height: gameConfig.player.height, lean: 0 });
     entry.input = { ...entry.input, life: p.life, f: 0, r: 0, s: false, c: false, j: false, a: false, active: false, y: p.yaw, p: 0 };
     entry.received = now; entry.lastShot = -1000; entry.reloadUntil = 0; entry.burstShots = 0; entry.recovery.interrupt();
     this.broadcast('combat:event', { type: 'respawn', playerId: id, health: p.health, life: p.life, roomId: this.roomId, timestamp: now });

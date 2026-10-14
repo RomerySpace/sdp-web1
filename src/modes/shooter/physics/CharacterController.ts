@@ -1,4 +1,5 @@
 import { MathUtils, Vector3 } from 'three';
+import { leanConfig, leanOffset } from '../../../../shared/Lean';
 import { gameConfig } from '../config/gameConfig';
 import { identityRotation, PhysicsWorld, RAPIER } from './PhysicsWorld';
 import type { CharacterInput } from '../../../../shared/ShooterProtocol';
@@ -14,6 +15,7 @@ export class CharacterController {
   readonly acceleration = new Vector3();
   readonly spawn: Vector3;
   readonly position = new Vector3();
+  lean = 0;
   grounded = false;
   crouching = false;
   sprinting = false;
@@ -40,7 +42,7 @@ export class CharacterController {
       .setSensor(true).setDensity(0), this.body);
     this.motor = physics.world.createCharacterController(0.015);
     this.motor.setSlideEnabled(true);
-    this.motor.enableAutostep(p.stepHeight, 0.18, false);
+    this.motor.enableAutostep(p.stepHeight, 0.08, false);
     this.motor.setMaxSlopeClimbAngle(MathUtils.degToRad(p.maxSlope));
     this.motor.setMinSlopeSlideAngle(MathUtils.degToRad(p.maxSlope + 3));
     this.current.copy(this.body.translation()); this.previous.copy(this.current);
@@ -89,13 +91,40 @@ export class CharacterController {
       const factor = Math.min(1, amount / Math.max(0.0001, Math.hypot(dx, dz)));
       this.drive.x += dx * factor; this.drive.z += dz * factor;
     }
-    this.motor.enableAutostep(p.stepHeight, 0.18, false);
+    this.motor.enableAutostep(p.stepHeight, 0.08, false);
+    const canStep = (this.grounded || this.time - this.lastGrounded < .14) && live.y <= 2 && this.time - this.lastJump > .18;
+    if (!canStep) this.motor.disableAutostep();
     this.motor.computeColliderMovement(this.motorCollider, {
-      x: this.drive.x * dt, y: this.grounded && live.y <= 0.1 ? -0.025 : 0, z: this.drive.z * dt,
+      x: this.drive.x * dt, y: canStep ? -0.035 : 0, z: this.drive.z * dt,
     }, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, c => c.handle !== this.collider.handle);
     const move = this.motor.computedMovement();
+    const desiredLength = Math.hypot(this.drive.x, this.drive.z) * dt;
+    const actualLength = Math.hypot(live.x, live.z) * dt;
+    if (canStep && desiredLength > .001 && (Math.hypot(move.x, move.z) < desiredLength * .95 || actualLength < desiredLength * .9)) {
+      // Read the tread ahead with a downward ray. Capsule contact normals on a
+      // sharp stair edge are diagonal, even when the tread itself is flat.
+      const world = this.physics.world, origin = this.body.translation();
+      const flags = RAPIER.QueryFilterFlags.EXCLUDE_SENSORS;
+      const lookAhead = p.radius + .08;
+      const dx = this.drive.x * dt, dz = this.drive.z * dt;
+      const sample = { x: origin.x + dx / desiredLength * lookAhead,
+        y: origin.y - this.height / 2 + p.stepHeight + .025, z: origin.z + dz / desiredLength * lookAhead };
+      const tread = world.castRayAndGetNormal(new RAPIER.Ray(sample, { x: 0, y: -1, z: 0 }),
+        p.stepHeight + .05, false, flags, undefined, this.collider, this.body);
+      if (tread && tread.normal.y > Math.cos(MathUtils.degToRad(p.maxSlope))) {
+        const rise = sample.y - tread.toi + this.height / 2 + .018 - origin.y;
+        if (rise > .025 && rise <= p.stepHeight + .02) {
+          const ceiling = world.castShape(origin, identityRotation, { x: 0, y: 1, z: 0 }, this.collider.shape,
+            rise, false, flags, undefined, this.collider, this.body);
+          const elevated = { x: origin.x, y: origin.y + rise, z: origin.z };
+          const obstacle = world.castShape(elevated, identityRotation, { x: dx, y: 0, z: dz }, this.collider.shape,
+            1, false, flags, undefined, this.collider, this.body);
+          if (!ceiling && !obstacle) { move.x = dx; move.z = dz; move.y = rise; }
+        }
+      }
+    }
     this.velocity.x = move.x / dt; this.velocity.z = move.z / dt;
-    if (this.grounded && move.y > 0.001) {
+    if (canStep && move.y > 0.001) {
       // Rapier's motor resolves the full stepped path before lifting the dynamic body.
       // Vertical falling/jumping remains the rigid-body solver's responsibility.
       const position = this.body.translation();
@@ -131,7 +160,18 @@ export class CharacterController {
       this.lastGrounded = this.time;
       if (!wasGrounded && this.preStepVy < -1.2) this.landingSpeed = -this.preStepVy;
     }
+    this.updateLean(gameConfig.physics.timestep);
     if (this.current.y < -30) this.respawn();
+  }
+  private updateLean(dt: number): void {
+    const target = (Number(this.input.keys.has('KeyE')) - Number(this.input.keys.has('KeyQ'))) * leanConfig.distance;
+    const desired = MathUtils.damp(this.lean, target, leanConfig.response, dt);
+    const offset = leanOffset(desired, this.input.yaw);
+    const origin = { x: this.current.x, y: this.current.y + this.height / 2 - .1, z: this.current.z };
+    const hit = this.physics.world.castShape(origin, identityRotation, offset, new RAPIER.Ball(leanConfig.radius),
+      1, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, this.collider, this.body);
+    // Clamp immediately on obstruction, including when turning while already leaning.
+    this.lean = desired * (hit ? Math.max(0, hit.toi - .025) : 1);
   }
   interpolate(alpha: number): Vector3 {
     this.position.lerpVectors(this.previous, this.current, alpha);
@@ -139,7 +179,7 @@ export class CharacterController {
     return this.position;
   }
   stopHorizontal(): void {
-    this.drive.set(0, 0, 0); this.acceleration.set(0, 0, 0);
+    this.lean = 0; this.drive.set(0, 0, 0); this.acceleration.set(0, 0, 0);
     const y = this.body.linvel().y;
     this.body.setLinvel({ x: 0, y, z: 0 }, true); this.velocity.set(0, y, 0);
   }
@@ -158,7 +198,7 @@ export class CharacterController {
     this.physics.world.removeRigidBody(this.body);
   }
   respawn(): void {
-    this.body.setEnabled(true);
+    this.lean = 0; this.body.setEnabled(true);
     this.height = gameConfig.player.height;
     this.collider.setShape(new RAPIER.Capsule(this.height / 2 - gameConfig.player.radius, gameConfig.player.radius));
     this.motorCollider.setShape(new RAPIER.Capsule(this.height / 2 - gameConfig.player.radius, gameConfig.player.radius - .025));

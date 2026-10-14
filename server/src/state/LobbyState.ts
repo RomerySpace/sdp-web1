@@ -4,6 +4,7 @@ import { shooterEnabled } from '../config/GameplayConfig';
 
 export class VisitorState extends Schema {
   displayName = '';
+  crouching = false;
   x = 0;
   y = PLAYER_HEIGHT;
   z = 9;
@@ -13,19 +14,20 @@ export class VisitorState extends Schema {
   lastProcessedInput = 0;
 }
 defineTypes(VisitorState, {
-  displayName: 'string',
+  displayName: 'string', crouching: 'boolean',
   x: 'float32', y: 'float32', z: 'float32', yaw: 'float32', pitch: 'float32',
   connected: 'boolean', lastProcessedInput: 'uint32',
 });
 
 export class LobbyState extends Schema {
+  wallTime = Date.now();
   shooterEnabled = shooterEnabled;
   players = new MapSchema<VisitorState>();
   online = 0;
   capacity = MAX_PLAYERS;
   tick = 0;
 }
-defineTypes(LobbyState, {
+defineTypes(LobbyState, { wallTime: 'float64',
   shooterEnabled: 'boolean',
   players: { map: VisitorState }, online: 'uint8', capacity: 'uint8', tick: 'uint32',
 });

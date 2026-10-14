@@ -2,7 +2,7 @@ import { BoxGeometry, CapsuleGeometry, Group, Mesh, MeshStandardMaterial, type S
 import type { LobbySnapshot } from '../../shared/MultiplayerProtocol';
 import type { Atmosphere } from './Atmosphere';
 
-interface Sample { time: number; x: number; y: number; z: number; yaw: number; pitch: number }
+interface Sample { time: number; x: number; y: number; z: number; yaw: number; pitch: number; crouching: boolean }
 interface RemoteVisitor { group: Group; marker: Mesh; samples: Sample[] }
 const INTERPOLATION_DELAY_MS = 100;
 
@@ -44,7 +44,7 @@ export class RemotePlayerManager {
         this.visitors.set(player.playerId, visitor);
         this.group.add(group);
       }
-      visitor.samples.push({ time: snapshot.receivedAt, x: player.x, y: player.y, z: player.z, yaw: player.yaw, pitch: player.pitch });
+      visitor.samples.push({ time: snapshot.receivedAt, x: player.x, y: player.y, z: player.z, yaw: player.yaw, pitch: player.pitch, crouching: Boolean(player.crouching) });
       if (visitor.samples.length > 8) visitor.samples.shift();
     }
     for (const [id, visitor] of this.visitors) {
@@ -71,6 +71,7 @@ export class RemotePlayerManager {
       );
       const angle = Math.atan2(Math.sin(after.yaw - before.yaw), Math.cos(after.yaw - before.yaw));
       visitor.group.rotation.y = before.yaw + angle * t;
+      visitor.group.scale.y = (before.crouching ? .65 : 1) + ((after.crouching ? .65 : 1) - (before.crouching ? .65 : 1)) * t;
       const pitch = before.pitch + (after.pitch - before.pitch) * t;
       visitor.marker.position.y = 1.48 + Math.sin(pitch) * 0.08;
     }

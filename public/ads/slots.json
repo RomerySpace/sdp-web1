@@ -1,0 +1,597 @@
+[
+  {
+    "id": "east-court-south",
+    "zone": "east-court",
+    "wall": "south",
+    "kind": "poster",
+    "anchor": [
+      50,
+      2.4,
+      -40
+    ],
+    "direction": [
+      0,
+      0,
+      1
+    ],
+    "size": [
+      1.4,
+      2
+    ]
+  },
+  {
+    "id": "east-court-west",
+    "zone": "east-court",
+    "wall": "west",
+    "kind": "poster",
+    "anchor": [
+      50,
+      2.4,
+      -40
+    ],
+    "direction": [
+      -1,
+      0,
+      0
+    ],
+    "size": [
+      1.4,
+      2
+    ]
+  },
+  {
+    "id": "west-court-north",
+    "zone": "west-court",
+    "wall": "north",
+    "kind": "poster",
+    "anchor": [
+      10,
+      2.4,
+      -40
+    ],
+    "direction": [
+      0,
+      0,
+      -1
+    ],
+    "size": [
+      1.4,
+      2
+    ]
+  },
+  {
+    "id": "west-court-east",
+    "zone": "west-court",
+    "wall": "east",
+    "kind": "tv",
+    "anchor": [
+      10,
+      2.4,
+      -40
+    ],
+    "direction": [
+      1,
+      0,
+      0
+    ],
+    "size": [
+      1.6,
+      0.9
+    ]
+  },
+  {
+    "id": "west-court-south",
+    "zone": "west-court",
+    "wall": "south",
+    "kind": "poster",
+    "anchor": [
+      10,
+      2.4,
+      -40
+    ],
+    "direction": [
+      0,
+      0,
+      1
+    ],
+    "size": [
+      1.4,
+      2
+    ]
+  },
+  {
+    "id": "west-court-west",
+    "zone": "west-court",
+    "wall": "west",
+    "kind": "poster",
+    "anchor": [
+      10,
+      2.4,
+      -40
+    ],
+    "direction": [
+      -1,
+      0,
+      0
+    ],
+    "size": [
+      1.4,
+      2
+    ]
+  },
+  {
+    "id": "south-court-north",
+    "zone": "south-court",
+    "wall": "north",
+    "kind": "poster",
+    "anchor": [
+      40,
+      2.4,
+      0
+    ],
+    "direction": [
+      0,
+      0,
+      -1
+    ],
+    "size": [
+      1.4,
+      2
+    ]
+  },
+  {
+    "id": "south-court-east",
+    "zone": "south-court",
+    "wall": "east",
+    "kind": "tv",
+    "anchor": [
+      40,
+      2.4,
+      0
+    ],
+    "direction": [
+      1,
+      0,
+      0
+    ],
+    "size": [
+      1.6,
+      0.9
+    ]
+  },
+  {
+    "id": "south-court-south",
+    "zone": "south-court",
+    "wall": "south",
+    "kind": "poster",
+    "anchor": [
+      40,
+      2.4,
+      0
+    ],
+    "direction": [
+      0,
+      0,
+      1
+    ],
+    "size": [
+      1.4,
+      2
+    ]
+  },
+  {
+    "id": "south-court-west",
+    "zone": "south-court",
+    "wall": "west",
+    "kind": "poster",
+    "anchor": [
+      40,
+      2.4,
+      0
+    ],
+    "direction": [
+      -1,
+      0,
+      0
+    ],
+    "size": [
+      1.4,
+      2
+    ]
+  },
+  {
+    "id": "north-street-north",
+    "zone": "north-street",
+    "wall": "north",
+    "kind": "poster",
+    "anchor": [
+      10,
+      2.4,
+      30
+    ],
+    "direction": [
+      0,
+      0,
+      -1
+    ],
+    "size": [
+      1.4,
+      2
+    ]
+  },
+  {
+    "id": "north-street-east",
+    "zone": "north-street",
+    "wall": "east",
+    "kind": "tv",
+    "anchor": [
+      10,
+      2.4,
+      30
+    ],
+    "direction": [
+      1,
+      0,
+      0
+    ],
+    "size": [
+      1.6,
+      0.9
+    ]
+  },
+  {
+    "id": "north-street-south",
+    "zone": "north-street",
+    "wall": "south",
+    "kind": "poster",
+    "anchor": [
+      10,
+      2.4,
+      30
+    ],
+    "direction": [
+      0,
+      0,
+      1
+    ],
+    "size": [
+      1.4,
+      2
+    ]
+  },
+  {
+    "id": "north-street-west",
+    "zone": "north-street",
+    "wall": "west",
+    "kind": "poster",
+    "anchor": [
+      10,
+      2.4,
+      30
+    ],
+    "direction": [
+      -1,
+      0,
+      0
+    ],
+    "size": [
+      1.4,
+      2
+    ]
+  },
+  {
+    "id": "01-muro-frente-a-la-cupula",
+    "zone": "01-calle",
+    "wall": "Tramo plano a la derecha del camino.",
+    "kind": "poster",
+    "anchor": [
+      -15,
+      5,
+      -33
+    ],
+    "direction": [
+      1,
+      0,
+      0
+    ],
+    "size": [
+      1.6,
+      2.0020833333333337
+    ],
+    "image": "/ads/carteles-por-zonas/01-calle/01-muro-frente-a-la-cupula/cartel.avif"
+  },
+  {
+    "id": "02-fachada-con-antenas",
+    "zone": "01-calle",
+    "wall": "Paño de pared sobre la acera, entre huecos y bajantes.",
+    "kind": "poster",
+    "anchor": [
+      -20,
+      5,
+      -27
+    ],
+    "direction": [
+      -1,
+      0,
+      0
+    ],
+    "size": [
+      1.6,
+      2.0020833333333337
+    ],
+    "image": "/ads/carteles-por-zonas/01-calle/02-fachada-con-antenas/cartel.avif"
+  },
+  {
+    "id": "03-pared-junto-a-puerta-con-escalones",
+    "zone": "01-calle",
+    "wall": "Paño a la derecha de la puerta, bajo las ventanas.",
+    "kind": "poster",
+    "anchor": [
+      -20,
+      4.5,
+      -15
+    ],
+    "direction": [
+      1,
+      0,
+      0
+    ],
+    "size": [
+      1.6,
+      2.0020833333333337
+    ],
+    "image": "/ads/carteles-por-zonas/01-calle/03-pared-junto-a-puerta-con-escalones/cartel.avif"
+  },
+  {
+    "id": "04-muro-bajo-de-la-esquina",
+    "zone": "01-calle",
+    "wall": "Cara frontal plana; evitar el canto curvo.",
+    "kind": "poster",
+    "anchor": [
+      -20,
+      4.2,
+      -3
+    ],
+    "direction": [
+      1,
+      0,
+      0
+    ],
+    "size": [
+      1.6,
+      2.0020833333333337
+    ],
+    "image": "/ads/carteles-por-zonas/01-calle/04-muro-bajo-de-la-esquina/cartel.avif"
+  },
+  {
+    "id": "05-pared-junto-al-hueco",
+    "zone": "02-muralla",
+    "wall": "Paño central a la derecha del hueco.",
+    "kind": "poster",
+    "anchor": [
+      20,
+      2.4,
+      -7
+    ],
+    "direction": [
+      0,
+      0,
+      -1
+    ],
+    "size": [
+      1.6,
+      2.0020833333333337
+    ],
+    "image": "/ads/carteles-por-zonas/02-muralla/05-pared-junto-al-hueco/cartel.avif"
+  },
+  {
+    "id": "06-pared-alta-junto-al-poste",
+    "zone": "02-muralla",
+    "wall": "Paño grande del centro, antes del poste.",
+    "kind": "poster",
+    "anchor": [
+      24,
+      2.4,
+      -7
+    ],
+    "direction": [
+      0,
+      0,
+      -1
+    ],
+    "size": [
+      1.6,
+      2.0020833333333337
+    ],
+    "image": "/ads/carteles-por-zonas/02-muralla/06-pared-alta-junto-al-poste/cartel.avif"
+  },
+  {
+    "id": "07-pared-a-la-izquierda-del-arco",
+    "zone": "02-muralla",
+    "wall": "Tramo plano a la izquierda del arco; no tapar el paso.",
+    "kind": "poster",
+    "anchor": [
+      27,
+      2.4,
+      -7
+    ],
+    "direction": [
+      0,
+      0,
+      -1
+    ],
+    "size": [
+      1.6,
+      2.0020833333333337
+    ],
+    "image": "/ads/carteles-por-zonas/02-muralla/07-pared-a-la-izquierda-del-arco/cartel.avif"
+  },
+  {
+    "id": "08-pared-entre-torres-junto-al-porton",
+    "zone": "03-puertas-y-rampa",
+    "wall": "Panel plano central bajo las ventanas.",
+    "kind": "poster",
+    "anchor": [
+      56,
+      2.4,
+      -21
+    ],
+    "direction": [
+      -1,
+      0,
+      0
+    ],
+    "size": [
+      1.6,
+      2.0020833333333337
+    ],
+    "image": "/ads/carteles-por-zonas/03-puertas-y-rampa/08-pared-entre-torres-junto-al-porton/cartel.avif"
+  },
+  {
+    "id": "09-muro-central-de-la-subida",
+    "zone": "03-puertas-y-rampa",
+    "wall": "Paño plano entre los pilares, sobre la rampa.",
+    "kind": "poster",
+    "anchor": [
+      60,
+      2.4,
+      -27
+    ],
+    "direction": [
+      -1,
+      0,
+      0
+    ],
+    "size": [
+      1.6,
+      2.0020833333333337
+    ],
+    "image": "/ads/carteles-por-zonas/03-puertas-y-rampa/09-muro-central-de-la-subida/cartel.avif"
+  },
+  {
+    "id": "10-pared-junto-al-porton-y-la-escalera",
+    "zone": "03-puertas-y-rampa",
+    "wall": "Tramo a la derecha del portón, antes de las rocas.",
+    "kind": "poster",
+    "anchor": [
+      64,
+      2.4,
+      -28
+    ],
+    "direction": [
+      0,
+      0,
+      -1
+    ],
+    "size": [
+      1.6,
+      2.0020833333333337
+    ],
+    "image": "/ads/carteles-por-zonas/03-puertas-y-rampa/10-pared-junto-al-porton-y-la-escalera/cartel.avif"
+  },
+  {
+    "id": "11-pantalla-sobre-las-cajas",
+    "zone": "04-patio",
+    "wall": "Referencia para el contenido de esa pantalla horizontal.",
+    "kind": "tv",
+    "anchor": [
+      50,
+      2.4,
+      -40
+    ],
+    "direction": [
+      1,
+      0,
+      0
+    ],
+    "size": [
+      1.6,
+      0.9
+    ],
+    "image": "/ads/carteles-por-zonas/04-patio/11-pantalla-sobre-las-cajas/cartel.avif"
+  },
+  {
+    "id": "12-cartel-junto-a-los-escalones",
+    "zone": "04-patio",
+    "wall": "Referencia para sustituir el cartel de muestra visible.",
+    "kind": "poster",
+    "anchor": [
+      50,
+      2.4,
+      -40
+    ],
+    "direction": [
+      0,
+      0,
+      -1
+    ],
+    "size": [
+      1.6,
+      2.0020833333333337
+    ],
+    "image": "/ads/carteles-por-zonas/04-patio/12-cartel-junto-a-los-escalones/cartel.avif"
+  },
+  {
+    "id": "13-pared-larga-bajo-el-fluorescente",
+    "zone": "05-pasaje-y-arcos",
+    "wall": "Pared larga de la derecha, entre los arcos.",
+    "kind": "poster",
+    "anchor": [
+      40,
+      2.4,
+      -50
+    ],
+    "direction": [
+      0,
+      0,
+      -1
+    ],
+    "size": [
+      1.6,
+      2.0020833333333337
+    ],
+    "image": "/ads/carteles-por-zonas/05-pasaje-y-arcos/13-pared-larga-bajo-el-fluorescente/cartel.avif"
+  },
+  {
+    "id": "14-pared-entre-columnas",
+    "zone": "05-pasaje-y-arcos",
+    "wall": "Paño central entre columnas, bajo la ventana.",
+    "kind": "poster",
+    "anchor": [
+      30,
+      2.4,
+      -52
+    ],
+    "direction": [
+      0,
+      0,
+      -1
+    ],
+    "size": [
+      1.6,
+      2.0020833333333337
+    ],
+    "image": "/ads/carteles-por-zonas/05-pasaje-y-arcos/14-pared-entre-columnas/cartel.avif"
+  },
+  {
+    "id": "15-pared-exterior-junto-al-arco",
+    "zone": "05-pasaje-y-arcos",
+    "wall": "Pared plana inmediatamente a la izquierda del arco.",
+    "kind": "poster",
+    "anchor": [
+      50,
+      2.9,
+      -48
+    ],
+    "direction": [
+      -1,
+      0,
+      0
+    ],
+    "size": [
+      1.6,
+      2.0020833333333337
+    ],
+    "image": "/ads/carteles-por-zonas/05-pasaje-y-arcos/15-pared-exterior-junto-al-arco/cartel.avif"
+  }
+]

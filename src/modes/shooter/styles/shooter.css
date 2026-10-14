@@ -52,3 +52,17 @@
 .desynchronization-state[hidden], .combat-confirmation[hidden] { display: none; }
 .shooter-health { position: absolute; bottom: 50px; left: 30px; font-size: 9px; color: #627783; }
 .shooter-hud[data-dead="true"] .shooter-crosshair { display: none; }
+
+.shooter-round { left: 50%; top: 30px; transform: translateX(-50%); font-size: 14px; letter-spacing: .12em; color: #edf2f5; text-shadow: 0 1px 8px #101b25; }
+.kill-announcement { position: absolute; top: 29%; left: 50%; transform: translateX(-50%); width: min(600px, 85vw); text-align: center; color: #f4f8fb; text-shadow: 0 2px 16px #132533; }
+.kill-announcement strong { display: block; font-size: clamp(16px, 2vw, 28px); font-weight: 400; overflow-wrap: anywhere; }
+.kill-announcement span { display: block; margin-top: 10px; font-size: 16px; letter-spacing: .12em; }
+.kill-announcement small { display: block; margin-top: 8px; font-size: 9px; letter-spacing: .18em; opacity: .75; }
+.streak-meter { position: absolute; left: 30px; top: 124px; width: 150px; display: flex; justify-content: space-between; padding-bottom: 10px; color: #acbac3; border-bottom: 1px solid #dde8ed30; }
+.streak-meter:after { content: ''; position: absolute; height: 2px; bottom: -1px; left: 0; width: calc(var(--progress) * 100%); background: #e8f5ff; transition: width .25s; }
+.streak-meter span[data-reached="true"] { color: #fff; text-shadow: 0 0 12px #bde9ff; }
+.shooter-kill-feed { top: 162px; }
+.shooter-hud { color: #d4dfe6; text-shadow: 0 1px 6px #17222c99; }
+.shooter-score, .shooter-strike, .shooter-record, .shooter-health, .shooter-movement, .shooter-fire-mode, .shooter-reserve, .shooter-menu-button { color: #c5d3dd; }
+.shooter-crosshair { background: #e9f4fa; box-shadow: 0 0 3px #101c25; }
+@media(max-width:600px) { .shooter-round { left: 50%; top: 22px; font-size: 12px; } .streak-meter { left: 18px; top: 106px; } .shooter-kill-feed { top: 145px; } }

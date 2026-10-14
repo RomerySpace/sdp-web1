@@ -11,5 +11,5 @@ export const gameplayConfig = {
     magazineSize: 30, reserveAmmo: 120, reloadDuration: 2.2 },
   death: { duration: 1.35, fragmentCount: 48, dissolutionSpeed: 1, particleOpacity: .55, reconstructionDuration: .7 },
   damage: { impulse: .12, vignetteDuration: .8, vignetteOpacity: .48 },
-  limbo: { sprintMultiplier: 1.5, sprintAcceleration: 7, walkAcceleration: 7, deceleration: 10, sprintFovAdjustment: 2 },
+  limbo: { jumpSpeed: 4.7, gravity: 12, crouchHeight: 1.05, sprintMultiplier: 2.25, sprintAcceleration: 7, walkAcceleration: 7, deceleration: 10, sprintFovAdjustment: 2 },
 };

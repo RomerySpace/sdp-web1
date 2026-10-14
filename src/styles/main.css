@@ -142,3 +142,19 @@ kbd, .key-label { font: inherit; font-size: 9px; letter-spacing: 0.04em; }
 @media (hover: none) and (pointer: coarse) {
   .inspect-button kbd, .inspection-close kbd { display: none; }
 }
+
+/* Keep the chat above the actual control panel height, including wrapped voice status. */
+.chat { bottom: calc(var(--edge) + var(--controls-height, 280px) + 18px); z-index: 20; }
+.ui[data-state="CHATTING"] .controls-overlay { visibility: hidden; opacity: 0; }
+.connection-indicator > span:first-child::before { width: 7px; height: 7px; }
+.connection-indicator[data-connection="connected"] > span:first-child::before { background: #20ed83; box-shadow: 0 0 0 3px #20ed8320, 0 0 10px #20ed8355; }
+.now-playing { position: fixed; right: var(--edge); top: calc(var(--edge) + 65px); z-index: 25; max-width: min(240px, 40vw); text-align: right; pointer-events: none; color: #e5ecef; text-shadow: 0 1px 9px #16212a; }
+.now-playing span { display: block; font-size: 10px; line-height: 1.6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.now-playing .music-artist { opacity: .65; font-size: 9px; }
+@media(max-height: 650px) { .controls-overlay .control-row:not(.menu-row) { display: none; } .voice-status { margin-top: 6px; } }
+
+.ui:is([data-state="EXPLORING"],[data-state="PAUSED"],[data-state="CHATTING"]) .controls-overlay { color: #edf3f7; text-shadow: 0 1px 6px #12202c; }
+.ui:is([data-state="EXPLORING"],[data-state="PAUSED"],[data-state="CHATTING"]) :is(.control-row > span:nth-child(2), .voice-status), #app[data-mode="SHOOTER"] .connection-indicator, .ui[data-state="EXPLORING"] .connection-indicator { color: #d4dfe7; }
+.ui[data-state="INSPECTING"] .chat { visibility: hidden; }
+.chat-history { background: #17232d77; border-radius: 4px; padding: 12px; }
+.chat-message { color: #edf4f8; } .chat-sender { color: #c1d2dd; }

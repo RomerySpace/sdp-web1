@@ -12,6 +12,8 @@ export class FirstPersonController {
   private readonly motion: MotionState = { x: 0, z: 9, velocityX: 0, velocityZ: 0 };
   private readonly movementInput: MovementInput = { seq: 0, f: 0, r: 0, y: 0, p: 0, active: true };
   private readonly events = new AbortController();
+  private phase = 0;
+  private eye = 1.7;
   private yaw = 0;
   private pitch = 0;
   private active = false;
@@ -44,6 +46,8 @@ export class FirstPersonController {
 
   setSpawn(player: NetworkPlayer): void {
     this.input.clear();
+    this.motion.elevation = this.motion.verticalSpeed = 0; this.motion.jumpHeld = false;
+    this.eye = 1.7;
     this.motion.velocityX = this.motion.velocityZ = 0;
     this.yaw = player.yaw;
     this.pitch = player.pitch;
@@ -79,8 +83,16 @@ export class FirstPersonController {
     this.movementInput.r = this.input.sideways;
     this.movementInput.y = this.yaw;
     this.movementInput.s = this.input.sprinting;
+    this.movementInput.j = this.input.jumping;
+    this.movementInput.c = this.input.crouching;
     simulateMovement(this.motion, this.movementInput, dt, this.collision);
-    this.camera.position.set(this.motion.x, 1.7, this.motion.z);
+    const speed = Math.hypot(this.motion.velocityX, this.motion.velocityZ);
+    this.phase += speed * dt * 2.8;
+    this.eye = MathUtils.damp(this.eye, this.input.crouching ? gameplayConfig.limbo.crouchHeight : 1.7, 14, dt);
+    const bob = (this.motion.elevation ? 0 : .012) * Math.min(speed / 3, 1.5);
+    this.camera.position.set(this.motion.x, this.eye + (this.motion.elevation ?? 0) + Math.sin(this.phase * 2) * bob, this.motion.z);
+    const roll = MathUtils.damp(this.camera.rotation.z, -this.input.sideways * .018 + Math.sin(this.phase) * bob * .35, 10, dt);
+    this.camera.rotation.set(this.pitch, this.yaw, roll, 'YXZ');
   }
 
   dispose(): void {

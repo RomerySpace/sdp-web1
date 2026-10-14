@@ -13,6 +13,8 @@ const voiceLabels: Record<VoiceState, string> = {
 
 export class ControlsOverlay {
   readonly element: HTMLElement;
+  private resize: ResizeObserver;
+  dispose(): void { this.resize.disconnect(); }
   private readonly voiceStatus: HTMLElement;
   private microphone: VoiceState = 'idle';
   private connection: VoiceConnectionState = 'disconnected';
@@ -23,6 +25,8 @@ export class ControlsOverlay {
     this.element.setAttribute('aria-label', 'Exhibition controls');
     this.element.innerHTML = limited ? '<p class="viewing-note">VIEWING MODE · DESKTOP REQUIRED TO EXPLORE</p>' : `
       <div class="control-row"><span class="key-group"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Move</span></div>
+      <div class="control-row"><kbd class="wide-key">SHIFT</kbd><span>Sprint</span></div>
+      <div class="control-row"><kbd class="wide-key">SPACE / CTRL</kbd><span>Jump / Crouch</span></div>
       <div class="control-row"><kbd class="wide-key">ENTER</kbd><span>Chat</span></div>
       <div class="control-row"><span class="wide-key key-label">HOLD V</span><span>Voice</span><span class="mic-dot" aria-hidden="true"></span></div>
       <div class="control-row"><kbd class="wide-key">F</kbd><span>Fullscreen</span></div>
@@ -39,6 +43,8 @@ export class ControlsOverlay {
     this.voiceStatus.textContent = voiceLabels.idle;
     this.element.append(this.voiceStatus);
     container.append(this.element);
+    this.resize = new ResizeObserver(() => container.style.setProperty('--controls-height', `${this.element.getBoundingClientRect().height}px`));
+    this.resize.observe(this.element);
   }
 
   setVoiceState(state: VoiceState): void {

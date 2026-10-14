@@ -5,6 +5,8 @@ export class ModeInterface {
   private readonly join: HTMLButtonElement;
   private readonly resume: HTMLButtonElement;
   private readonly back: HTMLButtonElement;
+  private readonly inspectionActions = document.createElement('div');
+  private readonly auction = document.createElement('button');
   private readonly testJoin = document.createElement('button');
   private readonly progress: HTMLProgressElement;
   private readonly haze = document.createElement('div');
@@ -28,7 +30,7 @@ export class ModeInterface {
     const signal = this.events.signal;
     this.join.addEventListener('click', actions.join, { signal }); this.back.addEventListener('click', actions.back, { signal });
     this.resume.addEventListener('click', actions.resume, { signal });
-    this.testJoin.className = 'shooter-test-join'; this.testJoin.type = 'button'; this.testJoin.textContent = 'JOIN SHOOTER TEST'; this.testJoin.hidden = true;
+    this.testJoin.className = 'shooter-test-join'; this.testJoin.type = 'button'; this.testJoin.textContent = 'JOIN SHOOTER'; this.testJoin.hidden = true;
     this.testJoin.addEventListener('click', actions.join, { signal });
     this.element.addEventListener('keydown', event => {
       if (event.key !== 'Tab') return;
@@ -38,16 +40,20 @@ export class ModeInterface {
       event.preventDefault(); controls[(index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length]?.focus();
     }, { signal });
     this.haze.className = 'mode-haze'; this.haze.setAttribute('aria-hidden', 'true');
-    container.append(this.haze, this.element, this.testJoin);
+    this.inspectionActions.className = 'inspection-actions'; this.inspectionActions.hidden = true;
+    this.auction.type = 'button'; this.auction.className = 'auction-join'; this.auction.textContent = 'JOIN SUBASTA';
+    this.auction.disabled = true; this.auction.title = 'Próximamente'; this.auction.setAttribute('aria-label', 'JOIN SUBASTA — próximamente');
+    this.inspectionActions.append(this.testJoin, this.auction);
+    container.append(this.haze, this.element, this.inspectionActions);
   }
   private show(title: string, text: string, state: 'loading' | 'paused' | 'error' | 'results'): void {
     this.title.textContent = title; this.message.textContent = text;
     this.element.hidden = false; this.element.dataset.phase = state;
     this.element.classList.remove('has-session'); if (this.session) this.session.hidden = true;
     this.progress.hidden = state !== 'loading'; this.join.hidden = state !== 'error';
-    this.resume.hidden = state !== 'paused'; this.testJoin.hidden = true;
+    this.resume.hidden = state !== 'paused'; this.inspectionActions.hidden = true;
   }
-  inspection(visible: boolean): void { this.testJoin.hidden = !visible; }
+  inspection(visible: boolean): void { this.inspectionActions.hidden = !visible; this.testJoin.hidden = !visible; }
   loading(text: string): void { this.show('INITIALIZING SIMULATION', text, 'loading'); }
   attachSession(element?: HTMLElement): void {
     this.session = element; this.element.querySelector('.protocol-session-slot')!.replaceChildren(...element ? [element] : []);
@@ -72,5 +78,5 @@ export class ModeInterface {
     this.element.hidden = true;
   }
   setHaze(value: number): void { this.haze.style.opacity = String(value); }
-  dispose(): void { this.events.abort(); this.element.remove(); this.haze.remove(); this.testJoin.remove(); }
+  dispose(): void { this.events.abort(); this.element.remove(); this.haze.remove(); this.inspectionActions.remove(); }
 }

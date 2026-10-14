@@ -64,7 +64,7 @@ export class RemoteShooterPlayers {
       remote.state = p;
       if (p.reloading && !remote.reloading) remote.reloadStarted = performance.now();
       remote.reloading = !!p.reloading;
-      remote.motion.push({ time: serverTime, x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch, height: p.height ?? 1.8 });
+      remote.motion.push({ time: serverTime, x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch, height: p.height ?? 1.8, lean: p.lean ?? 0 });
     }
     for (const [id, remote] of this.remotes) if (!present.has(id)) { this.remove(remote); this.remotes.delete(id); }
   }
@@ -84,9 +84,9 @@ export class RemoteShooterPlayers {
       remote.group.rotation.y = pose.yaw;
       remote.height = MathUtils.damp(remote.height, pose.height, 22, dt);
       const reload = remote.reloading ? Math.sin(Math.min(1, (now - remote.reloadStarted) / (gameConfig.weapon.reloadDuration * 1000)) * Math.PI) : 0;
-      const layout = remote.layout; layout.update(remote.height, pose.pitch, reload);
+      const layout = remote.layout; layout.update(remote.height, pose.pitch, reload, pose.lean ?? 0);
       remote.head.position.copy(layout.head.center);
-      remote.torso.position.copy(layout.torso.center); remote.torso.scale.y = layout.torso.height / .88;
+      remote.torso.quaternion.copy(layout.torso.rotation); remote.torso.position.copy(layout.torso.center); remote.torso.scale.y = layout.torso.height / .88;
       for (let i = 0; i < 2; i++) {
         const leg = remote.legs[i], arm = remote.arms[i];
         leg.position.copy(layout.legs[i].center); leg.quaternion.copy(layout.legs[i].rotation); leg.scale.y = layout.legs[i].height / .7;

@@ -9,6 +9,8 @@ export class Environment {
   private target = new Vector3(1e6, 1e6, 1e6);
   private environment?: WebGLRenderTarget;
   private disposed = false;
+  private lighting: 'day' | 'night' = 'day';
+  setLighting(lighting: 'day' | 'night'): void { if (lighting !== this.lighting) { this.lighting = lighting; this.update(); } }
   hdrLoaded = false;
   constructor(private readonly scene: Scene, private readonly renderer: WebGLRenderer) {
     const e = gameConfig.environment;
@@ -36,11 +38,14 @@ export class Environment {
     const e = gameConfig.environment;
     (this.scene.fog as FogExp2).density = e.fogDensity;
     (this.scene.fog as FogExp2).color.set(e.fogColor);
-    this.scene.environmentIntensity = e.hdrIntensity;
-    this.renderer.toneMappingExposure = e.exposure;
-    this.key.intensity = e.keyIntensity;
+    const night = this.lighting === 'night';
+    (this.scene.background as Color).set(night ? '#111b29' : '#8b98a3');
+    (this.scene.fog as FogExp2).color.set(night ? '#182534' : '#8b98a3');
+    this.scene.environmentIntensity = night ? .12 : .36;
+    this.renderer.toneMappingExposure = night ? .62 : .82;
+    this.key.intensity = night ? .32 : 1.15; this.key.color.set(night ? '#a6c8ed' : '#fff9f0');
     this.key.shadow.intensity = e.shadowIntensity;
-    this.fill.intensity = e.fillIntensity;
+    this.fill.intensity = night ? .24 : .48;
     const c = this.key.shadow.camera, r = e.shadowRadius;
     c.left = c.bottom = -r; c.right = c.top = r; c.updateProjectionMatrix();
   }

@@ -8,7 +8,7 @@ export const gameConfig = {
     walkSpeed: 3.8, sprintSpeed: 6, crouchSpeed: 2, acceleration: 23, deceleration: 27,
     airControl: 0.22, gravity: -9.81, jumpHeight: 1, height: 1.8, crouchHeight: 1.16,
     eyeHeight: 1.7, crouchEyeHeight: 1.05, radius: 0.3, mass: 75,
-    mouseSensitivity: 0.0017, stepHeight: 0.32, maxSlope: 48, groundProbe: 0.065,
+    mouseSensitivity: 0.0017, stepHeight: 0.38, maxSlope: 48, groundProbe: 0.09,
     coyoteTime: 0.08, crouchDuration: 0.2, adsSpeedMultiplier: 0.73,
     // Authored street/courtyard seeds, not a ray cast from above the rooftops.
     spawn: { x: 38.4, y: 0.06, z: -5.6, yaw: Math.PI },
