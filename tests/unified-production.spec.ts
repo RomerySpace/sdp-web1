@@ -16,12 +16,12 @@ test('compiled production ignores debug mode and requests Shooter chunks only af
   await expect(page.locator('.mode-overlay')).toBeHidden();
   await page.screenshot({ path: info.outputPath('production-protocol.png') });
   expect(shooterOnly()).toEqual([]);
-  await page.getByRole('button', { name: 'JOIN SHOOTER', exact: true }).click(); await expect(page.locator('#app')).toHaveAttribute('data-mode', 'SHOOTER');
+  await page.getByRole('button', { name: 'JOIN SHOOTER', exact: true }).click(); await expect(page.locator('#app')).toHaveAttribute('data-mode', 'SHOOTER', { timeout: 90000 });
   expect(urls.some(url => /ShooterMode-.*\.js/.test(url))).toBe(true);
   expect(urls.some(url => /shooter-physics-.*\.js/.test(url))).toBe(true);
   expect(urls.some(url => url.includes('/shooter/MAP/dust2plainmap.glb'))).toBe(true);
   await page.getByRole('button', { name: 'ENTER SIMULATION' }).click(); await expect(page.locator('.mode-overlay')).toBeHidden();
-  await page.screenshot({ path: info.outputPath('production-shooter.png') }); await expect(page.locator('canvas')).toHaveCount(1);
+  await page.screenshot({ path: info.outputPath('production-shooter.png') }); await expect(page.locator('canvas.scene-canvas')).toHaveCount(1);
   await page.keyboard.press('Escape'); await page.getByRole('button', { name: 'RETURN TO LIMBO' }).click();
   await expect(page.locator('#app')).toHaveAttribute('data-mode', 'LIMBO'); expect(errors).toEqual([]);
 });

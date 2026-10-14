@@ -18,7 +18,7 @@ async function shooter(page: Page, name = 'Touch Shooter') {
   expect(await page.evaluate(() => document.pointerLockElement)).toBeNull();
 }
 async function visibleCanvas(page: Page) {
-  const { data, info } = await sharp(await page.locator('canvas').screenshot()).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { data, info } = await sharp(await page.locator('canvas.scene-canvas').screenshot()).removeAlpha().raw().toBuffer({ resolveWithObject: true });
   let count = 0; for (let i = 0; i < data.length; i += info.channels) if (Math.min(data[i], data[i + 1], data[i + 2]) < 210) count++;
   return count;
 }
@@ -106,7 +106,7 @@ test('mobile Shooter: real simultaneous movement/look/fire, ADS, crouch, jump, r
       await page.setViewportSize({ width, height }); await hudFits(page); expect(await visibleCanvas(page)).toBeGreaterThan(1000); await page.screenshot({ path: info.outputPath(`touch-shooter-${width}x${height}.png`) });
     }
     await page.getByRole('button', { name: 'Open game menu' }).tap(); await expect(page.getByRole('table', { name: 'Room scores' })).toBeVisible(); await page.getByRole('button', { name: 'RETURN TO LIMBO' }).tap();
-    await expect(page.locator('#app')).toHaveAttribute('data-mode', 'LIMBO'); await expect(page.locator('.touch-stick')).toBeVisible(); await expect(page.locator('canvas')).toHaveCount(1); expect(errors).toEqual([]);
+    await expect(page.locator('#app')).toHaveAttribute('data-mode', 'LIMBO'); await expect(page.locator('.touch-stick')).toBeVisible(); await expect(page.locator('canvas.scene-canvas')).toHaveCount(1); expect(errors).toEqual([]);
   } finally { await a.close(); await b.close(); }
 });
 test('touch microphone capture stops on release, cancellation and focus loss', async ({ browser }) => {

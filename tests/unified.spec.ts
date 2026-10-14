@@ -34,12 +34,13 @@ async function openProtocol(page: Page): Promise<void> {
 }
 async function enterShooter(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'JOIN SHOOTER', exact: true }).click();
-  await expect(page.locator('#app')).toHaveAttribute('data-mode', 'SHOOTER');
+  // Three concurrent headless GPU contexts can compile a cold scene slowly.
+  await expect(page.locator('#app')).toHaveAttribute('data-mode', 'SHOOTER', { timeout: 90000 });
   await page.getByRole('button', { name: 'ENTER SIMULATION' }).click();
   await expect.poll(() => page.evaluate(() => window.sdpUnified.modes.shooter?.paused)).toBe(false);
 }
 async function visiblePixels(page: Page): Promise<number> {
-  const { data, info } = await sharp(await page.locator('canvas').screenshot()).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { data, info } = await sharp(await page.locator('canvas.scene-canvas').screenshot()).removeAlpha().raw().toBuffer({ resolveWithObject: true });
   let contrast = 0;
   for (let i = 0; i < data.length; i += info.channels) if (Math.min(data[i], data[i + 1], data[i + 2]) < 210) contrast++;
   return contrast;
@@ -111,7 +112,7 @@ for (const mobile of [false, true]) {
       await page.addStyleTag({ content: '.mode-diagnostics { visibility: hidden !important; }' });
       await page.screenshot({ path: info.outputPath('white-lobby.png') });
       await page.addStyleTag({ content: '.ui, .touch-controls { visibility: hidden !important; }' });
-      const { data, info: pixels } = await sharp(await page.locator('canvas').screenshot()).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+      const { data, info: pixels } = await sharp(await page.locator('canvas.scene-canvas').screenshot()).removeAlpha().raw().toBuffer({ resolveWithObject: true });
       const brightness = (top: number, bottom: number): number => {
         let sum = 0, count = 0;
         for (let y = Math.floor(pixels.height * top); y < pixels.height * bottom; y++) {
@@ -501,7 +502,7 @@ test('actual requests stay lazy; both scenes render; controls and repeated retur
   expect(requests.filter(shooterRequest)).toEqual([]);
   await enterShooter(page);
   expect(requests.some(url => url.includes('dust2plainmap.glb'))).toBe(true);
-  await expect(page.locator('canvas')).toHaveCount(1);
+  await expect(page.locator('canvas.scene-canvas')).toHaveCount(1);
   await expect.poll(() => page.evaluate(() => window.sdpUnified.modes.shooter?.player?.grounded)).toBe(true);
   expect(await visiblePixels(page)).toBeGreaterThan(10000);
   await page.screenshot({ path: info.outputPath('shooter-desktop.png') });
@@ -529,7 +530,7 @@ test('actual requests stay lazy; both scenes render; controls and repeated retur
   await page.getByRole('button', { name: 'RETURN TO LIMBO' }).click();
   await expect(page.locator('#app')).toHaveAttribute('data-mode', 'LIMBO');
   await expect(page.locator('.chat-message')).toHaveCount(0);
-  await expect(page.locator('canvas')).toHaveCount(1);
+  await expect(page.locator('canvas.scene-canvas')).toHaveCount(1);
   const steps = await page.evaluate(() => window.retiredShooter!.fixedSteps);
   await page.waitForTimeout(500);
   expect(await page.evaluate(() => window.retiredShooter!.fixedSteps)).toBe(steps);
@@ -588,9 +589,9 @@ test('two browsers synchronize in Shooter and stay isolated from Limbo voice and
       window.sdpUnified.modes.ui.hide(); game.remotes.group.children[0].visible = false;
     });
     await second.waitForTimeout(300);
-    const withoutAvatar = await sharp(await second.locator('canvas').screenshot()).removeAlpha().raw().toBuffer();
+    const withoutAvatar = await sharp(await second.locator('canvas.scene-canvas').screenshot()).removeAlpha().raw().toBuffer();
     await second.evaluate(() => window.sdpUnified.modes.shooter!.remotes.group.children[0].visible = true);
-    const withAvatar = await sharp(await second.locator('canvas').screenshot()).removeAlpha().raw().toBuffer();
+    const withAvatar = await sharp(await second.locator('canvas.scene-canvas').screenshot()).removeAlpha().raw().toBuffer();
     let avatarPixels = 0;
     for (let i = 0; i < withoutAvatar.length; i += 3) if (Math.abs(withoutAvatar[i] - withAvatar[i]) + Math.abs(withoutAvatar[i + 1] - withAvatar[i + 1]) + Math.abs(withoutAvatar[i + 2] - withAvatar[i + 2]) > 12) avatarPixels++;
     expect(avatarPixels).toBeGreaterThan(250);
@@ -614,7 +615,7 @@ test('failed assets allow retry and returning; mobile Limbo remains framed', asy
     expect(button!.y + button!.height).toBeLessThanOrEqual(844);
     await expect(mobile.locator('.touch-stick')).toBeHidden();
     await mobile.screenshot({ path: info.outputPath('limbo-mobile-inspection.png') });
-    await mobile.getByRole('button', { name: 'Close inspection' }).click(); await expect(mobile.locator('canvas')).toHaveCount(1);
+    await mobile.getByRole('button', { name: 'Close inspection' }).click(); await expect(mobile.locator('canvas.scene-canvas')).toHaveCount(1);
   } finally { await context.close(); }
 });
 test('Limbo text and real WebRTC media work; voice disconnects in Shooter and returns using one audio context', async ({ browser, request }) => {

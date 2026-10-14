@@ -3,6 +3,7 @@ import type { CharacterController } from '../physics/CharacterController';
 import type { Weapon } from '../weapon/Weapon';
 import type { LobbySnapshot } from '../../../../shared/MultiplayerProtocol';
 import { createElement, ListOrdered } from 'lucide';
+import { airstrikeConfig, strikeBit, type StrikeSlot } from '../../../../shared/AirstrikeProtocol';
 export class ShooterHUD {
   readonly element = document.createElement('div');
   private readonly strike: HTMLElement;
@@ -17,7 +18,10 @@ export class ShooterHUD {
   private bannerUntil = 0;
   private readonly banner = document.createElement('div');
   private readonly streakMeter = document.createElement('div');
-  constructor(container: HTMLElement, onMenu: () => void) {
+  private readonly strikeButtons: HTMLButtonElement[] = [];
+  private readonly strikeStatus = document.createElement('p');
+  private noticeUntil = 0;
+  constructor(container: HTMLElement, onMenu: () => void, onStrike: (slot: StrikeSlot) => void = () => {}) {
     this.element.className = 'shooter-hud'; this.element.hidden = true;
     this.element.innerHTML = `<header><span>SDP</span><span>DE_DUST2 / 01</span></header>
       <div class="shooter-round" aria-label="Round time"></div>
@@ -29,7 +33,9 @@ export class ShooterHUD {
       <strong class="shooter-magazine">30</strong><span class="shooter-reserve">/ 120</span><span class="shooter-action"></span></div>`;
     this.banner.className = 'kill-announcement'; this.banner.hidden = true; this.banner.setAttribute('role', 'status');
     this.streakMeter.className = 'streak-meter';
-    this.element.append(this.banner, this.streakMeter);
+    airstrikeConfig.tiers.forEach((tier,i)=>{const button=document.createElement('button');button.type='button';button.disabled=true;button.setAttribute('aria-label',`Deploy airstrike ${i+1}`);button.title=`${i+1}: airstrike / ${tier} kill streak`;button.innerHTML=`<kbd>${i+1}</kbd><span>${tier}</span>`;button.addEventListener('click',()=>onStrike((i+1) as StrikeSlot));this.strikeButtons.push(button);this.streakMeter.append(button);});
+    this.strikeStatus.className='strike-status';this.strikeStatus.hidden=true;this.strikeStatus.setAttribute('role','status');
+    this.element.append(this.banner, this.streakMeter,this.strikeStatus);
     container.append(this.element);
     this.strike = this.element.querySelector('.shooter-strike')!; this.score = this.element.querySelector('.shooter-record')!;
     this.feed = this.element.querySelector('.shooter-kill-feed')!; this.fireMode = this.element.querySelector('.shooter-fire-mode')!;
@@ -46,11 +52,9 @@ export class ShooterHUD {
     this.strike.textContent = `STREAK ${String(local?.streak ?? 0).padStart(2, '0')}`;
     this.score.textContent = `${local?.kills ?? 0} K / ${local?.deaths ?? 0} D · ${(local?.kills ?? 0) * ELIMINATION_POINTS} PTS`;
     const streak = local?.streak ?? 0, progress = streakProgress(streak);
-    this.streakMeter.replaceChildren(...STREAK_TIERS.map(tier => {
-      const step = document.createElement('span'); step.textContent = String(tier); step.dataset.reached = String(streak >= tier); return step;
-    }));
+    this.strikeButtons.forEach((button,i)=>{const ready=!!((local?.strikes??0)&strikeBit((i+1) as StrikeSlot))&&!local?.dead&&snapshot.match?.phase==='playing';button.disabled=!ready;button.dataset.ready=String(ready);button.querySelector('span')!.dataset.reached=String(streak>=airstrikeConfig.tiers[i]);});
     this.streakMeter.style.setProperty('--progress', String(progress.progress));
-    this.streakMeter.setAttribute('aria-label', `Racha ${streak}. ${progress.next ? `Siguiente hito: ${progress.next}` : 'Todos los hitos alcanzados'}. Recompensas pendientes.`);
+    this.streakMeter.setAttribute('aria-label', `Racha ${streak}. ${progress.next ? `Siguiente hito: ${progress.next}` : 'Todos los hitos alcanzados'}.`);
     const fresh = (snapshot.killFeed ?? []).filter(entry => !this.seen.has(entry.id));
     if (this.initialized && !local?.dead && snapshot.match?.phase === 'playing') {
       const own = fresh.filter(entry => entry.attackerId === snapshot.localPlayerId).sort((a, b) => b.timestamp - a.timestamp)[0];
@@ -76,6 +80,7 @@ export class ShooterHUD {
     }));
   }
   update(player: CharacterController, weapon: Weapon, health: number, dead: boolean): void {
+    this.strikeStatus.hidden=performance.now()>this.noticeUntil;
     this.banner.hidden = dead || performance.now() > this.bannerUntil;
     this.fireMode.textContent = weapon.automatic ? 'SDP / AUTO' : 'SDP / SEMI-AUTO';
     this.fireMode.title = 'Fire mode';
@@ -87,5 +92,6 @@ export class ShooterHUD {
     this.element.dataset.dead = String(dead);
     this.element.dataset.grounded = String(player.grounded);
   }
+  notice(message:string):void{this.strikeStatus.textContent=message;this.noticeUntil=performance.now()+2800;this.strikeStatus.hidden=false;}
   dispose(): void { this.element.remove(); }
 }

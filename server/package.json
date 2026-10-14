@@ -9,7 +9,7 @@
     "start": "node --env-file-if-exists=.env --import tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "test:load": "tsx ../scripts/load-multiplayer.mjs",
-    "test": "node --import tsx --test tests/*.test.ts"
+    "test": "node --import tsx --test --test-concurrency=2 tests/*.test.ts"
   },
   "dependencies": {
     "@colyseus/core": "~0.17.0",

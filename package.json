@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:airstrike": "playwright test --config playwright.airstrike.config.ts",
     "test:shooter-disabled": "playwright test --config playwright.disabled.config.ts",
     "test:unified": "playwright test --config playwright.unified.config.ts",
     "test:regression": "playwright test --config playwright.regression.config.ts",

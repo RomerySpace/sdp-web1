@@ -22,6 +22,7 @@ export interface NetworkPlayer {
   kills?: number;
   deaths?: number;
   streak?: number;
+  strikes?: number;
   lastDamageAt?: number;
   x: number;
   y: number;
@@ -62,6 +63,7 @@ export interface LobbySnapshot {
   shooterEnabled?: boolean;
   killFeed?: readonly KillRecord[];
   match?: ShooterMatchSnapshot;
+  airstrikes?: readonly import('./AirstrikeProtocol').AirstrikeFlight[];
 }
 
 export interface ConnectionStatus {

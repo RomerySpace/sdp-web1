@@ -70,6 +70,18 @@ En Limbo, mantener SHIFT al moverse aumenta la velocidad a 1.5 veces, con aceler
 Mantener una tercera ventana en Limbo permite comprobar que no recibe chat ni voz del Shooter.
 Cerrar una ventana elimina su avatar. Volver a Limbo reconecta su voz correspondiente.
 
+## Ataque aereo de prueba
+
+En Shooter, las rachas de 3, 7 y 12 bajas desbloquean los slots **1, 2 y 3**. Por ahora los tres usan el mismo ataque aereo de prueba. Pulsar la tecla, elegir una superficie en el plano real de Dust 2 y confirmar **DEPLOY AIRSTRIKE**. ESC, X o la misma tecla guardan el plano sin consumir la carga. En movil, tocar el slot desbloqueado. El arma baja y no puede disparar mientras se selecciona el objetivo.
+
+El avion se genera en Three.js, sin descargar otro modelo. El mapa tambien se proyecta desde la geometria existente. Todo pertenece al modulo lazy del Shooter: abrir Limbo o inspeccionar la escultura no lo carga.
+
+El servidor valida sala, vida, racha, secuencia, intervalo, capacidad y superficie. Solo consume la recompensa al aceptar un objetivo valido. A los 5.35 segundos aplica el impacto una sola vez: radio 10m, hasta 120 HP en el nucleo de 3m y dano decreciente fuera de el. Las paredes y techos bloquean el dano; el misil impacta en la primera superficie desde arriba. Puede danar a quien lo lanza. La proteccion de respawn sigue vigente para otros jugadores y termina al desplegar el propio ataque. Las cargas no utilizadas se pierden al morir; un mismo umbral no puede reutilizarse en esa vida.
+
+Vuelo, misil, anillo blanco, fragmentos instanciados y sonido sintetizado de prueba se sincronizan por el reloj de la sala. El sonido respeta volumen y silencio del menu. Maximo 4 ataques activos por sala. Salir de la sala o terminar la ronda cancela sus ataques pendientes.
+
+Parametros: `shared/AirstrikeProtocol.ts`; silueta del avion: `src/modes/shooter/strikes/Aircraft.ts`; mapa y efectos: `src/modes/shooter/strikes/`. Pruebas: `npm run test:server` y `npm run test:airstrike`. Las ayudas que generan rachas pertenecen exclusivamente al proceso de pruebas, no a un mensaje o endpoint del servidor publico.
+
 ## Desarrollo directo
 
 - `http://localhost:5373/?debugMode=limbo`: diagnosticos de modo, sala, poblacion, FPS, ping, fisica y cache.

@@ -6,6 +6,7 @@ import type { SpawnNavigationData } from './SpawnNavigation';
 import { gameConfig } from '../../../src/modes/shooter/config/gameConfig';
 import type { CharacterInput, ShooterInput } from '../../../shared/ShooterProtocol';
 import { Vector3 } from 'three';
+import { airstrikeConfig } from '../../../shared/AirstrikeProtocol';
 
 interface Geometry { vertices: number[]; indices: number[] }
 let mapData: Promise<{ colliders: Geometry[]; navigation: SpawnNavigationData }> | undefined;
@@ -30,6 +31,7 @@ export class ShooterWorld {
   private readonly entries = new Map<string, { input: ServerInput; player: CharacterController }>();
   private readonly spawns: Vector3[] = [];
   private spawnSequence = 0;
+  private readonly bounds = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity };
   private constructor(readonly physics: PhysicsWorld) {}
   static async create(): Promise<ShooterWorld> {
     mapData ??= readFile(new URL('../../assets/dust2-colliders.json.gz', import.meta.url))
@@ -40,6 +42,10 @@ export class ShooterWorld {
       for (const g of data.colliders) physics.world.createCollider(RAPIER.ColliderDesc.trimesh(Float32Array.from(g.vertices), Uint32Array.from(g.indices)).setFriction(0).setRestitution(0));
       physics.world.updateSceneQueries();
       const world = new ShooterWorld(physics);
+      for (const geometry of data.colliders) for (let i = 0; i < geometry.vertices.length; i += 3) {
+        world.bounds.minX = Math.min(world.bounds.minX, geometry.vertices[i]); world.bounds.maxX = Math.max(world.bounds.maxX, geometry.vertices[i]);
+        world.bounds.minZ = Math.min(world.bounds.minZ, geometry.vertices[i + 2]); world.bounds.maxZ = Math.max(world.bounds.maxZ, geometry.vertices[i + 2]);
+      }
       if (data.navigation?.version !== 1 || data.navigation.connectedCells < 200) throw new Error('Regenerate validated spawn navigation with npm run prepare:shooter.');
       for (const point of data.navigation.points) world.spawns.push(new Vector3().fromArray(point));
       if (!world.spawns.length) throw new Error('No ground-level Shooter spawn is available.');
@@ -91,6 +97,23 @@ export class ShooterWorld {
     return (candidates.includes(preferred) ? preferred : candidates[0]).clone();
   }
   player(id: string): CharacterController | undefined { return this.entries.get(id)?.player; }
+  strikeTarget(x: number, z: number): { x: number; y: number; z: number } | null {
+    if (x < this.bounds.minX || x > this.bounds.maxX || z < this.bounds.minZ || z > this.bounds.maxZ) return null;
+    const origin = { x, y: airstrikeConfig.maxTargetHeight, z };
+    const hit = this.physics.world.castRayAndGetNormal(new RAPIER.Ray(origin, { x: 0, y: -1, z: 0 }),
+      airstrikeConfig.maxTargetHeight + 5, false, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,
+      undefined, undefined, undefined, collider => !collider.parent() || collider.parent()!.isFixed());
+    return hit && hit.normal.y > .55 ? { x, y: origin.y - hit.toi, z } : null;
+  }
+  blastVisible(origin: { x: number; y: number; z: number }, target: { x: number; y: number; z: number; height: number }): boolean {
+    for (const height of [.2, target.height * .5, target.height - .12]) {
+      const direction = new Vector3(target.x - origin.x, target.y + height - origin.y, target.z - origin.z), distance = direction.length();
+      if (distance < .15) return true;
+      direction.divideScalar(distance);
+      if (this.wallDistance(new RAPIER.Ray(origin, direction), distance) >= distance - .025) return true;
+    }
+    return false;
+  }
   remove(id: string): void { this.entries.get(id)?.player.dispose(); this.entries.delete(id); }
   dispose(): void { this.entries.clear(); this.physics.dispose(); }
 }

@@ -1,0 +1,37 @@
+.airstrike-map { --map-reveal: 0; position: fixed; inset: 0; z-index: 85; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: max(20px, env(safe-area-inset-top)) 24px max(20px, env(safe-area-inset-bottom)); background: rgba(236,244,247,.92); backdrop-filter: blur(7px); color: #344e60; opacity: var(--map-reveal); }
+.airstrike-map[hidden] { display: none; }
+.airstrike-map header, .airstrike-map footer { width: min(780px, 100%); display: flex; align-items: center; gap: 24px; }
+.strike-map-brand { font-size: 28px; font-weight: 300; }
+.airstrike-map header div { display: grid; gap: 6px; font-size: 9px; }
+.airstrike-map header strong { font-size: 11px; font-weight: 500; }
+.airstrike-map button { border: 0; background: transparent; color: inherit; font: inherit; padding: 12px; min-height: 44px; }
+.strike-map-close { margin-left: auto; width: 44px; }
+.airstrike-map button svg { width: 19px; height: 19px; vertical-align: middle; }
+.strike-map-sheet { position: relative; width: min(780px, 100%, calc(100dvh - 190px)); aspect-ratio: 1; flex: 0 0 auto; transform: perspective(1100px) translateY(calc((1 - var(--map-reveal)) * 110px)) rotateX(calc((1 - var(--map-reveal)) * 38deg)) scale(calc(.92 + var(--map-reveal) * .08)); transform-origin: center bottom; box-shadow: 0 18px 42px rgba(56,83,101,.10); }
+.strike-map-terrain, .strike-map-overlay { display: block; width: 100%; height: 100%; }
+.strike-map-terrain { cursor: crosshair; touch-action: none; outline-offset: 5px; }
+.strike-map-terrain:focus { outline: none; }
+.strike-map-terrain:focus-visible { outline: 1px solid #7796a6; }
+.strike-map-overlay { position: absolute; inset: 0; pointer-events: none; }
+.strike-map-marker { position: absolute; transform: translate(-50%,-50%); border: 1px solid #577f96; border-radius: 50%; background: rgba(247,253,255,.22); pointer-events: none; }
+.strike-map-marker::after { content: ''; position: absolute; inset: 15%; border: 1px dashed #577f96; border-radius: 50%; }
+.strike-map-marker svg { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; transform: translate(-50%,-50%); stroke: #274d66; stroke-width: 1.5; }
+.strike-map-coordinate { font: 10px monospace; min-width: 0; flex: 1; }
+.strike-map-confirm { display: flex; align-items: center; gap: 10px; font-size: 10px !important; white-space: nowrap; border-bottom: 1px solid #7796a6 !important; }
+.strike-map-confirm:disabled { opacity: .35; cursor: default; }
+.airstrike-map:not([data-phase="open"]) .strike-map-sheet { pointer-events: none; }
+.streak-meter button { pointer-events: auto; display: flex; align-items: center; justify-content: center; gap: 6px; width: 52px; height: 30px; padding: 0; border: 0; border-bottom: 1px solid rgba(214,233,243,.3); background: transparent; color: #d8e6ed; font: 10px monospace; }
+.streak-meter button:disabled { opacity: .38; cursor: default; }
+.streak-meter button[data-ready="true"] { color: #fff; border-color: #e1f5ff; }
+.streak-meter button kbd { font: inherit; border: 1px solid currentColor; padding: 2px 4px; }
+.shooter-hud .streak-meter { width: 180px; }
+.shooter-hud .shooter-kill-feed { top: 194px; }
+.strike-status { position: absolute; left: 30px; top: 164px; font-size: 10px; color: #e4f5fc; text-shadow: 0 1px 6px #243c4c; }
+#app[data-input="touch"] .streak-meter button { height: 44px; }
+#app[data-input="touch"] .shooter-hud { z-index: 36; }
+#app[data-input="touch"] .strike-status { left: 18px; top: 172px; }
+.shooter-hud[data-targeting="true"] :is(.shooter-crosshair,.shooter-ammo) { visibility: hidden; }
+@media (max-width: 520px) { .airstrike-map { padding-left: 16px; padding-right: 16px; gap: 16px; } .airstrike-map header { gap: 14px; } .airstrike-map footer { gap: 10px; flex-wrap: wrap; justify-content: space-between; } .strike-map-coordinate { font-size: 9px; } .strike-map-confirm { font-size: 9px !important; padding-left: 5px !important; padding-right: 5px !important; } }
+@media (max-height: 500px) { .airstrike-map { gap: 8px; padding-top: 8px; padding-bottom: 8px; } .strike-map-sheet { width: min(640px, 100%, calc(100dvh - 118px)); } .airstrike-map header, .airstrike-map footer { width: min(640px, 100%); } .strike-map-brand { font-size: 20px; } }
+@media (max-height: 500px) { .shooter-hud .shooter-kill-feed li:nth-child(n+3) { display: none; } }
+@media (prefers-reduced-motion: reduce) { .strike-map-sheet { transform: none; } }
