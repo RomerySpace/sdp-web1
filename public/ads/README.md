@@ -23,4 +23,6 @@ Para una TV, usa `kind: "tv"`, proporción 16:9 y:
 "video": "/ads/east-court/east/screen.mp4"
 ```
 
-Imágenes y vídeos son opcionales. Sin contenido aparece un identificador discreto. Puedes modificar `anchor`, `direction` y `size`; las coordenadas son metros del mapa importado. La TV está hecha con geometría simple, se apoya en una pared existente y no requiere GLB. Los vídeos son mudos, en bucle, y se detienen al pausar o salir. Las imágenes y vídeos remotos requieren HTTPS y CORS. Conviene usar vídeos pequeños y cortos; no activar 16 vídeos de alta resolución a la vez.
+Actualmente los 29 emplazamientos muestran el cartel de prueba: las 15 ubicaciones editoriales conservan su archivo propio y las 14 referencias originales usan el mismo AVIF de prueba cuando no tienen `image`. Los nueve candidatos que caían en huecos se han ajustado a paredes cercanas completas, sin desactivar la validación de soporte. Las texturas con la misma URL se comparten y la carga espera a las imágenes; `placements[].content` y `skipped` permiten auditar fallos en desarrollo.
+
+Puedes modificar `anchor`, `direction` y `size`; las coordenadas son metros del mapa importado. La TV está hecha con geometría simple, se apoya en una pared existente y no requiere GLB. Las imágenes mantienen su proporción también en pantallas horizontales. Los vídeos son mudos, en bucle, y se detienen al pausar o salir. Las imágenes y vídeos remotos requieren HTTPS y CORS. Conviene usar vídeos pequeños y cortos; no activar 16 vídeos de alta resolución a la vez.

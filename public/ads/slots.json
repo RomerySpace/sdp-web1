@@ -27,7 +27,7 @@
     "anchor": [
       50,
       2.4,
-      -40
+      -42
     ],
     "direction": [
       -1,
@@ -46,7 +46,7 @@
     "kind": "poster",
     "anchor": [
       10,
-      2.4,
+      1.6,
       -40
     ],
     "direction": [
@@ -66,8 +66,8 @@
     "kind": "tv",
     "anchor": [
       10,
-      2.4,
-      -40
+      2.8,
+      -39.5
     ],
     "direction": [
       1,
@@ -86,7 +86,7 @@
     "kind": "poster",
     "anchor": [
       10,
-      2.4,
+      2,
       -40
     ],
     "direction": [
@@ -125,7 +125,7 @@
     "wall": "north",
     "kind": "poster",
     "anchor": [
-      40,
+      41.5,
       2.4,
       0
     ],
@@ -145,9 +145,9 @@
     "wall": "east",
     "kind": "tv",
     "anchor": [
-      40,
+      39.5,
       2.4,
-      0
+      0.5
     ],
     "direction": [
       1,
@@ -165,8 +165,8 @@
     "wall": "south",
     "kind": "poster",
     "anchor": [
-      40,
-      2.4,
+      39,
+      4,
       0
     ],
     "direction": [
@@ -187,7 +187,7 @@
     "anchor": [
       40,
       2.4,
-      0
+      8
     ],
     "direction": [
       -1,
@@ -245,8 +245,8 @@
     "wall": "south",
     "kind": "poster",
     "anchor": [
-      10,
-      2.4,
+      9,
+      3.2,
       30
     ],
     "direction": [

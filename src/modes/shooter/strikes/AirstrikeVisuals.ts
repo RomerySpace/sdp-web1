@@ -1,6 +1,7 @@
 import { BufferGeometry, ConeGeometry, CylinderGeometry, DoubleSide, Group, IcosahedronGeometry, InstancedMesh, LineBasicMaterial, LineSegments, Material, Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, RingGeometry, Scene, Vector3, BoxGeometry } from 'three';
 import { airstrikeConfig, type AirstrikeFlight } from '../../../../shared/AirstrikeProtocol';
 import { createAircraft } from './Aircraft';
+import { strikePresentation } from './StrikePresentation';
 interface FlightVisual { root: Group; plane: Group; missile: Group; marker: Group; ring: Mesh; burst: Mesh; fragments: InstancedMesh; id: string; impactSound: boolean; passSound: boolean }
 const forward = new Vector3(0,0,-1);
 export class AirstrikeVisuals {
@@ -18,6 +19,7 @@ export class AirstrikeVisuals {
     const fragmentGeometry = new BoxGeometry(.12,.055,.2);
     for(let i=0;i<airstrikeConfig.maxActive;i++) {
       const root=new Group(),plane=prototype.clone(true),missile=new Group(),marker=new Group();
+      plane.scale.setScalar(strikePresentation.aircraftScale);missile.scale.setScalar(strikePresentation.missileScale);
       const body=new Mesh(missileBody,shell);body.rotation.x=Math.PI/2;missile.add(body);
       const nose=new Mesh(missileNose,shell);nose.rotation.x=-Math.PI/2;nose.position.z=-.72;missile.add(nose);
       const markerMaterial=new MeshBasicMaterial({color:0x7798a8,transparent:true,opacity:.7,side:DoubleSide,depthWrite:false});
@@ -49,7 +51,7 @@ export class AirstrikeVisuals {
       const marker=v.marker.children[0] as Mesh;marker.scale.setScalar(airstrikeConfig.radius*(.97+.03*Math.sin(t*4)));
       const fall=(now-flight.releasedAt)/(flight.impactAt-flight.releasedAt),p=Math.max(0,Math.min(1,fall));
       v.missile.visible=fall>=0&&fall<1;
-      v.missile.position.set(flight.x,flight.y+(airstrikeConfig.altitude-.7-flight.y)*(1-p*p),flight.z);
+      v.missile.position.set(flight.x,flight.y+(airstrikeConfig.altitude-strikePresentation.releaseClearance-flight.y)*(1-p*p),flight.z);
       this.position.set(0,-1,0);v.missile.quaternion.setFromUnitVectors(forward,this.position);
       if(!v.passSound&&Math.abs(t-release)<.6){v.passSound=true;this.sound('flyover',v.plane.position);}
       const age=(now-flight.impactAt)/1000,a=Math.max(0,age),life=a/airstrikeConfig.explosionDuration;

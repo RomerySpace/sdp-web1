@@ -26,6 +26,7 @@ import './styles/shooter.css';
 import { TargetingMap } from './strikes/TargetingMap';
 import { AirstrikeVisuals } from './strikes/AirstrikeVisuals';
 import { airstrikeConfig, strikeBit, type StrikeSlot } from '../../../shared/AirstrikeProtocol';
+import { strikePresentation } from './strikes/StrikePresentation';
 
 export class ShooterMode {
   readonly scene = new Scene(); readonly input: InputManager; readonly camera: FirstPersonCamera;
@@ -73,7 +74,7 @@ export class ShooterMode {
     const signal = this.events.signal;
     document.addEventListener('pointerlockchange', () => {
       if (!this.active || this.touch) return;
-      if (this.targeting.blocking) return;
+      if (this.targeting.blocking || this.targeting.visible && !this.input.locked) return;
       if (this.input.locked && !this.roundComplete) { this.paused = false; this.suppressPauseMenu = false; this.input.enabled = !this.dead; this.accumulator = 0; this.onResumed(); }
       else this.pause(this.suppressPauseMenu);
     }, { signal });
@@ -186,7 +187,7 @@ export class ShooterMode {
     if (this.input.locked) document.exitPointerLock(); if (!hideMenu) this.onPaused();
   }
   openTargeting(slot:StrikeSlot):void {
-    if(!this.active||this.dead||this.paused||this.roundComplete)return;
+    if(!this.active||this.dead||this.paused||this.roundComplete||this.targeting.visible)return;
     const local=this.network.snapshot?.players.find(p=>p.playerId===this.network.snapshot?.localPlayerId);
     if(!((local?.strikes??0)&strikeBit(slot))){this.hud.notice(`STREAK ${airstrikeConfig.tiers[slot-1]} REQUIRED`);return;}
     this.targeting.open(slot);this.input.enabled=false;this.input.clear();this.player?.stopHorizontal();this.sendInput(false,true);
@@ -194,11 +195,12 @@ export class ShooterMode {
   }
   closeTargeting():void {
     if(!this.targeting.blocking)return;this.targeting.close();
+    this.input.clear();
     if(!this.touch&&!this.dead&&!this.paused)this.input.requestLock(()=>this.pause());
   }
   handleAirstrikeKey(event:KeyboardEvent):boolean {
     const slot=['Digit1','Digit2','Digit3','Numpad1','Numpad2','Numpad3'].indexOf(event.code);
-    if(slot>=0&&!event.repeat){event.preventDefault();if(this.targeting.blocking)this.closeTargeting();else this.openTargeting((slot%3+1) as StrikeSlot);return true;}
+    if(slot>=0){event.preventDefault();if(!event.repeat){if(this.targeting.blocking)this.closeTargeting();else if(!this.targeting.visible)this.openTargeting((slot%3+1) as StrikeSlot);}return true;}
     if(this.targeting.blocking){if(event.code==='Escape'){event.preventDefault();this.closeTargeting();}else if(event.code==='KeyP'||event.code==='Enter'&&!(event.target instanceof HTMLElement&&event.target.closest('button'))){event.preventDefault();}return true;}
     return false;
   }
@@ -253,12 +255,12 @@ export class ShooterMode {
       this.audio.reload(); this.network.sendWeaponAction({ seq: ++this.actionSequence, life: this.life, action: 'reload' });
     }
     this.weapon.update(activeDt, p, this.input);
-    this.weapon.root.position.y-=this.targeting.blend*.75;this.weapon.root.rotation.x-=this.targeting.blend*.65;
+    this.weapon.setHolster(this.targeting.blend,strikePresentation.weaponLowering,strikePresentation.weaponTilt);
     this.camera.update(this.dead ? dt : activeDt, p, this.paused || this.dead ? 1 : this.accumulator / gameConfig.physics.timestep, this.weapon.ads);
     this.viewCorrection.multiplyScalar(Math.exp(-shooterNetworkConfig.correctionResponse * dt));
     this.camera.root.position.add(this.viewCorrection); this.camera.root.updateMatrixWorld(true);
     const clicks = this.input.shots; this.input.shots = 0;
-    if (!this.paused && !this.dead && !blocked && this.weapon.canShoot() && (clicks > 0 || this.weapon.automatic && this.input.trigger)) {
+    if (!this.paused && !this.dead && !this.targeting.visible && this.weapon.canShoot() && (clicks > 0 || this.weapon.automatic && this.input.trigger)) {
       this.sendInput(true, true);
       this.network.sendWeaponAction({ seq: ++this.actionSequence, life: this.life, action: 'fire' });
       this.shooting?.fire();

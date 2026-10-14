@@ -72,7 +72,7 @@ Cerrar una ventana elimina su avatar. Volver a Limbo reconecta su voz correspond
 
 ## Ataque aereo de prueba
 
-En Shooter, las rachas de 3, 7 y 12 bajas desbloquean los slots **1, 2 y 3**. Por ahora los tres usan el mismo ataque aereo de prueba. Pulsar la tecla, elegir una superficie en el plano real de Dust 2 y confirmar **DEPLOY AIRSTRIKE**. ESC, X o la misma tecla guardan el plano sin consumir la carga. En movil, tocar el slot desbloqueado. El arma baja y no puede disparar mientras se selecciona el objetivo.
+En Shooter, las rachas de 3, 7 y 12 bajas desbloquean los slots **1, 2 y 3**. Por ahora los tres usan el mismo ataque aereo de prueba. Pulsar la tecla y hacer un solo clic/toque en una superficie valida del plano real de Dust 2: al soltar se lanza y se guarda el mapa inmediatamente, sin confirmacion adicional. Arrastrar muestra la marca antes de soltar; cancelar el gesto no lanza nada. ESC, X o la misma tecla guardan el plano sin consumir la carga. En movil, tocar el slot desbloqueado. El arma baja y no puede disparar mientras se selecciona el objetivo. El cierre dura 170ms; el movimiento se recupera desde el inicio del cierre y el arma vuelve a su transformacion original. Con teclado, las flechas mueven el objetivo y ENTER lo lanza.
 
 El avion se genera en Three.js, sin descargar otro modelo. El mapa tambien se proyecta desde la geometria existente. Todo pertenece al modulo lazy del Shooter: abrir Limbo o inspeccionar la escultura no lo carga.
 
@@ -80,7 +80,7 @@ El servidor valida sala, vida, racha, secuencia, intervalo, capacidad y superfic
 
 Vuelo, misil, anillo blanco, fragmentos instanciados y sonido sintetizado de prueba se sincronizan por el reloj de la sala. El sonido respeta volumen y silencio del menu. Maximo 4 ataques activos por sala. Salir de la sala o terminar la ronda cancela sus ataques pendientes.
 
-Parametros: `shared/AirstrikeProtocol.ts`; silueta del avion: `src/modes/shooter/strikes/Aircraft.ts`; mapa y efectos: `src/modes/shooter/strikes/`. Pruebas: `npm run test:server` y `npm run test:airstrike`. Las ayudas que generan rachas pertenecen exclusivamente al proceso de pruebas, no a un mensaje o endpoint del servidor publico.
+Parametros de autoridad: `shared/AirstrikeProtocol.ts`; tiempos de apertura/cierre, posicion del arma y escalas visuales: `src/modes/shooter/strikes/StrikePresentation.ts`; silueta del avion: `src/modes/shooter/strikes/Aircraft.ts`. El avion mide aproximadamente 5.7m de largo y el misil 1.75m. Pruebas: `npm run test:server` y `npm run test:airstrike`. Las ayudas que generan rachas pertenecen exclusivamente al proceso de pruebas, no a un mensaje o endpoint del servidor publico.
 
 ## Desarrollo directo
 

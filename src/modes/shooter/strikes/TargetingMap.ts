@@ -1,8 +1,9 @@
 import { Vector3 } from 'three';
-import { createElement, Crosshair, Plane, X } from 'lucide';
+import { createElement, Crosshair, X } from 'lucide';
 import { airstrikeConfig, type StrikeSlot } from '../../../../shared/AirstrikeProtocol';
 import type { MapLoader } from '../world/MapLoader';
 import type { NetworkPlayer } from '../../../../shared/MultiplayerProtocol';
+import { strikePresentation } from './StrikePresentation';
 import './airstrike.css';
 
 export class TargetingMap {
@@ -10,7 +11,6 @@ export class TargetingMap {
   readonly canvas = document.createElement('canvas');
   private readonly overlay = document.createElement('canvas');
   private readonly marker = document.createElement('div');
-  private readonly confirm = document.createElement('button');
   private readonly coordinate = document.createElement('output');
   private readonly events = new AbortController();
   private map?: MapLoader;
@@ -21,10 +21,12 @@ export class TargetingMap {
   private progress = 0;
   private selected?: { x: number; z: number };
   private cursor = { u: .5, v: .5 };
+  private pointer?: number;
   slot: StrikeSlot = 1;
-  get blocking(): boolean { return this.phase !== 'hidden'; }
-  get blend(): number { return this.progress; }
-  constructor(container: HTMLElement, launch: (slot: StrikeSlot, x: number, z: number) => void, cancel: () => void) {
+  get blocking(): boolean { return this.phase === 'opening' || this.phase === 'open'; }
+  get visible(): boolean { return this.phase !== 'hidden'; }
+  get blend(): number { return this.progress * this.progress * (3 - 2 * this.progress); }
+  constructor(container: HTMLElement, private readonly launch: (slot: StrikeSlot, x: number, z: number) => void, cancel: () => void) {
     this.element.className = 'airstrike-map'; this.element.hidden = true;
     this.element.setAttribute('role','dialog');this.element.setAttribute('aria-modal','true');this.element.setAttribute('aria-label','Airstrike targeting map');
     const header=document.createElement('header');header.innerHTML='<span class="strike-map-brand">SDP</span><div><strong>TACTICAL PROJECTION</strong><span>DE_DUST2 / AERIAL PROTOCOL</span></div>';
@@ -35,20 +37,36 @@ export class TargetingMap {
     this.marker.className='strike-map-marker';this.marker.hidden=true;this.marker.append(createElement(Crosshair));
     sheet.append(this.canvas,this.overlay,this.marker);
     const footer=document.createElement('footer');this.coordinate.className='strike-map-coordinate';this.coordinate.textContent='TARGET / --';
-    this.confirm.type='button';this.confirm.className='strike-map-confirm';this.confirm.disabled=true;this.confirm.append(createElement(Plane),document.createTextNode('DEPLOY AIRSTRIKE'));
-    this.confirm.addEventListener('click',()=>{if(this.phase==='open'&&this.selected){const {x,z}=this.selected;launch(this.slot,x,z);}},{signal:this.events.signal});footer.append(this.coordinate,this.confirm);
+    footer.append(this.coordinate);
     this.element.append(header,sheet,footer);container.append(this.element);
     this.canvas.addEventListener('pointerdown',event=>{
-      if(this.phase!=='open')return;event.preventDefault();const r=this.canvas.getBoundingClientRect();
-      this.select((event.clientX-r.x)/r.width,(event.clientY-r.y)/r.height);
+      if(this.phase!=='open'||!event.isPrimary||event.button!==0)return;
+      event.preventDefault();this.pointer=event.pointerId;this.canvas.setPointerCapture(event.pointerId);this.point(event);
     },{signal:this.events.signal});
+    this.canvas.addEventListener('pointermove',event=>{if(this.phase==='open'&&(this.pointer===event.pointerId||event.pointerType==='mouse'))this.point(event);},{signal:this.events.signal});
+    // Commit on release: the same gesture must never become a first-person gunshot.
+    this.canvas.addEventListener('pointerup',event=>{
+      if(this.pointer!==event.pointerId)return;event.preventDefault();this.pointer=undefined;
+      if(this.phase!=='open')return;const r=this.canvas.getBoundingClientRect();
+      if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)return;
+      this.point(event);this.commit();
+    },{signal:this.events.signal});
+    this.canvas.addEventListener('pointercancel',()=>{this.pointer=undefined;},{signal:this.events.signal});
+    this.canvas.addEventListener('click',event=>event.preventDefault(),{signal:this.events.signal});
     this.canvas.addEventListener('keydown',event=>{
       if(this.phase!=='open')return;
       if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Enter'].includes(event.code))return;event.preventDefault();
-      if(event.code==='Enter'){if(this.selected)this.confirm.click();return;}
+      if(event.code==='Enter'){if(!event.repeat)this.commit();return;}
       this.select(this.cursor.u+(event.code==='ArrowRight'?2:event.code==='ArrowLeft'?-2:0)/this.span,
         this.cursor.v+(event.code==='ArrowDown'?2:event.code==='ArrowUp'?-2:0)/this.span);
     },{signal:this.events.signal});
+  }
+  private point(event:PointerEvent):void {
+    const r=this.canvas.getBoundingClientRect();this.select((event.clientX-r.x)/r.width,(event.clientY-r.y)/r.height);
+  }
+  private commit():void {
+    if(this.phase!=='open'||!this.selected)return;
+    const {x,z}=this.selected;this.launch(this.slot,x,z);
   }
   async prepare(map: MapLoader): Promise<void> {
     this.map=map;this.centerX=(map.bounds.min.x+map.bounds.max.x)/2;this.centerZ=(map.bounds.min.z+map.bounds.max.z)/2;
@@ -82,18 +100,26 @@ export class TargetingMap {
     if(!this.map)return;const x=this.centerX+(u-.5)*this.span,z=this.centerZ+(v-.5)*this.span;
     const hit=this.map.trace(new Vector3(x,airstrikeConfig.maxTargetHeight,z),new Vector3(0,-1,0),airstrikeConfig.maxTargetHeight+5);
     const valid=!!hit?.face&&hit.face.normal.y>.55;
-    this.selected=valid?{x,z}:undefined;this.confirm.disabled=!valid;this.marker.hidden=!valid;
+    this.selected=valid?{x,z}:undefined;this.marker.hidden=!valid;
     if(!valid){this.coordinate.textContent='TARGET UNAVAILABLE';return;}
     this.marker.style.left=`${u*100}%`;this.marker.style.top=`${v*100}%`;this.marker.style.width=this.marker.style.height=`${airstrikeConfig.radius*2/this.span*100}%`;
     const col=Math.max(0,Math.min(5,Math.floor((u-.06)/(.88/6)))),row=Math.max(1,Math.min(6,Math.floor((v-.06)/(.88/6))+1));
     this.coordinate.textContent=`GRID ${String.fromCharCode(65+col)}${row} / ${x.toFixed(1)} / ${z.toFixed(1)}`;
   }
-  open(slot:StrikeSlot):void {this.slot=slot;this.phase='opening';this.progress=0;this.selected=undefined;this.cursor={u:.5,v:.5};this.marker.hidden=true;this.confirm.disabled=true;this.coordinate.textContent='TARGET / --';this.element.hidden=false;this.element.dataset.phase='opening';}
-  close(immediate=false):void {this.confirm.disabled=true;if(this.element.contains(document.activeElement)&&document.activeElement instanceof HTMLElement)document.activeElement.blur();if(immediate){this.phase='hidden';this.progress=0;this.element.hidden=true;return;}this.phase='closing';this.element.dataset.phase='closing';}
+  open(slot:StrikeSlot):void {this.slot=slot;this.phase='opening';this.progress=0;this.pointer=undefined;this.selected=undefined;this.cursor={u:.5,v:.5};this.marker.hidden=true;this.coordinate.textContent='TARGET / --';this.element.hidden=false;this.element.inert=false;this.element.setAttribute('aria-modal','true');this.element.removeAttribute('aria-hidden');this.element.style.setProperty('--map-reveal','0');this.element.dataset.phase='opening';}
+  close(immediate=false):void {
+    if(this.pointer!==undefined&&this.canvas.hasPointerCapture(this.pointer))this.canvas.releasePointerCapture(this.pointer);
+    this.pointer=undefined;this.selected=undefined;
+    if(this.element.contains(document.activeElement)&&document.activeElement instanceof HTMLElement)document.activeElement.blur();
+    this.element.inert=true;this.element.setAttribute('aria-modal','false');this.element.setAttribute('aria-hidden','true');
+    if(immediate){this.phase='hidden';this.progress=0;this.element.hidden=true;this.element.style.setProperty('--map-reveal','0');return;}
+    if(!this.visible)return;this.phase='closing';this.element.dataset.phase='closing';
+  }
   update(dt:number,player?:NetworkPlayer):void {
     if(this.phase==='hidden')return;
-    this.progress=Math.max(0,Math.min(1,this.progress+(this.phase==='closing'?-1:1)*dt/.42));
-    this.element.style.setProperty('--map-reveal',String(this.progress));
+    const closing=this.phase==='closing';
+    this.progress=Math.max(0,Math.min(1,this.progress+(closing?-dt/strikePresentation.mapCloseSeconds:dt/strikePresentation.mapOpenSeconds)));
+    this.element.style.setProperty('--map-reveal',String(this.blend));
     if(this.phase==='opening'&&this.progress===1){this.phase='open';this.element.dataset.phase='open';this.canvas.focus({preventScroll:true});}
     if(this.phase==='closing'&&this.progress===0){this.phase='hidden';this.element.hidden=true;return;}
     const ctx=this.overlay.getContext('2d')!;ctx.clearRect(0,0,this.size,this.size);
