@@ -1,6 +1,6 @@
 import { createElement, Maximize, Minimize, Volume2, VolumeX } from 'lucide';
 import { PlayerSettings, settingsLimits, type SettingsState } from '../core/PlayerSettings';
-import { toggleFullscreen } from './Fullscreen';
+import { fullscreenState, toggleFullscreen } from './Fullscreen';
 import { usesTouchControls } from '../input/InputCapabilities';
 
 export class SettingsPanel {
@@ -29,11 +29,14 @@ export class SettingsPanel {
     this.mute.addEventListener('click', () => settings.toggleMute(), { signal });
     this.fullscreen = document.createElement('button'); this.fullscreen.className = 'session-fullscreen'; this.fullscreen.type = 'button';
     const status = document.createElement('p'); status.className = 'settings-status'; status.setAttribute('role', 'status'); status.hidden = true;
-    this.fullscreen.addEventListener('click', () => toggleFullscreen(() => {
-      status.textContent = 'Fullscreen unavailable in this browser window.'; status.hidden = false;
-    }), { signal });
+    this.fullscreen.addEventListener('click', () => {
+      status.hidden = true;
+      toggleFullscreen(message => { status.textContent = message; status.hidden = false; });
+    }, { signal });
     tools.append(this.mute, this.fullscreen); this.element.append(tools, status);
     document.addEventListener('fullscreenchange', () => this.updateFullscreen(), { signal });
+    document.addEventListener('webkitfullscreenchange', () => this.updateFullscreen(), { signal });
+    for (const display of ['standalone', 'fullscreen']) matchMedia(`(display-mode: ${display})`).addEventListener('change', () => this.updateFullscreen(), { signal });
     this.updateFullscreen(); this.unsubscribe = settings.subscribe(state => this.update(state));
   }
   private update(state: Readonly<SettingsState>): void {
@@ -46,14 +49,13 @@ export class SettingsPanel {
     this.mute.replaceChildren(createElement(state.muted ? VolumeX : Volume2));
   }
   private updateFullscreen(): void {
-    const active = Boolean(document.fullscreenElement);
-    this.fullscreen.disabled = !document.fullscreenEnabled;
-    this.fullscreen.title = document.fullscreenEnabled ? `${active ? 'Exit' : 'Enter'} fullscreen (F)` : 'Fullscreen unavailable';
-    this.fullscreen.setAttribute('aria-label', active ? 'Exit fullscreen' : 'Enter fullscreen');
+    const { active, installed } = fullscreenState(), touch = usesTouchControls();
+    this.fullscreen.title = installed ? 'Fullscreen app' : `${active ? 'Exit' : 'Enter'} fullscreen${touch ? '' : ' (F)'}`;
+    this.fullscreen.setAttribute('aria-label', installed ? 'Fullscreen app' : active ? 'Exit fullscreen' : 'Enter fullscreen');
     this.fullscreen.setAttribute('aria-pressed', String(active));
     const label = document.createElement('span'); label.textContent = 'FULLSCREEN';
     const key = document.createElement('kbd'); key.textContent = 'F';
-    this.fullscreen.replaceChildren(createElement(active ? Minimize : Maximize), label, key);
+    this.fullscreen.replaceChildren(createElement(active && !installed ? Minimize : Maximize), label, ...(touch ? [] : [key]));
   }
   dispose(): void { this.events.abort(); this.unsubscribe(); this.element.remove(); }
 }

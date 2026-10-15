@@ -173,6 +173,7 @@ export class App {
     }, { signal });
     document.addEventListener('visibilitychange', () => {
       this.audio.setVisible(!document.hidden);
+      this.modes.shooter?.audio.setVisible(!document.hidden);
       if (document.hidden) { this.pause(); cancelAnimationFrame(this.frame); }
       else { this.lastTime = 0; this.frame = requestAnimationFrame(this.tick); }
     }, { signal });
@@ -202,7 +203,7 @@ export class App {
     if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
     const typing = event.target instanceof HTMLElement && (event.target.isContentEditable || event.target.closest('input:not([type="range"]):not([type="checkbox"]),textarea'));
     if (event.code === 'KeyF' && !typing && this.state.value !== 'CHATTING') {
-      event.preventDefault(); if (!event.repeat) toggleFullscreen(() => this.ui.notify('Fullscreen is unavailable in this browser window.')); return;
+      event.preventDefault(); if (!event.repeat) toggleFullscreen(message => this.ui.notify(message)); return;
     }
     if (this.settingsMenu.visible) {
       if (!event.repeat && (event.code === 'KeyP' || event.code === 'Escape')) { event.preventDefault(); this.closeSettings(); }

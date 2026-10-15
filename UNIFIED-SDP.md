@@ -175,6 +175,14 @@ SDP_PRODUCTION_URL=http://127.0.0.1:5384 npm run test:unified
 
 ## Vercel y Render
 
+Pantalla completa movil: los menus de Limbo y Shooter usan la API estandar o la variante WebKit, siempre desde el toque original. Si el navegador la bloquea, el boton responde con un estado legible, no queda desactivado sin explicacion. `public/manifest.webmanifest` y los metadatos Apple permiten abrir SDP como web app desde la pantalla de inicio. En Safari: Compartir > Anadir a pantalla de inicio > abrir el icono SDP. No se instala un service worker ni se guardan modelos o versiones antiguas en una cache offline. Sigue haciendo falta conexion para el multijugador.
+
+La parte superior del monolito refleja el perfil organico de la base y comparte su acabado blanco satinado. Comienza a 2.85m para mantener libre el hueco de la escultura; no cambia el collider del pedestal.
+
+Audio: disparo, pasos, recarga, vuelo y explosion mantienen sus efectos sintetizados. Las rampas de volumen sustituyen la automatizacion anterior y alcanzan cero real, tanto en efectos como en musica. El siguiente gesto reactiva el contexto compartido tras una interrupcion del navegador. Ocultar Shooter detiene sus fuentes sin suspender el contexto de musica/voz; salir libera tambien los sonidos cortos pendientes. La playlist publica sigue vacia: no se ha anadido musica.
+
+Pruebas especificas: `npm run test:unified -- --grep 'fullscreen|WebKit|actual mobile menus|upper monolith|white lobby ground'`. Miden audio real con AnalyserNode, prueban los menus tactiles de ambos modos, volumen/silencio, recuperacion y un unico AudioContext. La compatibilidad WebKit y el bloqueo de API se simulan; las pruebas de Chrome movil emulado no sustituyen un iPhone/Android fisico.
+
 Vercel conserva npm run build y dist. El endpoint de Colyseus sigue configurado mediante VITE_SDP_SERVER_URL, con HTTPS/WSS en publico.
 Render conserva su estructura y variables privadas. El build instala las dependencias de raiz y servidor porque la fisica se reutiliza desde el mismo modulo de WEB2, y genera el archivo de colisiones antes de arrancar.
 server/assets/dust2-colliders.json.gz es un recurso derivado, ignorado por Git y regenerable con npm run prepare:shooter. No procede de datos de un cliente.

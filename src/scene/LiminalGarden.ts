@@ -1,8 +1,8 @@
-import { BoxGeometry, BufferGeometry, DoubleSide, Float32BufferAttribute, InstancedMesh, Mesh, MeshStandardMaterial, Object3D, Vector2, type Vector3, type Material, type Scene } from 'three';
-import { nebulaMaterial } from './NebulaMaterial';
+import { BufferGeometry, DoubleSide, Float32BufferAttribute, InstancedMesh, Mesh, MeshStandardMaterial, Object3D, Vector2, type Vector3, type Material, type Scene } from 'three';
+import { createUpperMonolithGeometry, monolithFinish } from './MonolithGeometry';
 import type { Atmosphere } from './Atmosphere';
 
-/** Instanced tapered blades and a bounded cloud column; no external assets. */
+/** Instanced tapered blades and a satin column; no external assets. */
 export class LiminalGarden {
   private readonly reveal = { value: 0 };
   private readonly time = { value: 0 };
@@ -10,7 +10,9 @@ export class LiminalGarden {
   private readonly objects: Mesh[] = [];
   constructor(scene: Scene, atmosphere: Atmosphere) {
     // The weapon floats between 1.33 and 2.28m. Leave the entire aperture clear.
-    const tower = new Mesh(new BoxGeometry(2.4, 300, 2.4), nebulaMaterial(2.85, 300, this.time, this.reveal, atmosphere.horizon)); tower.position.y = 152.85;
+    const finish = new MeshStandardMaterial(monolithFinish); atmosphere.apply(finish);
+    const tower = new Mesh(createUpperMonolithGeometry(), finish); tower.position.y = 2.85;
+    tower.receiveShadow = true;
     tower.name = 'Nebula / infinite upper monolith';
     this.objects.push(tower);
 

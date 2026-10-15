@@ -1,4 +1,5 @@
 import { sharedAudioContext } from './AudioContextHub';
+import { rampGain } from './GainEnvelope';
 import { musicPosition, validMusicTracks, type MusicTrack } from '../../shared/MusicTimeline';
 import type { LobbySnapshot } from '../../shared/MultiplayerProtocol';
 const MUTE_KEY = 'sdp:muted';
@@ -66,7 +67,7 @@ export class AudioManager {
   toggleMute(): boolean { this.setMuted(!this.muted); try { localStorage.setItem(MUTE_KEY, String(this.muted)); } catch {} return this.muted; }
   setMuted(muted: boolean): void { this.muted = muted; this.updateGain(); }
   setVolume(volume: number): void { this.volume = Math.max(0, Math.min(1, volume)); this.updateGain(); }
-  private updateGain(): void { if (this.gain && this.context) this.gain.gain.setTargetAtTime(this.muted ? 0 : this.volume * .6, this.context.currentTime, .1); }
+  private updateGain(): void { if (this.gain && this.context) rampGain(this.gain.gain, this.muted ? 0 : this.volume * .6, this.context.currentTime, .1); }
   setVisible(visible: boolean): void { if (!visible) this.media.pause(); else { void this.context?.resume().catch(() => {}); this.sync(); } }
   dispose(): void { this.abort.abort(); window.clearInterval(this.timer); this.media.pause(); this.media.removeAttribute('src'); this.media.load(); this.source?.disconnect(); this.gain?.disconnect(); this.label.remove(); }
 }

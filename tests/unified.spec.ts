@@ -4,7 +4,7 @@ import type { InstancedMesh, Mesh, MeshStandardMaterial, PlaneGeometry, ShaderMa
 import { enterExhibition } from './entry';
 import { walkToSculpture } from './touch-driver';
 import { sessionRanking } from '../src/modes/shooter/ui/SessionRanking';
-import { createMonolithGeometry } from '../src/scene/MonolithGeometry';
+import { createMonolithGeometry, createUpperMonolithGeometry } from '../src/scene/MonolithGeometry';
 import type { NetworkPlayer } from '../shared/MultiplayerProtocol';
 import type { GameModeManager } from '../src/modes/GameModeManager';
 import type { ColyseusNetworkAdapter } from '../src/network/ColyseusNetworkAdapter';
@@ -91,11 +91,16 @@ for (const mobile of [false, true]) {
         }
         renderer.render(scene, camera);
         const base = scene.getObjectByName('Monolith / satin foundation') as Mesh<PlaneGeometry, MeshStandardMaterial>;
-        const column = scene.getObjectByName('Nebula / infinite upper monolith') as Mesh<PlaneGeometry, ShaderMaterial>;
+        const column = scene.getObjectByName('Nebula / infinite upper monolith') as Mesh<PlaneGeometry, MeshStandardMaterial>;
+        let sharedHorizon = false;
+        const compile = column.material.onBeforeCompile.bind(column.material), cacheKey = column.material.customProgramCacheKey();
+        column.material.onBeforeCompile = (shader, webgl) => { compile(shader, webgl); sharedHorizon = shader.uniforms.atmosphereHorizon === window.sdpUnified.scene.atmosphere.horizon; };
+        column.material.customProgramCacheKey = () => `${cacheKey}-upper-test`;column.material.needsUpdate = true;renderer.render(scene, camera);
         return {
           floor: floor.material.color.getHexString(), grass: grass.map(field => (field.material as MeshStandardMaterial).color.getHexString()), shaders,
           base: { visible: base.visible, color: base.material.color.getHexString(), bottom: base.geometry.boundingBox!.min.y + base.position.y, top: base.geometry.boundingBox!.max.y + base.position.y },
-          sharedHorizon: column.material.uniforms.atmosphereHorizon === window.sdpUnified.scene.atmosphere.horizon,
+          sharedHorizon,
+          upperFinish: column.material.color.getHexString(), matchingFinish: column.material.roughness === base.material.roughness,
           lowerCloud: !!scene.getObjectByName('Nebula / lower monolith'),
         };
       });
@@ -103,6 +108,7 @@ for (const mobile of [false, true]) {
       expect(palette.base.visible).toBe(true); expect(palette.base.color).toBe(palette.floor);
       expect(palette.base.bottom).toBeLessThan(0); expect(palette.base.top).toBeCloseTo(1.2, 5);
       expect(palette.sharedHorizon).toBe(true); expect(palette.lowerCloud).toBe(false);
+      expect(palette.upperFinish).toBe(palette.base.color);expect(palette.matchingFinish).toBe(true);
       expect(palette.shaders).toHaveLength(2);
       for (const shader of palette.shaders) {
         expect(shader.vertex).toContain('transformed *= root * fieldFade;');
@@ -149,6 +155,20 @@ test('organic monolith has a flared, buried foot, smooth normals and the origina
     expect(foot - waist).toBeGreaterThan(.15);
     expect(normals.getY(positions.count - 1)).toBeCloseTo(1, 5);
   } finally { geometry.dispose(); }
+});
+test('upper monolith mirrors the lower organic profile and leaves the weapon aperture clear', () => {
+  const lower = createMonolithGeometry(), upper = createUpperMonolithGeometry();
+  try {
+    const a = lower.getAttribute('position'), b = upper.getAttribute('position'), n = upper.getAttribute('normal'), sides = 72, rings = 40;
+    for(let ring=0;ring<=rings;ring++)for(let side=0;side<sides;side++) {
+      const i=ring*sides+side,j=(rings-ring)*sides+side;
+      expect(b.getX(i)).toBeCloseTo(a.getX(j),5);expect(b.getZ(i)).toBeCloseTo(a.getZ(j),5);expect(b.getY(i)+a.getY(j)).toBeCloseTo(1.2,5);
+      expect(Math.hypot(n.getX(i),n.getY(i),n.getZ(i))).toBeCloseTo(1,5);
+    }
+    expect(upper.boundingBox!.min.y+2.85).toBeCloseTo(2.85);expect(upper.boundingBox!.max.y).toBe(300);
+    expect(b.count).toBeLessThan(4000);expect(upper.index!.count/3).toBeLessThan(6500);
+    expect(n.getY(b.count-2)).toBeCloseTo(-1,5);
+  }finally{lower.dispose();upper.dispose();}
 });
 test('session ranking uses authoritative kills then deaths and excludes disconnected players', () => {
   const player = (playerId: string, kills: number, deaths: number, connected = true): NetworkPlayer => ({

@@ -3,7 +3,7 @@ import {
   PlaneGeometry, Scene,
 } from 'three';
 import type { Atmosphere } from './Atmosphere';
-import { createMonolithGeometry } from './MonolithGeometry';
+import { createMonolithGeometry, monolithFinish } from './MonolithGeometry';
 
 export class Environment {
   private readonly meshes: Mesh[] = [];
@@ -17,9 +17,7 @@ export class Environment {
     floor.receiveShadow = true;
     this.meshes.push(floor);
 
-    const pedestalMaterial = new MeshStandardMaterial({
-      color: 0xffffff, roughness: 0.62, metalness: 0, envMapIntensity: 0.3,
-    });
+    const pedestalMaterial = new MeshStandardMaterial(monolithFinish);
     atmosphere.apply(pedestalMaterial);
     const pedestal = new Mesh(createMonolithGeometry(), pedestalMaterial);
     pedestal.name = 'Monolith / satin foundation';

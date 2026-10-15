@@ -1,4 +1,5 @@
 import { sharedAudioContext } from '../../../audio/AudioContextHub';
+import { rampGain } from '../../../audio/GainEnvelope';
 import { Vector3, type Camera } from 'three';
 /** Original quiet mechanical report and footsteps, mixed into the application's context. */
 export class AudioManager {
@@ -6,6 +7,7 @@ export class AudioManager {
   private gain?: GainNode;
   private noise?: AudioBuffer;
   private readonly strikeSources = new Set<AudioScheduledSourceNode>();
+  private visible = true;
   volume = .5;
   muted = false;
   constructor() { try { this.muted = localStorage.getItem('sdp:muted') === 'true'; } catch { /* Optional preference. */ } }
@@ -24,21 +26,22 @@ export class AudioManager {
   }
   private report(volume: number, frequency: number, duration: number): void {
     const ctx = this.context;
-    if (!ctx || !this.gain || !this.noise || this.muted || ctx.state !== 'running') return;
+    if (!ctx || !this.gain || !this.noise || this.muted || !this.visible || ctx.state !== 'running') return;
     const source = ctx.createBufferSource(); source.buffer = this.noise;
     const filter = ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = frequency;
     const envelope = ctx.createGain();
     envelope.gain.setValueAtTime(volume, ctx.currentTime);
     envelope.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
     source.connect(filter); filter.connect(envelope); envelope.connect(this.gain);
+    this.strikeSources.add(source);
     source.start(); source.stop(ctx.currentTime + duration);
-    source.onended = () => { source.disconnect(); filter.disconnect(); envelope.disconnect(); };
+    source.onended = () => { this.strikeSources.delete(source); source.disconnect(); filter.disconnect(); envelope.disconnect(); };
   }
   shot(): void { this.report(0.48, 1600, 0.13); }
   step(sprinting: boolean): void { this.report(sprinting ? 0.1 : 0.065, 350, 0.065); }
   reload(): void { this.report(0.12, 2200, 0.09); }
   airstrike(phase: 'flyover' | 'impact', point: Vector3, camera: Camera): void {
-    const ctx=this.context;if(!ctx||!this.gain||!this.noise||this.muted||ctx.state!=='running')return;
+    const ctx=this.context;if(!ctx||!this.gain||!this.noise||this.muted||!this.visible||ctx.state!=='running')return;
     const local=camera.worldToLocal(point.clone()),distance=local.length(),volume=Math.pow(Math.max(0,1-distance/140),2);
     if(volume<.002)return;
     const source=ctx.createBufferSource(),filter=ctx.createBiquadFilter(),envelope=ctx.createGain(),pan=ctx.createStereoPanner();
@@ -62,8 +65,13 @@ export class AudioManager {
   setMuted(muted: boolean): void { this.muted = muted; this.updateGain(); }
   setVolume(value: number): void { this.volume = Math.max(0, Math.min(1, value)); this.updateGain(); }
   private updateGain(): void {
-    if (this.context && this.gain) this.gain.gain.setTargetAtTime(this.muted ? 0 : this.volume * .7, this.context.currentTime, .05);
+    if (this.context && this.gain) rampGain(this.gain.gain, this.muted || !this.visible ? 0 : this.volume * .7, this.context.currentTime);
   }
-  setVisible(visible: boolean): void { if (this.context) void (visible ? this.context.resume() : this.context.suspend()).catch(() => {}); }
-  dispose(): void { for(const source of this.strikeSources){try{source.stop();}catch{/* Already ended. */}source.disconnect();}this.strikeSources.clear();this.gain?.disconnect(); }
+  setVisible(visible: boolean): void {
+    this.visible = visible; this.updateGain();
+    if (visible) void this.context?.resume().catch(() => {});
+    else this.stopSources();
+  }
+  private stopSources(): void { for(const source of this.strikeSources){try{source.stop();}catch{/* Already ended. */}source.disconnect();}this.strikeSources.clear(); }
+  dispose(): void { this.visible = false; this.stopSources(); this.gain?.disconnect(); }
 }
