@@ -69,6 +69,7 @@ export class App {
     this.player = new FirstPersonController(this.scene.camera, this.scene.renderer.domElement, this.touch);
     this.inputs = new InputSynchronizer(this.network, this.player);
     this.voiceTransport = new LiveKitVoiceTransport(this.network, () => this.voice?.release());
+    this.scene.remotePlayers.setVoiceLevels(this.voiceTransport.voiceLevels);
     this.voice = new VoiceChatManager(this.voiceTransport);
     this.chat = new ChatManager(this.network);
     this.ui = new UIManager(container, {
@@ -132,7 +133,7 @@ export class App {
     if (import.meta.env.DEV && new URLSearchParams(location.search).has('debugMode')) {
       this.diagnostics = document.createElement('pre'); this.diagnostics.className = 'mode-diagnostics'; container.append(this.diagnostics);
       Object.assign(window, { sdpUnified: { modes: this.modes, network: this.network, scene: this.scene, player: this.player,
-        state: this.state, voice: this.voice, voiceTransport: this.voiceTransport, chat: this.chat } });
+        state: this.state, voice: this.voice, voiceTransport: this.voiceTransport, chat: this.chat, audio: this.audio } });
     }
     this.frame = requestAnimationFrame(this.tick);
   }
@@ -410,6 +411,7 @@ export class App {
       this.updateTouchControls();
       // Shooter catches up bounded fixed steps after a slow render frame.
       this.modes.update(this.modes.value === 'SHOOTER' ? Math.min(frameDt, .125) : dt);
+      this.audio.updateEnvironment(this.scene.camera, this.modes.value === 'LIMBO', this.reveal);
       if (this.modes.value !== 'SHOOTER' && this.modes.value !== 'RETURNING_TO_LIMBO') {
         if (this.modes.value === 'LIMBO') this.player.update(dt);
         this.ui.inspection.update(

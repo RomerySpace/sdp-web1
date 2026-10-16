@@ -1,5 +1,7 @@
 import { sharedAudioContext } from './AudioContextHub';
 import { rampGain } from './GainEnvelope';
+import { Vector3, type Camera } from 'three';
+import { lobbyAmbience } from '../core/LobbyAmbience';
 import { musicPosition, validMusicTracks, type MusicTrack } from '../../shared/MusicTimeline';
 import type { LobbySnapshot } from '../../shared/MultiplayerProtocol';
 const MUTE_KEY = 'sdp:muted';
@@ -11,6 +13,11 @@ export class AudioManager {
   private context?: AudioContext;
   private gain?: GainNode;
   private source?: MediaElementAudioSourceNode;
+  private panner?: PannerNode;
+  private ambience?: GainNode;
+  private readonly forward = new Vector3();
+  private readonly up = new Vector3();
+  private environmentGain = 0;
   private tracks: MusicTrack[] = [];
   private current = '';
   private started = false;
@@ -44,7 +51,12 @@ export class AudioManager {
     if (!this.started) {
       this.started = true; this.context = sharedAudioContext();
       this.source = this.context.createMediaElementSource(this.media); this.gain = this.context.createGain();
-      this.source.connect(this.gain); this.gain.connect(this.context.destination); this.updateGain();
+      this.panner = this.context.createPanner();
+      this.panner.panningModel = 'HRTF'; this.panner.rolloffFactor = 0;
+      this.panner.positionY.value = lobbyAmbience.music.height;
+      this.ambience = this.context.createGain(); this.ambience.gain.value = this.environmentGain;
+      this.source.connect(this.gain); this.gain.connect(this.panner);
+      this.panner.connect(this.ambience); this.ambience.connect(this.context.destination); this.updateGain();
     }
     void this.context?.resume().catch(() => {}); this.sync();
   }
@@ -67,7 +79,31 @@ export class AudioManager {
   toggleMute(): boolean { this.setMuted(!this.muted); try { localStorage.setItem(MUTE_KEY, String(this.muted)); } catch {} return this.muted; }
   setMuted(muted: boolean): void { this.muted = muted; this.updateGain(); }
   setVolume(volume: number): void { this.volume = Math.max(0, Math.min(1, volume)); this.updateGain(); }
+  updateEnvironment(camera: Camera, active: boolean, reveal: number): void {
+    this.label.hidden = !active || this.media.paused || this.media.readyState < HTMLMediaElement.HAVE_FUTURE_DATA;
+    const settings = lobbyAmbience.music;
+    const distance = Math.hypot(camera.position.x, camera.position.z);
+    const t = Math.max(0, Math.min(1, (distance - settings.fullRadius) / (settings.fadeRadius - settings.fullRadius)));
+    this.environmentGain = active ? reveal * (1 - (1 - settings.distantGain) * t * t * (3 - 2 * t)) : 0;
+    const context = this.context;
+    if (!context || !this.ambience) return;
+    this.ambience.gain.setTargetAtTime(this.environmentGain, context.currentTime, settings.smoothing);
+    if (!active) return;
+    this.forward.set(0, 0, -1).applyQuaternion(camera.quaternion);
+    this.up.set(0, 1, 0).applyQuaternion(camera.quaternion);
+    const listener = context.listener;
+    if (listener.positionX) {
+      for (const [parameter, value] of [
+        [listener.positionX, camera.position.x], [listener.positionY, camera.position.y], [listener.positionZ, camera.position.z],
+        [listener.forwardX, this.forward.x], [listener.forwardY, this.forward.y], [listener.forwardZ, this.forward.z],
+        [listener.upX, this.up.x], [listener.upY, this.up.y], [listener.upZ, this.up.z],
+      ] as const) parameter.setTargetAtTime(value, context.currentTime, .06);
+    } else {
+      listener.setPosition(camera.position.x, camera.position.y, camera.position.z);
+      listener.setOrientation(this.forward.x, this.forward.y, this.forward.z, this.up.x, this.up.y, this.up.z);
+    }
+  }
   private updateGain(): void { if (this.gain && this.context) rampGain(this.gain.gain, this.muted ? 0 : this.volume * .6, this.context.currentTime, .1); }
   setVisible(visible: boolean): void { if (!visible) this.media.pause(); else { void this.context?.resume().catch(() => {}); this.sync(); } }
-  dispose(): void { this.abort.abort(); window.clearInterval(this.timer); this.media.pause(); this.media.removeAttribute('src'); this.media.load(); this.source?.disconnect(); this.gain?.disconnect(); this.label.remove(); }
+  dispose(): void { this.abort.abort(); window.clearInterval(this.timer); this.media.pause(); this.media.removeAttribute('src'); this.media.load(); this.source?.disconnect(); this.panner?.disconnect(); this.ambience?.disconnect(); this.gain?.disconnect(); this.label.remove(); }
 }

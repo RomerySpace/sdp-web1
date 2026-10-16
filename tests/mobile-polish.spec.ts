@@ -160,6 +160,8 @@ test('mobile music mixer really silences and restores a supplied stream without 
     const samples=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(samples);return Math.max(...samples.map(Math.abs));
   });
   await page.goto('/?debugMode=limbo');await enterExhibition(page,'Music Volume Test');await expect.poll(level).toBeGreaterThan(.0001);
+  const title = (await page.locator('.now-playing').boundingBox())!, tools = (await page.locator('.touch-tools').boundingBox())!;
+  expect(title.x + title.width).toBeLessThan(tools.x - 8);
   await page.getByRole('button',{name:'Open game menu',exact:true}).tap();
   await touchVolume(page,false,'Music volume');await expect.poll(level).toBeLessThan(.00001);
   await touchVolume(page,true,'Music volume');await expect.poll(level).toBeGreaterThan(.0001);

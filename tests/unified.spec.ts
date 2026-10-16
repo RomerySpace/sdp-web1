@@ -12,11 +12,13 @@ import type { SceneManager } from '../src/scene/SceneManager';
 import type { FirstPersonController } from '../src/player/FirstPersonController';
 import type { LiveKitVoiceTransport } from '../src/audio/LiveKitVoiceTransport';
 import type { ShooterMode } from '../src/modes/shooter/ShooterMode';
+import type { AudioManager } from '../src/audio/AudioManager';
 declare global { interface Window {
-  sdpUnified: { modes: GameModeManager; network: ColyseusNetworkAdapter; scene: SceneManager; player: FirstPersonController; voiceTransport: LiveKitVoiceTransport };
+  sdpUnified: { modes: GameModeManager; network: ColyseusNetworkAdapter; scene: SceneManager; player: FirstPersonController; voiceTransport: LiveKitVoiceTransport; audio: AudioManager };
   retiredShooter?: ShooterMode;
   audioContexts: number;
   createdAudioContexts: AudioContext[];
+  ambientMeter?: AnalyserNode;
   shooterMotionSamples: { time: number; x: number; y: number; z: number }[];
 } }
 const shooterRequest = (url: string): boolean => /\/shooter\/|\/modes\/shooter\/|ShooterMode-|shooter-physics-|rapier3d/.test(url);
@@ -97,15 +99,15 @@ for (const mobile of [false, true]) {
         column.material.onBeforeCompile = (shader, webgl) => { compile(shader, webgl); sharedHorizon = shader.uniforms.atmosphereHorizon === window.sdpUnified.scene.atmosphere.horizon; };
         column.material.customProgramCacheKey = () => `${cacheKey}-upper-test`;column.material.needsUpdate = true;renderer.render(scene, camera);
         return {
-          floor: floor.material.color.getHexString(), grass: grass.map(field => (field.material as MeshStandardMaterial).color.getHexString()), shaders,
+          floor: floor.material.color.r, grass: grass.map(field => (field.material as MeshStandardMaterial).color.getHexString()), shaders,
           base: { visible: base.visible, color: base.material.color.getHexString(), bottom: base.geometry.boundingBox!.min.y + base.position.y, top: base.geometry.boundingBox!.max.y + base.position.y },
           sharedHorizon,
           upperFinish: column.material.color.getHexString(), matchingFinish: column.material.roughness === base.material.roughness,
           lowerCloud: !!scene.getObjectByName('Nebula / lower monolith'),
         };
       });
-      expect(palette.floor).toBe('ffffff'); expect(palette.grass).toEqual(['ffffff', 'ffffff']);
-      expect(palette.base.visible).toBe(true); expect(palette.base.color).toBe(palette.floor);
+      expect(palette.floor).toBeCloseTo(.95); expect(palette.grass).toEqual(['ffffff', 'ffffff']);
+      expect(palette.base.visible).toBe(true); expect(palette.base.color).toBe('ffffff');
       expect(palette.base.bottom).toBeLessThan(0); expect(palette.base.top).toBeCloseTo(1.2, 5);
       expect(palette.sharedHorizon).toBe(true); expect(palette.lowerCloud).toBe(false);
       expect(palette.upperFinish).toBe(palette.base.color);expect(palette.matchingFinish).toBe(true);
@@ -133,9 +135,62 @@ for (const mobile of [false, true]) {
       expect(foreground).toBeGreaterThan(170); expect(horizon).toBeLessThan(100);
       expect(foreground - horizon).toBeGreaterThan(60);
       expect(requests.filter(shooterRequest)).toEqual([]); expect(errors).toEqual([]);
+      const zenith = await page.evaluate(() => {
+        const { scene, renderer, camera } = window.sdpUnified.scene;
+        window.sdpUnified.player.setEnabled(false);
+        camera.position.set(0, 1.7, 24); camera.lookAt(0, 38, 0); camera.updateMatrixWorld();
+        const tower = scene.getObjectByName('Nebula / infinite upper monolith')!;
+        const gl = renderer.getContext();
+        const sample = (height: number) => {
+          const projected = camera.position.clone().set(0, height, 0).project(camera), pixel = new Uint8Array(4);
+          gl.readPixels(Math.floor((projected.x + 1) * .5 * gl.drawingBufferWidth), Math.floor((projected.y + 1) * .5 * gl.drawingBufferHeight), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+          return [...pixel];
+        };
+        renderer.render(scene, camera); const high = sample(80), middle = sample(20);
+        tower.visible = false; renderer.render(scene, camera); const backgroundHigh = sample(80), backgroundMiddle = sample(20);
+        tower.visible = true; renderer.render(scene, camera);
+        return { high: high.reduce((sum, value, i) => sum + Math.abs(value - backgroundHigh[i]), 0), middle: middle.reduce((sum, value, i) => sum + Math.abs(value - backgroundMiddle[i]), 0) };
+      });
+      expect(zenith.high).toBeLessThanOrEqual(3); expect(zenith.middle).toBeGreaterThan(3);
+      await page.screenshot({ path: info.outputPath('monolith-zenith.png') });
     } finally { await context.close(); }
   });
 }
+test('actual MP3 waits for entry, plays from above, attenuates with distance and fades out in Shooter', async ({ page }) => {
+  const requests: string[] = []; page.on('request', request => requests.push(request.url()));
+  await page.goto('/?debugMode=limbo');
+  await expect(page.locator('.ui')).toHaveAttribute('data-sculpture', 'loaded');
+  expect(requests.filter(url => url.endsWith('.mp3'))).toEqual([]);
+  await enterExhibition(page, 'Ambient Audio');
+  await expect(page.locator('.now-playing')).toBeVisible();
+  expect(requests.some(url => url.includes('/audio/music/steve-hauschildt-time-we-have.mp3'))).toBe(true);
+  expect(requests.filter(shooterRequest)).toEqual([]);
+  const playback = await page.evaluate(() => {
+    const audio = window.sdpUnified.audio as unknown as { media: HTMLAudioElement; panner: PannerNode; ambience: GainNode; context: AudioContext };
+    const analyser = audio.context.createAnalyser(); audio.ambience.connect(analyser);
+    Object.assign(window, { ambientMeter: analyser });
+    window.sdpUnified.player.setEnabled(false); window.sdpUnified.scene.camera.position.set(0, 1.7, 2.7);
+    return { duration: audio.media.duration, paused: audio.media.paused, height: audio.panner.positionY.value, spatial: audio.panner.panningModel };
+  });
+  expect(playback.duration).toBeCloseTo(353.28, 1); expect(playback.paused).toBe(false);
+  expect(playback.height).toBe(14); expect(playback.spatial).toBe('HRTF');
+  const ambientGain = () => page.evaluate(() => (window.sdpUnified.audio as unknown as { ambience: GainNode }).ambience.gain.value);
+  await expect.poll(ambientGain).toBeGreaterThan(.98);
+  await expect.poll(() => page.evaluate(() => {
+    const analyser = window.ambientMeter!;
+    const samples = new Float32Array(analyser.fftSize); analyser.getFloatTimeDomainData(samples);
+    return Math.max(...samples.map(Math.abs));
+  })).toBeGreaterThan(.0001);
+  await page.evaluate(() => window.sdpUnified.scene.camera.position.set(0, 1.7, 50));
+  await expect.poll(ambientGain).toBeLessThan(.23); expect(await ambientGain()).toBeGreaterThan(.20);
+  await page.evaluate(() => { window.sdpUnified.scene.camera.position.set(0, 1.7, 2.7); window.sdpUnified.player.setEnabled(true); });
+  await openProtocol(page); expect(requests.filter(shooterRequest)).toEqual([]);
+  await enterShooter(page); await expect.poll(ambientGain).toBeLessThan(.001);
+  await page.keyboard.press('Escape'); await page.getByRole('button', { name: 'RETURN TO LIMBO' }).click();
+  await expect(page.locator('#app')).toHaveAttribute('data-mode', 'LIMBO');
+  await expect.poll(ambientGain).toBeGreaterThan(.2);
+});
+
 test('organic monolith has a flared, buried foot, smooth normals and the original collision footprint', () => {
   const geometry = createMonolithGeometry();
   try {
@@ -667,7 +722,17 @@ test('Limbo text and real WebRTC media work; voice disconnects in Shooter and re
       const data = await window.sdpUnified.voiceTransport.diagnostics();
       return data.remote.reduce((total, remote) => total + (remote.stats?.bytesReceived || 0), 0);
     })).toBeGreaterThan(100);
+    await expect.poll(() => second.evaluate(() => Math.max(0, ...window.sdpUnified.voiceTransport.voiceLevels.values()))).toBeGreaterThan(.05);
+    await expect.poll(() => second.evaluate(() => {
+      const visitors = window.sdpUnified.scene.remotePlayers.group.children;
+      return Math.max(0, ...visitors.map(visitor => ((visitor.children[0] as Mesh).material as MeshStandardMaterial).opacity));
+    })).toBeGreaterThan(.70);
     await first.keyboard.up('KeyV'); await expect.poll(() => first.evaluate(() => window.sdpUnified.voiceTransport.transmitting)).toBe(false);
+    await expect.poll(() => second.evaluate(() => Math.max(0, ...window.sdpUnified.voiceTransport.voiceLevels.values()))).toBe(0);
+    await expect.poll(() => second.evaluate(() => {
+      const visitors = window.sdpUnified.scene.remotePlayers.group.children;
+      return Math.max(0, ...visitors.map(visitor => ((visitor.children[0] as Mesh).material as MeshStandardMaterial).opacity));
+    })).toBeLessThan(.685);
     await openProtocol(first); await enterShooter(first);
     expect(await first.evaluate(() => window.sdpUnified.voiceTransport.state)).toBe('disconnected');
     await expect.poll(() => first.evaluate(() => window.createdAudioContexts.filter(context => context.state !== 'closed').length)).toBe(1);

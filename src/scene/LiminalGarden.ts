@@ -1,6 +1,7 @@
 import { BufferGeometry, DoubleSide, Float32BufferAttribute, InstancedMesh, Mesh, MeshStandardMaterial, Object3D, Vector2, type Vector3, type Material, type Scene } from 'three';
 import { createUpperMonolithGeometry, monolithFinish } from './MonolithGeometry';
 import type { Atmosphere } from './Atmosphere';
+import { lobbyAmbience } from '../core/LobbyAmbience';
 
 /** Instanced tapered blades and a satin column; no external assets. */
 export class LiminalGarden {
@@ -11,6 +12,16 @@ export class LiminalGarden {
   constructor(scene: Scene, atmosphere: Atmosphere) {
     // The weapon floats between 1.33 and 2.28m. Leave the entire aperture clear.
     const finish = new MeshStandardMaterial(monolithFinish); atmosphere.apply(finish);
+    finish.transparent = true; finish.depthWrite = false;
+    const columnAtmosphere = finish.onBeforeCompile.bind(finish);
+    finish.onBeforeCompile = (shader, renderer) => {
+      columnAtmosphere(shader, renderer);
+      shader.fragmentShader = shader.fragmentShader.replace('#include <dithering_fragment>', `
+        #include <dithering_fragment>
+        gl_FragColor.a *= 1.0 - smoothstep(${lobbyAmbience.monolith.fadeStart.toFixed(1)}, ${lobbyAmbience.monolith.fadeEnd.toFixed(1)}, vAtmospherePosition.y);
+      `);
+    };
+    finish.customProgramCacheKey = () => 'sdp-monolith-zenith-v1';
     const tower = new Mesh(createUpperMonolithGeometry(), finish); tower.position.y = 2.85;
     tower.receiveShadow = true;
     tower.name = 'Nebula / infinite upper monolith';

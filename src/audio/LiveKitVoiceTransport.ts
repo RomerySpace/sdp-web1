@@ -5,11 +5,13 @@ import type { LobbySnapshot } from '../../shared/MultiplayerProtocol';
 import type { SpatialVoiceTransport } from './VoiceChatManager';
 import { proximityGain, voiceSettings } from './SpatialVoiceSettings';
 import { sharedAudioContext } from './AudioContextHub';
+import { lobbyAmbience } from '../core/LobbyAmbience';
 
 export type VoiceConnectionState = 'disconnected' | 'connecting' | 'connected' | 'unavailable';
-interface RemoteVoice { track: RemoteAudioTrack; element: HTMLMediaElement; panner: PannerNode; gain: GainNode }
+interface RemoteVoice { track: RemoteAudioTrack; element: HTMLMediaElement; panner: PannerNode; gain: GainNode; analyser: AnalyserNode; samples: Float32Array<ArrayBuffer> }
 
 export class LiveKitVoiceTransport implements SpatialVoiceTransport {
+  readonly voiceLevels = new Map<string, number>();
   private context?: AudioContext;
   private room?: Room;
   private roomId = '';
@@ -178,13 +180,14 @@ export class LiveKitVoiceTransport implements SpatialVoiceTransport {
     panner.panningModel = 'HRTF'; panner.distanceModel = 'linear'; panner.rolloffFactor = 0;
     panner.refDistance = voiceSettings.fullDistance; panner.maxDistance = voiceSettings.maxDistance;
     const gain = this.context.createGain(); gain.gain.value = 0;
+    const analyser = this.context.createAnalyser(); analyser.fftSize = 512;
     track.setAudioContext(this.context);
-    track.setWebAudioPlugins([panner, gain]);
+    track.setWebAudioPlugins([analyser, panner, gain]);
     const element = track.attach();
     element.hidden = true;
     element.dataset.voiceParticipant = identity;
     document.body.append(element);
-    this.remotes.set(identity, { track, element, panner, gain });
+    this.remotes.set(identity, { track, element, panner, gain, analyser, samples: new Float32Array(analyser.fftSize) });
   }
 
   private removeRemote(identity: string): void {
@@ -192,7 +195,8 @@ export class LiveKitVoiceTransport implements SpatialVoiceTransport {
     if (!remote) return;
     remote.gain.gain.value = 0;
     remote.track.detach(remote.element);
-    remote.panner.disconnect(); remote.gain.disconnect(); remote.element.remove();
+    remote.panner.disconnect(); remote.gain.disconnect(); remote.analyser.disconnect(); remote.element.remove();
+    this.voiceLevels.delete(identity);
     this.remotes.delete(identity);
   }
 
@@ -214,6 +218,12 @@ export class LiveKitVoiceTransport implements SpatialVoiceTransport {
       listener.setOrientation(this.forward.x, this.forward.y, this.forward.z, this.up.x, this.up.y, this.up.z);
     }
     for (const [identity, remote] of this.remotes) {
+      remote.analyser.getFloatTimeDomainData(remote.samples);
+      let energy = 0;
+      for (const sample of remote.samples) energy += sample * sample;
+      const level = Math.sqrt(energy / remote.samples.length);
+      this.voiceLevels.set(identity, remote.track.isMuted ? 0 : Math.max(0, Math.min(1,
+        (level - lobbyAmbience.voice.noiseFloor) / (lobbyAmbience.voice.fullLevel - lobbyAmbience.voice.noiseFloor))));
       const player = this.snapshot.players.find((player) => player.playerId === identity && player.connected);
       if (!player) { remote.gain.gain.value = 0; continue; }
       remote.panner.positionX.setTargetAtTime(player.x, now, voiceSettings.smoothing);

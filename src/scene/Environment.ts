@@ -4,6 +4,7 @@ import {
 } from 'three';
 import type { Atmosphere } from './Atmosphere';
 import { createMonolithGeometry, monolithFinish } from './MonolithGeometry';
+import { lobbyAmbience } from '../core/LobbyAmbience';
 
 export class Environment {
   private readonly meshes: Mesh[] = [];
@@ -11,6 +12,7 @@ export class Environment {
 
   constructor(scene: Scene, atmosphere: Atmosphere) {
     const floorMaterial = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.94, metalness: 0 });
+    floorMaterial.color.multiplyScalar(lobbyAmbience.floorReflectance);
     atmosphere.apply(floorMaterial);
     const floor = new Mesh(new PlaneGeometry(2000, 2000), floorMaterial);
     floor.rotation.x = -Math.PI / 2;
