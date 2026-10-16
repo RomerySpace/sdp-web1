@@ -1,4 +1,4 @@
-import { BoxGeometry, Group, Mesh, MeshStandardMaterial, MathUtils, type Scene } from 'three';
+import { BoxGeometry, Group, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, MathUtils, type Scene } from 'three';
 import { AvatarLayout } from '../../../../shared/AvatarLayout';
 import type { LobbySnapshot, NetworkPlayer } from '../../../../shared/MultiplayerProtocol';
 import type { WeaponEvent } from '../../../../shared/ShooterProtocol';
@@ -14,7 +14,7 @@ export class RemoteShooterPlayers {
   private readonly remotes = new Map<string, Remote>();
   private readonly figureGeometry = new FigureGeometry();
   private readonly flashGeometry = new BoxGeometry(.04, .04, .08);
-  private readonly material = new MeshStandardMaterial(anonymousFinish);
+  private readonly material = new MeshPhysicalMaterial(anonymousFinish);
   private readonly flashMaterial = new MeshStandardMaterial({ color: '#fff5df', emissive: '#fff5df', emissiveIntensity: 2 });
   readonly clock = new SnapshotClock();
   private lastTime = 0; private lastTick = -1;

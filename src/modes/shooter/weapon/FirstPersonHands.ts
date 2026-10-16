@@ -1,11 +1,11 @@
-import { Group, MathUtils, Mesh, MeshStandardMaterial, Vector3 } from 'three';
+import { Group, MathUtils, Mesh, MeshPhysicalMaterial, Vector3 } from 'three';
 import { anonymousFinish, FigureGeometry } from '../player/AnonymousFigure';
 
 /** Viewmodel-only hands inherit the weapon springs, ADS, recoil and holstering. */
 export class FirstPersonHands {
   readonly group = new Group();
   private readonly geometry = new FigureGeometry();
-  private readonly material = new MeshStandardMaterial({ ...anonymousFinish, fog: false });
+  private readonly material = new MeshPhysicalMaterial({ ...anonymousFinish, fog: false });
   private readonly hands: Mesh[];
   private readonly wrists: Mesh[];
   private readonly forearms: Mesh[];

@@ -1,16 +1,24 @@
-import { Bone, BufferGeometry, CapsuleGeometry, Float32BufferAttribute, Group, LatheGeometry, Mesh, MeshStandardMaterial, Quaternion, Skeleton, SkinnedMesh, SphereGeometry, Uint16BufferAttribute, Vector2, Vector3 } from 'three';
+import { Bone, BufferGeometry, CapsuleGeometry, CatmullRomCurve3, Float32BufferAttribute, Group, LatheGeometry, Mesh, MeshStandardMaterial, Quaternion, Skeleton, SkinnedMesh, SphereGeometry, Uint16BufferAttribute, Vector2, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { AvatarLayout } from '../../../../shared/AvatarLayout';
 
 const up = new Vector3(0, 1, 0);
-export const anonymousFinish = { color: 0xf4f6f7, roughness: .76, metalness: .02, envMapIntensity: .45 };
+export const anonymousFinish = { color: 0xf4f6f7, roughness: .98, metalness: 0, envMapIntensity: .24, specularIntensity: .08, ior: 1.35, clearcoat: 0 };
+
+/** Sample the silhouette as a curve so lighting never reveals the control rings. */
+function smoothLathe(profile: [number, number][], sides: number, rings: number): LatheGeometry {
+  const curve = new CatmullRomCurve3(profile.map(([radius, height]) => new Vector3(radius, height, 0)), false, 'centripetal');
+  const minHeight = profile[0][1], maxHeight = profile.at(-1)![1];
+  const points = curve.getPoints(rings).map(point => new Vector2(Math.max(0, point.x), Math.max(minHeight, Math.min(maxHeight, point.y))));
+  return new LatheGeometry(points, sides);
+}
 
 function handGeometry(left: boolean): BufferGeometry {
   const parts: BufferGeometry[] = [];
-  const palm = new SphereGeometry(1, 12, 8); palm.scale(.036, .049, .026); parts.push(palm);
+  const palm = new SphereGeometry(1, 20, 14); palm.scale(.036, .049, .026); parts.push(palm);
   const link = (a: Vector3, b: Vector3, radius: number) => {
     const direction = b.clone().sub(a), length = direction.length();
-    const segment = new CapsuleGeometry(radius, Math.max(.001, length - radius * 2), 3, 6);
+    const segment = new CapsuleGeometry(radius, Math.max(.001, length - radius * 2), 4, 10);
     segment.applyQuaternion(new Quaternion().setFromUnitVectors(up, direction.normalize()));
     segment.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2); parts.push(segment);
   };
@@ -30,7 +38,7 @@ function softLimbGeometry(arm: boolean): BufferGeometry {
   const profile: [number, number][] = arm
     ? [[0, 0], [.065, .035], [.084, .15], [.076, .33], [.063, .5], [.066, .65], [.054, .83], [.034, .97], [0, 1]]
     : [[0, 0], [.085, .025], [.105, .16], [.1, .32], [.078, .5], [.077, .65], [.071, .8], [.048, .97], [0, 1]];
-  const geometry = new LatheGeometry(profile.map(([radius, height]) => new Vector2(radius, height)), 14);
+  const geometry = smoothLathe(profile, 20, 32);
   const positions = geometry.getAttribute('position'), indices: number[] = [], weights: number[] = [];
   for (let i = 0; i < positions.count; i++) {
     const t = Math.max(0, Math.min(1, (positions.getY(i) - .35) / .3));
@@ -67,20 +75,20 @@ class SoftLimb {
 
 /** Shared smooth geometry; every remote figure reuses these buffers. */
 export class FigureGeometry {
-  readonly joint = new SphereGeometry(1, 12, 8);
-  readonly head = new LatheGeometry([
-    new Vector2(0, -.19), new Vector2(.065, -.18), new Vector2(.12, -.14), new Vector2(.158, -.065),
-    new Vector2(.17, .035), new Vector2(.153, .13), new Vector2(.10, .185), new Vector2(0, .205),
-  ], 24);
-  readonly torso = new LatheGeometry([
-    new Vector2(0, -.44), new Vector2(.13, -.43), new Vector2(.17, -.36), new Vector2(.19, -.23),
-    new Vector2(.245, -.06), new Vector2(.267, .13), new Vector2(.25, .24), new Vector2(.18, .32),
-    new Vector2(.085, .37), new Vector2(.075, .43), new Vector2(0, .44),
-  ], 20);
-  readonly limb = new LatheGeometry([
-    new Vector2(0, -.5), new Vector2(.65, -.48), new Vector2(.86, -.39), new Vector2(1, -.17),
-    new Vector2(.96, .16), new Vector2(.78, .38), new Vector2(.56, .48), new Vector2(0, .5),
-  ], 12);
+  readonly joint = new SphereGeometry(1, 20, 14);
+  readonly head = smoothLathe([
+    [0, -.19], [.065, -.18], [.12, -.14], [.158, -.065],
+    [.17, .035], [.153, .13], [.10, .185], [0, .205],
+  ], 32, 40);
+  readonly torso = smoothLathe([
+    [0, -.44], [.13, -.43], [.17, -.36], [.19, -.23],
+    [.245, -.06], [.267, .13], [.25, .24], [.18, .32],
+    [.085, .37], [.075, .43], [0, .44],
+  ], 28, 40);
+  readonly limb = smoothLathe([
+    [0, -.5], [.65, -.48], [.86, -.39], [1, -.17],
+    [.96, .16], [.78, .38], [.56, .48], [0, .5],
+  ], 20, 32);
   readonly rightHand = handGeometry(false);
   readonly leftHand = handGeometry(true);
   readonly legSkin = softLimbGeometry(false);
