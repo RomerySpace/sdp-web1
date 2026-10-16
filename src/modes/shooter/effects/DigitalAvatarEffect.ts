@@ -27,6 +27,8 @@ export class DigitalAvatarEffect {
           vec3 cell = floor(position * 18.0);
           float drift = sin(dot(cell, vec3(7.1, 13.7, 3.4)) + digitalTime * 3.0);
           transformed.xz += vec2(drift, -drift * .3) * (1.0 - digitalCoherence) * .06;
+        `)
+        .replace('#include <project_vertex>', `#include <project_vertex>
           digitalPosition = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
       shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>
         varying vec3 digitalPosition; uniform float digitalCoherence; uniform float digitalTime;`)

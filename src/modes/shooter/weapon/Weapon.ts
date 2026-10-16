@@ -7,6 +7,7 @@ import type { InputManager } from '../player/InputManager';
 import { assetBuffer } from '../../../assets/AssetCache';
 import { gameplayConfig } from '../../../../shared/GameplayConfig';
 import { shotRecoil } from '../../../../shared/WeaponRecoil';
+import { FirstPersonHands } from './FirstPersonHands';
 
 export class Weapon {
   readonly root = new Group();
@@ -14,6 +15,7 @@ export class Weapon {
   readonly rotationPivot = new Group();
   readonly recoilPivot = new Group();
   readonly modelRoot = new Group();
+  readonly hands = new FirstPersonHands();
   readonly axes = new AxesHelper(0.25);
   readonly springs = { x: new Spring(), y: new Spring(), z: new Spring(), pitch: new Spring(), yaw: new Spring(), roll: new Spring(), recoil: new Spring() };
   readonly material = new MeshPhysicalMaterial({ color: '#b9b7ad', metalness: 0.72, roughness: 0.28, clearcoat: 0.15 });
@@ -34,10 +36,11 @@ export class Weapon {
   private sprintAmount = 0;
   private crouchAmount = 0;
   private obstructionAmount = 0;
+  private aspect = 1;
   private model?: Group;
   constructor() {
     this.root.add(this.positionPivot); this.positionPivot.add(this.rotationPivot);
-    this.rotationPivot.add(this.recoilPivot); this.recoilPivot.add(this.modelRoot);
+    this.rotationPivot.add(this.recoilPivot); this.recoilPivot.add(this.modelRoot, this.hands.group);
     this.axes.visible = false; this.rotationPivot.add(this.axes);
   }
   async load(): Promise<void> {
@@ -82,6 +85,7 @@ export class Weapon {
     this.springs.pitch.kick(Math.min(speed, 9) * 0.07);
   }
   onJump(): void { this.springs.y.kick(-0.16); }
+  setAspect(aspect: number): void { this.aspect = MathUtils.clamp(aspect, .3, 1); }
   setHolster(amount: number, lowering: number, tilt: number): void {
     const blend = MathUtils.clamp(amount, 0, 1);
     this.root.position.set(0, -lowering * blend, 0);
@@ -111,6 +115,7 @@ export class Weapon {
     this.obstructionAmount = MathUtils.damp(this.obstructionAmount, this.obstruction, 18, dt);
     const sprint = this.sprintAmount;
     const target = new Vector3().copy(w.position).lerp(w.sprintPosition, sprint).lerp(w.adsPosition, this.ads);
+    target.x *= this.aspect;
     const speed = Math.hypot(player.velocity.x, player.velocity.z);
     this.phase += speed * dt * 2.8;
     const walking = Math.min(1.5, speed / gameConfig.player.walkSpeed) * (player.grounded ? 1 : 0);
@@ -121,6 +126,7 @@ export class Weapon {
     const mouseX = MathUtils.clamp(input.lookX / Math.max(dt, 0.008), -5, 5);
     const mouseY = MathUtils.clamp(input.lookY / Math.max(dt, 0.008), -5, 5);
     const reloadT = this.reloading ? MathUtils.clamp(this.reloadElapsed / w.reloadDuration, 0, 1) : 0;
+    this.hands.update(reloadT);
     const envelope = Math.pow(Math.sin(reloadT * Math.PI), 0.8);
     const manipulation = Math.sin(reloadT * Math.PI * 3) * envelope;
     this.obstruction = MathUtils.clamp(this.obstruction, 0, 1);
@@ -145,5 +151,6 @@ export class Weapon {
   dispose(): void {
     this.model?.traverse(o => { if (o instanceof Mesh) o.geometry.dispose(); });
     this.material.dispose(); this.axes.dispose(); this.root.removeFromParent();
+    this.hands.dispose();
   }
 }

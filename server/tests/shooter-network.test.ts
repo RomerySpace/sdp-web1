@@ -52,8 +52,8 @@ test('remote muzzle follows look direction independently of the source model pos
     const direction = new Vector3(0, 0, 1).transformDirection(model.matrixWorld);
     const expected = new Vector3(-Math.sin(.8) * Math.cos(.5), Math.sin(.5), -Math.cos(.8) * Math.cos(.5));
     assert.ok(direction.dot(expected) > .99999);
-    const arm = avatar.getObjectByName('remote-right-arm')!;
-    const hand = new Vector3(0, .35, 0).applyMatrix4(arm.matrix);
+    const handMesh = avatar.getObjectByName('remote-right-hand')!;
+    const hand = handMesh.position.clone();
     const grip = new Vector3(0, -.08, .12).applyEuler(mount.rotation).add(mount.position);
     assert.ok(hand.distanceTo(grip) < .00001);
     const standing = mount.position.y;
@@ -62,7 +62,7 @@ test('remote muzzle follows look direction independently of the source model pos
     for (let now = 1150; now <= 1600; now += 16) remotes.update(now);
     assert.ok(standing - mount.position.y > .5);
     remotes.group.updateMatrixWorld(true);
-    const crouchedHand = new Vector3(0, .35, 0).applyMatrix4(arm.matrix);
+    const crouchedHand = handMesh.position.clone();
     const crouchedGrip = new Vector3(0, -.08, .12).applyEuler(mount.rotation).add(mount.position);
     assert.ok(crouchedHand.distanceTo(crouchedGrip) < .00001);
   } finally { remotes.dispose(); }

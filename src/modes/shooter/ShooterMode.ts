@@ -277,7 +277,8 @@ export class ShooterMode {
   }
   resize(): void {
     if (this.active) { this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, gameConfig.rendering.maxPixelRatio)); this.renderer.setSize(window.innerWidth, window.innerHeight); }
-    this.camera.camera.aspect = window.innerWidth / window.innerHeight; this.camera.camera.updateProjectionMatrix(); this.contactShading.resize(this.renderer);
+    this.camera.camera.aspect = window.innerWidth / window.innerHeight; this.weapon.setAspect(this.camera.camera.aspect);
+    this.camera.camera.updateProjectionMatrix(); this.contactShading.resize(this.renderer);
   }
   get snapshot() { return { media: this.media.placements, lighting: this.network.snapshot?.match?.lighting, paused: this.paused, physicsSteps: this.fixedSteps, position: this.player?.current.toArray(),
     grounded: this.player?.grounded, movement: this.player?.state, colliders: this.colliderCount, map: this.map.stats,

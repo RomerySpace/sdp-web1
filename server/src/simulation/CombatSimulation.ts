@@ -5,7 +5,8 @@ import { Quaternion, Vector3 } from 'three';
 import { AvatarLayout } from '../../../shared/AvatarLayout';
 import type { HitRegion } from '../../../shared/ShooterProtocol';
 import type { ShooterWorld } from './ShooterWorld';
-export interface CombatPose { id: string; life: number; x: number; y: number; z: number; height: number;
+import type { AvatarGait } from '../../../shared/AvatarAnimation';
+export interface CombatPose extends Partial<AvatarGait> { id: string; life: number; x: number; y: number; z: number; height: number;
   dead: boolean; connected: boolean; protectedUntil: number; time: number; yaw?: number; pitch?: number; reload?: number; lean?: number }
 export interface PlayerHit { playerId: string; region: HitRegion; distance: number }
 const layout = new AvatarLayout(), center = new Vector3(), rotation = new Quaternion(), yawRotation = new Quaternion(), axis = new Vector3(0, 1, 0);
@@ -17,7 +18,8 @@ export function hitboxDistance(pose: CombatPose, ray: RAPIER.Ray, range: number)
 export function regionalHit(pose: CombatPose, ray: RAPIER.Ray, range: number): PlayerHit | null {
   const broad = new RAPIER.Ball(1.5).castRay(ray, { x: pose.x, y: pose.y + pose.height / 2, z: pose.z }, identityRotation, range, true);
   if (broad < 0 || broad > range) return null;
-  layout.update(pose.height, pose.pitch ?? 0, pose.reload ?? 0, pose.lean ?? 0);
+  layout.update(pose.height, pose.pitch ?? 0, pose.reload ?? 0, pose.lean ?? 0,
+    { gaitPhase: pose.gaitPhase ?? 0, gaitX: pose.gaitX ?? 0, gaitZ: pose.gaitZ ?? 0 });
   yawRotation.setFromAxisAngle(axis, pose.yaw ?? 0);
   let nearest = range, hit: PlayerHit | null = null;
   for (const part of layout.parts) {
@@ -56,6 +58,9 @@ export class CombatSimulation {
           yaw: (before.yaw ?? 0) + Math.atan2(Math.sin((after.yaw ?? 0) - (before.yaw ?? 0)), Math.cos((after.yaw ?? 0) - (before.yaw ?? 0))) * t,
           pitch: (before.pitch ?? 0) + ((after.pitch ?? 0) - (before.pitch ?? 0)) * t,
           lean: (before.lean ?? 0) + ((after.lean ?? 0) - (before.lean ?? 0)) * t,
+          gaitPhase: (before.gaitPhase ?? 0) + ((after.gaitPhase ?? 0) - (before.gaitPhase ?? 0)) * t,
+          gaitX: (before.gaitX ?? 0) + ((after.gaitX ?? 0) - (before.gaitX ?? 0)) * t,
+          gaitZ: (before.gaitZ ?? 0) + ((after.gaitZ ?? 0) - (before.gaitZ ?? 0)) * t,
           reload: (before.reload ?? 0) + ((after.reload ?? 0) - (before.reload ?? 0)) * t };
       }
       before = after;

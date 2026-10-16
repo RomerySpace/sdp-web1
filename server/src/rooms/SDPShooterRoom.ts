@@ -15,6 +15,7 @@ import { HealthRecovery } from '../simulation/HealthRecovery';
 import { ShooterMatch } from '../simulation/ShooterMatch';
 import { roomDisplayName, validateDisplayName } from '../../../shared/PlayerIdentity';
 import { shotRecoil } from '../../../shared/WeaponRecoil';
+import { advanceGait } from '../../../shared/AvatarAnimation';
 interface Entry { input: ShooterInput; received: number; slot: number; lastAction: number; lastShot: number; reloadUntil: number;
   probe: string; probeAt: number; rtt: number; recovery: HealthRecovery; burstShots: number; awardedStrikes: number; strikeSequence: number; lastStrike: number }
 export class SDPShooterRoom extends Room<{ state: ShooterState }> {
@@ -189,6 +190,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     for (const [id, entry] of this.entries) {
       const player = this.state.players.get(id)!, body = this.world.player(id)!;
       if (player.dead) continue;
+      advanceGait(player, body.current.x - player.x, body.current.z - player.z, entry.input.y, body.grounded, 1 / SHOOTER_HZ);
       player.x = body.current.x; player.y = body.current.y - body.height / 2; player.z = body.current.z;
       player.yaw = entry.input.y; player.pitch = entry.input.p; player.height = body.height; player.lean = body.lean;
       player.crouching = body.crouching; player.sprinting = body.sprinting; player.grounded = body.grounded;
@@ -246,6 +248,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     const entry = this.entries.get(id)!;
     const reload = p.reloading ? Math.sin(Math.max(0, 1 - (entry.reloadUntil - time) / (gameConfig.weapon.reloadDuration * 1000)) * Math.PI) : 0;
     return { id, time, life: p.life, x: p.x, y: p.y, z: p.z, height: p.height, yaw: p.yaw, pitch: p.pitch, lean: p.lean, reload,
+      gaitPhase: p.gaitPhase, gaitX: p.gaitX, gaitZ: p.gaitZ,
       dead: p.dead, connected: p.connected, protectedUntil: p.protectedUntil };
   }
   private poses(time: number): CombatPose[] { return [...this.state.players.keys()].map(id => this.pose(id, time)); }
@@ -294,7 +297,8 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
       protectedUntil: now + gameplayConfig.combat.spawnProtection * 1000,
       health: gameplayConfig.combat.maxHealth, lastDamageAt: now, ammo: gameConfig.weapon.magazineSize, reserve: gameConfig.weapon.reserveAmmo,
       strikes: 0,
-      reloading: false, crouching: false, sprinting: false, grounded: false, height: gameConfig.player.height, lean: 0 });
+      reloading: false, crouching: false, sprinting: false, grounded: false, height: gameConfig.player.height, lean: 0,
+      gaitPhase: 0, gaitX: 0, gaitZ: 0 });
     entry.input = { ...entry.input, life: p.life, f: 0, r: 0, s: false, c: false, j: false, a: false, active: false, y: p.yaw, p: 0 };
     entry.received = now; entry.lastShot = -1000; entry.reloadUntil = 0; entry.burstShots = 0; entry.awardedStrikes = 0; entry.recovery.interrupt();
     this.broadcast('combat:event', { type: 'respawn', playerId: id, health: p.health, life: p.life, roomId: this.roomId, timestamp: now });

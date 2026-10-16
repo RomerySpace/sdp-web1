@@ -19,6 +19,7 @@ declare global { interface Window {
   audioContexts: number;
   createdAudioContexts: AudioContext[];
   ambientMeter?: AnalyserNode;
+  avatarReconstructions?: { life: number; coherence: number }[];
   shooterMotionSamples: { time: number; x: number; y: number; z: number }[];
 } }
 const shooterRequest = (url: string): boolean => /\/shooter\/|\/modes\/shooter\/|ShooterMode-|shooter-physics-|rapier3d/.test(url);
@@ -391,6 +392,52 @@ test('B toggles authoritative automatic fire; holding fires a rising burst, rele
   await page.mouse.down(); await page.waitForTimeout(500); await page.mouse.up();
   expect(await page.evaluate(() => window.sdpUnified.modes.shooter!.shooting!.shotsFired)).toBe(before + 1);
 });
+test('two clients see white articulated walking/running figures and POV hands stay with ADS and reload', async ({ browser }, info) => {
+  const a = await browser.newContext(), b = await browser.newContext(), first = await a.newPage(), second = await b.newPage();
+  const errors: string[] = []; for (const page of [first, second]) page.on('pageerror', e => errors.push(e.message));
+  try {
+    await enterLimbo(first); await openProtocol(first); await enterShooter(first);
+    await enterLimbo(second); await openProtocol(second); await enterShooter(second);
+    await expect.poll(() => second.evaluate(() => window.sdpUnified.modes.shooter!.remotes.count)).toBe(1);
+    await first.bringToFront(); if (await first.getByRole('button', { name: 'RESUME', exact: true }).isVisible()) await first.getByRole('button', { name: 'RESUME', exact: true }).click();
+    await first.evaluate(() => { const game = window.sdpUnified.modes.shooter!; game.input.yaw = Math.PI; game.input.pitch = 0; });
+    const phase = () => second.evaluate(() => window.sdpUnified.modes.shooter!.remotes.group.children[0].userData.gaitPhase as number);
+    const kneeBefore = await second.evaluate(() => window.sdpUnified.modes.shooter!.remotes.group.children[0].getObjectByName('remote-left-shin')!.position.z);
+    await first.keyboard.down('KeyW');
+    await expect.poll(phase).toBeGreaterThan(.2);
+    await expect.poll(() => second.evaluate(before => Math.abs(window.sdpUnified.modes.shooter!.remotes.group.children[0].getObjectByName('remote-left-shin')!.position.z - before), kneeBefore)).toBeGreaterThan(.01);
+    const walk = await phase(); await first.keyboard.down('ShiftLeft');
+    await expect.poll(() => second.evaluate(() => window.sdpUnified.modes.shooter!.remotes.group.children[0].userData.sprinting)).toBe(true);
+    await expect.poll(phase).toBeGreaterThan(walk + .5);
+    await first.keyboard.up('KeyW'); await first.keyboard.up('ShiftLeft');
+    await expect.poll(() => second.evaluate(() => window.sdpUnified.modes.shooter!.remotes.group.children[0].userData.stride as number)).toBeLessThan(.01);
+    const figure = await second.evaluate(() => {
+      const remote = window.sdpUnified.modes.shooter!.remotes.group.children[0];
+      const head = remote.getObjectByName('anonymous-head') as Mesh<PlaneGeometry, MeshStandardMaterial>;
+      return { color: head.material.color.getHexString(), hand: !!remote.getObjectByName('remote-right-hand'), shin: !!remote.getObjectByName('remote-left-shin'),
+        skinned: Boolean((remote.getObjectByName('remote-left-leg') as Mesh & { isSkinnedMesh?: boolean }).isSkinnedMesh) };
+    });
+    expect(figure).toEqual({ color: 'f4f6f7', hand: true, shin: true, skinned: true });
+    const hands = await first.evaluate(() => {
+      const weapon = window.sdpUnified.modes.shooter!.weapon;
+      return { parent: weapon.hands.group.parent === weapon.recoilPivot, count: weapon.hands.group.children.filter(o => o.name.startsWith('pov-')).length,
+        layers: weapon.hands.group.children.every(o => o.layers.mask === 2) };
+    });
+    expect(hands).toEqual({ parent: true, count: 2, layers: true });
+    await first.screenshot({ path: info.outputPath('white-pov-hands.png') });
+    await first.mouse.down({ button: 'right' }); await expect.poll(() => first.evaluate(() => window.sdpUnified.modes.shooter!.weapon.ads)).toBeGreaterThan(.95);
+    await first.screenshot({ path: info.outputPath('white-hands-ads.png') }); await first.mouse.up({ button: 'right' });
+    await first.evaluate(() => { window.sdpUnified.modes.shooter!.input.pitch = 1.1; });
+    await first.mouse.click(720, 500); await expect.poll(() => first.evaluate(() => window.sdpUnified.modes.shooter!.weapon.ammo)).toBe(29);
+    const rest = await first.evaluate(() => window.sdpUnified.modes.shooter!.weapon.hands.group.getObjectByName('pov-left-hand')!.position.y);
+    await first.keyboard.press('KeyR');
+    await expect.poll(() => first.evaluate(() => window.sdpUnified.modes.shooter!.weapon.hands.group.getObjectByName('pov-left-hand')!.position.y)).toBeLessThan(rest - .04);
+    await expect.poll(() => first.evaluate(() => window.sdpUnified.modes.shooter!.weapon.reloading)).toBe(false);
+    await expect.poll(() => first.evaluate(() => window.sdpUnified.modes.shooter!.weapon.hands.group.getObjectByName('pov-left-hand')!.position.y)).toBeCloseTo(rest, 3);
+    expect(errors).toEqual([]);
+  } finally { await a.close(); await b.close(); }
+});
+
 test('two actual browsers: authoritative hits, crouch, digital death and server respawn', async ({ browser }, info) => {
   const a = await browser.newContext(), b = await browser.newContext(), first = await a.newPage(), second = await b.newPage();
   const errors: string[] = [];
@@ -403,6 +450,17 @@ test('two actual browsers: authoritative hits, crouch, digital death and server 
     await enterLimbo(first); await openProtocol(first); await enterShooter(first);
     await enterLimbo(second); await openProtocol(second); await enterShooter(second);
     await expect.poll(() => first.evaluate(() => window.sdpUnified.modes.shooter!.remotes.count)).toBe(1);
+    await first.evaluate(() => {
+      const samples = window.avatarReconstructions = [] as { life: number; coherence: number }[];
+      const capture = () => {
+        const remote = window.sdpUnified.modes.shooter?.remotes.group.children[0];
+        if (remote && samples.length < 1024) {
+          const { life, coherence } = remote.userData, last = samples.at(-1);
+          if (!last || last.life !== life || Math.abs(last.coherence - coherence) > .01) samples.push({ life, coherence });
+        }
+        requestAnimationFrame(capture);
+      }; capture();
+    });
     await second.keyboard.down('ControlLeft');
     await expect.poll(async () => (await targetState()).height).toBeLessThan(1.3);
     await expect.poll(() => first.evaluate(() => window.sdpUnified.modes.shooter!.remotes.group.children[0].userData.height)).toBeLessThan(1.3);
@@ -449,7 +507,7 @@ test('two actual browsers: authoritative hits, crouch, digital death and server 
     expect(revived.protectedUntil!).toBeGreaterThan(revived.bornAt!);
     expect(Math.hypot(revived.x - dead.x, revived.z - dead.z)).toBeGreaterThan(3);
     await expect.poll(() => first.evaluate(() => window.sdpUnified.modes.shooter!.remotes.group.children[0].userData.life)).toBe(revived.life);
-    expect(await first.evaluate(() => window.sdpUnified.modes.shooter!.remotes.group.children[0].userData.coherence)).toBeLessThan(1);
+    expect(await first.evaluate(life => window.avatarReconstructions?.some(sample => sample.life === life && sample.coherence < 1), revived.life)).toBe(true);
     await expect.poll(() => second.evaluate(() => window.sdpUnified.modes.shooter!.dead)).toBe(false);
     await expect(second.locator('.desynchronization-state')).toBeHidden();
     expect(await second.evaluate(() => Math.abs(window.sdpUnified.modes.shooter!.weapon.springs.recoil.velocity))).toBeLessThan(.001);

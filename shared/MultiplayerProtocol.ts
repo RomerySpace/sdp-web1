@@ -36,6 +36,9 @@ export interface NetworkPlayer {
   grounded?: boolean;
   height?: number;
   lean?: number;
+  gaitPhase?: number;
+  gaitX?: number;
+  gaitZ?: number;
   ammo?: number;
   reserve?: number;
   reloading?: boolean;

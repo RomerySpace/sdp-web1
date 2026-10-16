@@ -1,4 +1,4 @@
-import { BoxGeometry, CapsuleGeometry, SphereGeometry, Group, Mesh, MeshStandardMaterial, MathUtils, type Scene } from 'three';
+import { BoxGeometry, Group, Mesh, MeshStandardMaterial, MathUtils, type Scene } from 'three';
 import { AvatarLayout } from '../../../../shared/AvatarLayout';
 import type { LobbySnapshot, NetworkPlayer } from '../../../../shared/MultiplayerProtocol';
 import type { WeaponEvent } from '../../../../shared/ShooterProtocol';
@@ -6,17 +6,15 @@ import { gameplayConfig } from '../../../../shared/GameplayConfig';
 import { gameConfig } from '../config/gameConfig';
 import { DigitalAvatarEffect } from '../effects/DigitalAvatarEffect';
 import { MotionBuffer, SnapshotClock } from './SnapshotInterpolation';
-interface Remote { group: Group; torso: Mesh; head: Mesh; legs: Mesh[]; arms: Mesh[]; weapon: Group; effect: DigitalAvatarEffect;
+import { AnonymousFigure, FigureGeometry, anonymousFinish } from '../player/AnonymousFigure';
+interface Remote { group: Group; figure: AnonymousFigure; weapon: Group; effect: DigitalAvatarEffect;
   reloadStarted: number; reloading: boolean; flash: Mesh; flashUntil: number; state: NetworkPlayer; motion: MotionBuffer; height: number; layout: AvatarLayout }
 export class RemoteShooterPlayers {
   readonly group = new Group();
   private readonly remotes = new Map<string, Remote>();
-  private readonly torso = new CapsuleGeometry(.25, .38, 4, 8);
-  private readonly head = new SphereGeometry(.19, 10, 8);
-  private readonly limb = new CapsuleGeometry(.09, .52, 4, 6);
-  private readonly foot = new BoxGeometry(.16, .1, .24);
+  private readonly figureGeometry = new FigureGeometry();
   private readonly flashGeometry = new BoxGeometry(.04, .04, .08);
-  private readonly material = new MeshStandardMaterial({ color: '#7d8c92', roughness: .8 });
+  private readonly material = new MeshStandardMaterial(anonymousFinish);
   private readonly flashMaterial = new MeshStandardMaterial({ color: '#fff5df', emissive: '#fff5df', emissiveIntensity: 2 });
   readonly clock = new SnapshotClock();
   private lastTime = 0; private lastTick = -1;
@@ -34,11 +32,7 @@ export class RemoteShooterPlayers {
       present.add(p.playerId); let remote = this.remotes.get(p.playerId);
       if (!remote) {
         const group = new Group(), effect = new DigitalAvatarEffect(group), material = effect.material(this.material);
-        const torso = new Mesh(this.torso, material), head = new Mesh(this.head, material);
-        const legs = [new Mesh(this.limb, material), new Mesh(this.limb, material)], arms = [new Mesh(this.limb, material), new Mesh(this.limb, material)];
-        arms[0].name = 'remote-left-arm'; arms[1].name = 'remote-right-arm';
-        group.add(torso, head, ...legs, ...arms);
-        for (const x of [-.14, .14]) { const foot = new Mesh(this.foot, material); foot.position.set(x, .05, -.04); group.add(foot); }
+        const figure = new AnonymousFigure(this.figureGeometry, material); group.add(figure.group);
         // Aim rotates the mount; the model's muzzle conversion stays on its child.
         const gun = new Group(), model = this.weapon.clone(true), rotation = gameConfig.weapon.modelRotation;
         gun.name = 'remote-weapon-mount'; model.name = 'remote-weapon-model';
@@ -56,7 +50,7 @@ export class RemoteShooterPlayers {
         }); group.add(gun);
         const flash = new Mesh(this.flashGeometry, this.flashMaterial); flash.position.set(0, 0, -gameConfig.weapon.length / 2); flash.visible = false; gun.add(flash);
         group.position.set(p.x, p.y, p.z); group.rotation.y = p.yaw;
-        remote = { group, torso, head, legs, arms, weapon: gun, effect, reloadStarted: 0, reloading: false, flash, flashUntil: 0, motion: new MotionBuffer(), height: p.height ?? 1.8, state: p, layout: new AvatarLayout() };
+        remote = { group, figure, weapon: gun, effect, reloadStarted: 0, reloading: false, flash, flashUntil: 0, motion: new MotionBuffer(), height: p.height ?? 1.8, state: p, layout: new AvatarLayout() };
         this.remotes.set(p.playerId, remote); this.group.add(group);
       }
       if (p.life !== remote.state.life) { remote.motion.clear(); remote.group.position.set(p.x, p.y, p.z); }
@@ -64,7 +58,8 @@ export class RemoteShooterPlayers {
       remote.state = p;
       if (p.reloading && !remote.reloading) remote.reloadStarted = performance.now();
       remote.reloading = !!p.reloading;
-      remote.motion.push({ time: serverTime, x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch, height: p.height ?? 1.8, lean: p.lean ?? 0 });
+      remote.motion.push({ time: serverTime, x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch, height: p.height ?? 1.8, lean: p.lean ?? 0,
+        gaitPhase: p.gaitPhase ?? 0, gaitX: p.gaitX ?? 0, gaitZ: p.gaitZ ?? 0 });
     }
     for (const [id, remote] of this.remotes) if (!present.has(id)) { this.remove(remote); this.remotes.delete(id); }
   }
@@ -84,29 +79,24 @@ export class RemoteShooterPlayers {
       remote.group.rotation.y = pose.yaw;
       remote.height = MathUtils.damp(remote.height, pose.height, 22, dt);
       const reload = remote.reloading ? Math.sin(Math.min(1, (now - remote.reloadStarted) / (gameConfig.weapon.reloadDuration * 1000)) * Math.PI) : 0;
-      const layout = remote.layout; layout.update(remote.height, pose.pitch, reload, pose.lean ?? 0);
-      remote.head.position.copy(layout.head.center);
-      remote.torso.quaternion.copy(layout.torso.rotation); remote.torso.position.copy(layout.torso.center); remote.torso.scale.y = layout.torso.height / .88;
-      for (let i = 0; i < 2; i++) {
-        const leg = remote.legs[i], arm = remote.arms[i];
-        leg.position.copy(layout.legs[i].center); leg.quaternion.copy(layout.legs[i].rotation); leg.scale.y = layout.legs[i].height / .7;
-        arm.position.copy(layout.arms[i].center); arm.quaternion.copy(layout.arms[i].rotation); arm.scale.y = layout.arms[i].height / .7;
-      }
+      const layout = remote.layout; layout.update(remote.height, pose.pitch, reload, pose.lean ?? 0,
+        { gaitPhase: pose.gaitPhase ?? 0, gaitX: pose.gaitX ?? 0, gaitZ: pose.gaitZ ?? 0 });
+      remote.figure.update(layout, pose.pitch);
       remote.weapon.position.copy(layout.weaponPosition); remote.weapon.rotation.copy(layout.weaponRotation);
-      remote.head.rotation.x = pose.pitch;
       remote.flash.visible = !remote.state.dead && now < remote.flashUntil;
       const death = MathUtils.clamp((serverTime - (remote.state.diedAt ?? serverTime)) / (gameplayConfig.death.duration * 1000), 0, 1);
       const reconstruction = MathUtils.clamp((serverTime - (remote.state.bornAt ?? 0)) / (gameplayConfig.death.reconstructionDuration * 1000), 0, 1);
       remote.group.visible = !remote.state.dead || death < 1;
       const coherence = remote.state.dead ? 1 - Math.min(1, death * gameplayConfig.death.dissolutionSpeed) : reconstruction;
       remote.effect.update(now, coherence, remote.state.dead ? death : reconstruction, !remote.state.dead, remote.height);
-      Object.assign(remote.group.userData, { dead: !!remote.state.dead, crouching: !!remote.state.crouching, height: remote.height, coherence, life: remote.state.life });
+      Object.assign(remote.group.userData, { dead: !!remote.state.dead, crouching: !!remote.state.crouching, sprinting: !!remote.state.sprinting,
+        gaitPhase: pose.gaitPhase, stride: Math.hypot(pose.gaitX ?? 0, pose.gaitZ ?? 0), height: remote.height, coherence, life: remote.state.life });
     }
   }
-  private remove(remote: Remote): void { remote.effect.dispose(); remote.group.removeFromParent(); remote.group.clear(); }
+  private remove(remote: Remote): void { remote.effect.dispose(); remote.figure.dispose(); remote.group.removeFromParent(); remote.group.clear(); }
   dispose(): void {
     for (const remote of this.remotes.values()) this.remove(remote);
-    this.group.removeFromParent(); this.remotes.clear(); this.torso.dispose(); this.head.dispose(); this.limb.dispose(); this.foot.dispose();
+    this.group.removeFromParent(); this.remotes.clear(); this.figureGeometry.dispose();
     this.flashGeometry.dispose(); this.material.dispose(); this.flashMaterial.dispose();
   }
 }
