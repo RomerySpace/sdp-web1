@@ -2,7 +2,7 @@
 #app[data-input="touch"] .scene-canvas { touch-action: none; }
 #app[data-input="touch"] .ui { z-index: 40; }
 #app[data-input="touch"] .mode-diagnostics { display: none; }
-#app[data-input="touch"] .now-playing { left: max(18px, env(safe-area-inset-left)); right: auto; top: max(76px, calc(env(safe-area-inset-top) + 66px)); max-width: min(240px, calc(100% - 200px - env(safe-area-inset-left) - env(safe-area-inset-right))); text-align: left; }
+#app[data-input="touch"] .now-playing { right: max(18px, env(safe-area-inset-right)); bottom: max(18px, calc(env(safe-area-inset-bottom) + 12px)); max-width: min(240px, calc(100% - 36px)); }
 .touch-controls { position: fixed; inset: 0; z-index: 35; pointer-events: none; user-select: none; -webkit-user-select: none; }
 .touch-controls [hidden], .touch-controls[hidden] { display: none; }
 .touch-look { position: absolute; inset: 0 0 0 45%; pointer-events: auto; touch-action: none; }

@@ -148,7 +148,8 @@ kbd, .key-label { font: inherit; font-size: 9px; letter-spacing: 0.04em; }
 .ui[data-state="CHATTING"] .controls-overlay { visibility: hidden; opacity: 0; }
 .connection-indicator > span:first-child::before { width: 7px; height: 7px; }
 .connection-indicator[data-connection="connected"] > span:first-child::before { background: #20ed83; box-shadow: 0 0 0 3px #20ed8320, 0 0 10px #20ed8355; }
-.now-playing { position: fixed; right: var(--edge); top: calc(var(--edge) + 65px); z-index: 25; max-width: min(240px, 40vw); text-align: right; pointer-events: none; color: #e5ecef; text-shadow: 0 1px 9px #16212a; }
+.now-playing { position: fixed; right: var(--edge); bottom: var(--edge); z-index: 25; max-width: min(240px, 40vw); text-align: right; pointer-events: none; color: #e5ecef; text-shadow: 0 1px 9px #16212a; opacity: 0; visibility: hidden; transition: opacity 1.5s, visibility 1.5s; }
+.ui:is([data-state="EXPLORING"], [data-state="PAUSED"], [data-state="CHATTING"], [data-state="INSPECTING"]) .now-playing { opacity: 1; visibility: visible; }
 .now-playing span { display: block; font-size: 10px; line-height: 1.6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .now-playing .music-artist { opacity: .65; font-size: 9px; }
 @media(max-height: 650px) { .controls-overlay .control-row:not(.menu-row) { display: none; } .voice-status { margin-top: 6px; } }

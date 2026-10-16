@@ -44,3 +44,4 @@
 .inspection-actions { position: fixed; z-index: 55; bottom: max(30px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: flex; gap: 12px; max-width: calc(100% - 32px); }
 .inspection-actions .shooter-test-join, .auction-join { position: static; transform: none; white-space: nowrap; min-height: 44px; padding: 12px 18px; border: 1px solid #71818c55; border-radius: 3px; background: #edf2f444; color: #31414c; font-size: 10px; }
 .auction-join:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 700px) { .inspection-actions { bottom: max(90px, calc(env(safe-area-inset-bottom) + 70px)); } }

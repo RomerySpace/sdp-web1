@@ -63,7 +63,6 @@ export class App {
   private entering = false;
 
   constructor(container: HTMLElement) {
-    this.audio.attach(container);
     this.scene = new SceneManager(container);
     container.dataset.input = this.touch ? 'touch' : 'mouse';
     this.player = new FirstPersonController(this.scene.camera, this.scene.renderer.domElement, this.touch);
@@ -78,6 +77,7 @@ export class App {
       menu: () => this.openSettings(),
       closeChat: () => this.closeChat(),
     }, this.limited, this.network.displayName);
+    this.audio.attach(this.ui.element);
     this.settingsMenu = new SettingsMenu(container, this.settings, () => this.closeSettings());
     this.modes = new GameModeManager(container, this.scene.renderer, this.network, {
       pauseLimbo: () => { this.pause(); this.player.setEnabled(false); },
