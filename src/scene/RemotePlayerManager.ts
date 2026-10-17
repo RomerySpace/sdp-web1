@@ -1,10 +1,10 @@
-import { AdditiveBlending, BackSide, BoxGeometry, CapsuleGeometry, Group, Mesh, MeshStandardMaterial, ShaderMaterial, type Scene } from 'three';
+import { AdditiveBlending, BackSide, BoxGeometry, CapsuleGeometry, Group, Mesh, MeshStandardMaterial, Raycaster, ShaderMaterial, Sphere, Vector2, Vector3, type Camera, type Object3D, type Scene } from 'three';
 import type { LobbySnapshot } from '../../shared/MultiplayerProtocol';
 import type { Atmosphere } from './Atmosphere';
 import { lobbyAmbience } from '../core/LobbyAmbience';
 
 interface Sample { time: number; x: number; y: number; z: number; yaw: number; pitch: number; crouching: boolean }
-interface RemoteVisitor { group: Group; marker: Mesh; material: MeshStandardMaterial; halo: Mesh<CapsuleGeometry, ShaderMaterial>; level: number; samples: Sample[] }
+interface RemoteVisitor { group: Group; body: Mesh; name: string; marker: Mesh; material: MeshStandardMaterial; halo: Mesh<CapsuleGeometry, ShaderMaterial>; level: number; samples: Sample[] }
 const INTERPOLATION_DELAY_MS = 100;
 
 export class RemotePlayerManager {
@@ -12,6 +12,10 @@ export class RemotePlayerManager {
   private readonly visitors = new Map<string, RemoteVisitor>();
   private voiceLevels: ReadonlyMap<string, number> = new Map();
   private lastUpdate = 0;
+  private readonly raycaster = new Raycaster();
+  private readonly center = new Vector2();
+  private readonly head = new Sphere(new Vector3(), .28);
+  private readonly hit = new Vector3();
   private readonly body = new CapsuleGeometry(0.23, 1.1, 4, 8);
   private readonly markerGeometry = new BoxGeometry(0.07, 0.045, 0.1);
   private readonly material = new MeshStandardMaterial({
@@ -58,16 +62,33 @@ export class RemotePlayerManager {
         group.add(body, marker, halo);
         group.position.set(player.x, player.y - 1.7, player.z);
         group.rotation.y = player.yaw;
-        visitor = { group, marker, material, halo, level: 0, samples: [] };
+        visitor = { group, body, name: '', marker, material, halo, level: 0, samples: [] };
         this.visitors.set(player.playerId, visitor);
         this.group.add(group);
       }
+      visitor.name = player.displayName || 'VISITOR';
       visitor.samples.push({ time: snapshot.receivedAt, x: player.x, y: player.y, z: player.z, yaw: player.yaw, pitch: player.pitch, crouching: Boolean(player.crouching) });
       if (visitor.samples.length > 8) visitor.samples.shift();
     }
     for (const [id, visitor] of this.visitors) {
       if (!present.has(id)) { visitor.group.removeFromParent(); visitor.group.clear(); visitor.material.dispose(); visitor.halo.material.dispose(); this.visitors.delete(id); }
     }
+  }
+
+  focus(camera: Camera, occluders: Object3D[] = []): { id: string; name: string } | undefined {
+    if (!this.group.visible) return;
+    this.raycaster.setFromCamera(this.center, camera); this.raycaster.far = lobbyAmbience.identity.distance;
+    let nearest = this.raycaster.far, focused: { id: string; name: string } | undefined;
+    for (const [id, visitor] of this.visitors) {
+      const intersection = this.raycaster.intersectObject(visitor.body, false)[0];
+      let distance = intersection?.distance ?? Infinity;
+      this.head.center.set(0, 1.45, 0).applyMatrix4(visitor.group.matrixWorld);
+      this.head.radius = .28;
+      if (this.raycaster.ray.intersectSphere(this.head, this.hit)) distance = Math.min(distance, this.hit.distanceTo(this.raycaster.ray.origin));
+      if (distance < nearest) { nearest = distance; focused = { id, name: visitor.name }; }
+    }
+    if (focused && this.raycaster.intersectObjects(occluders, true).some(hit => hit.distance < nearest - .03)) return;
+    return focused;
   }
 
   update(now: number, reveal: number): void {

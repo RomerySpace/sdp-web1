@@ -1,5 +1,6 @@
 import {
-  FogExp2, Mesh, PlaneGeometry, Scene, ShaderMaterial, Vector3,
+  FogExp2, Matrix4, Mesh, PlaneGeometry, Scene, ShaderMaterial, Vector3,
+  type PerspectiveCamera,
   type MeshStandardMaterial,
 } from 'three';
 
@@ -20,31 +21,29 @@ export class Atmosphere {
       depthTest: false,
       depthWrite: false,
       vertexShader: `
-        varying vec2 vUv;
+        uniform mat4 skyInverseProjection;
+        uniform mat4 skyCameraWorld;
+        varying vec3 vWorldDirection;
         void main() {
-          vUv = uv;
+          vec4 direction = skyInverseProjection * vec4(position.xy, 1.0, 1.0);
+          vWorldDirection = mat3(skyCameraWorld) * direction.xyz;
           gl_Position = vec4(position.xy, 1.0, 1.0);
         }
       `,
       fragmentShader: `
-        uniform float atmosphereTime;
         uniform float atmosphereReveal;
         uniform vec3 atmosphereHorizon;
-        varying vec2 vUv;
+        varying vec3 vWorldDirection;
         void main() {
-          vec2 p = vUv - 0.5;
-          float drift = sin(p.x * 3.3 + atmosphereTime * 0.018)
-                      * sin(p.y * 4.2 - atmosphereTime * 0.012);
-          float veil = smoothstep(-0.35, 0.9, p.y + p.x * 0.16 + drift * 0.08);
-          vec3 ivory = vec3(0.38, 0.42, 0.46);
-          vec3 blue = vec3(0.20, 0.25, 0.31);
-          vec3 color = mix(ivory, blue, veil * (0.37 + atmosphereReveal * 0.13));
-          color += exp(-dot(p - vec2(-0.2, 0.12), p - vec2(-0.2, 0.12)) * 3.0) * 0.009;
-          color = mix(atmosphereHorizon, color, smoothstep(0.0, 0.35, abs(p.y)));
+          float elevation = normalize(vWorldDirection).y;
+          vec3 color = mix(atmosphereHorizon, vec3(.38, .42, .46), smoothstep(-.035, .68, elevation));
+          color = mix(color, vec3(.29, .34, .40), smoothstep(.62, 1.0, elevation) * .3);
           gl_FragColor = vec4(mix(vec3(1.0), color, atmosphereReveal), 1.0);
         }
       `,
     }));
+    this.backdrop.material.uniforms.skyInverseProjection = { value: new Matrix4() };
+    this.backdrop.material.uniforms.skyCameraWorld = { value: new Matrix4() };
     this.backdrop.frustumCulled = false;
     this.backdrop.renderOrder = -1000;
     scene.add(this.backdrop);
@@ -88,9 +87,14 @@ export class Atmosphere {
     material.customProgramCacheKey = () => 'sdp-atmosphere-v4';
   }
 
-  update(time: number, reveal: number): void {
+  update(time: number, reveal: number, camera?: PerspectiveCamera): void {
     this.uniforms.atmosphereTime.value = time;
     this.uniforms.atmosphereReveal.value = reveal;
+    if (camera) {
+      camera.updateMatrixWorld();
+      this.backdrop.material.uniforms.skyInverseProjection.value.copy(camera.projectionMatrixInverse);
+      this.backdrop.material.uniforms.skyCameraWorld.value.copy(camera.matrixWorld);
+    }
   }
 
   dispose(): void { this.backdrop.geometry.dispose(); this.backdrop.material.dispose(); }

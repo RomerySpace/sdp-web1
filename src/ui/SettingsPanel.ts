@@ -10,10 +10,12 @@ export class SettingsPanel {
   private readonly inputs = new Map<'sensitivity' | 'volume' | 'musicVolume', HTMLInputElement>();
   private readonly mute: HTMLButtonElement;
   private readonly fullscreen: HTMLButtonElement;
+  private readonly voiceModes: HTMLInputElement[] = [];
   constructor(settings: PlayerSettings, prefix: string) {
     this.element.className = 'session-settings'; this.element.setAttribute('aria-label', 'Experience settings');
     this.element.innerHTML = `<h2>SETTINGS</h2>`;
     const signal = this.events.signal;
+    const ranges = document.createElement('div'); ranges.className = 'settings-ranges';
     for (const [key, label] of [['sensitivity', usesTouchControls() ? 'Look sensitivity' : 'Mouse sensitivity'], ['volume', 'Game volume'], ['musicVolume', 'Music volume']] as const) {
       const id = `${prefix}-${key === 'musicVolume' ? 'music-volume' : key}`;
       const row = document.createElement('label'); row.htmlFor = id;
@@ -22,7 +24,21 @@ export class SettingsPanel {
       const input = document.createElement('input'); input.id = id; input.type = 'range'; input.setAttribute('aria-label', label);
       const limit = settingsLimits[key]; input.min = String(limit.min); input.max = String(limit.max); input.step = String(limit.step);
       input.addEventListener('input', () => settings.set(key, Number(input.value)), { signal });
-      this.inputs.set(key, input); this.element.append(row, input);
+      const control = document.createElement('div'); control.className = `setting-range setting-${key}`;
+      control.append(row, input); this.inputs.set(key, input); ranges.append(control);
+    }
+    this.element.append(ranges);
+    if (prefix === 'limbo') {
+      const field = document.createElement('fieldset'); field.className = 'voice-activation';
+      field.innerHTML = '<legend>MICROPHONE <span>V</span></legend>';
+      const choices = document.createElement('div'); choices.className = 'voice-choices';
+      for (const [value, text, accessible] of [['hold', 'HOLD', 'Hold to talk'], ['toggle', 'ON / OFF', 'Toggle microphone']] as const) {
+        const label = document.createElement('label'); const input = document.createElement('input');
+        input.type = 'radio'; input.name = `${prefix}-voice-mode`; input.value = value; input.setAttribute('aria-label', accessible);
+        input.addEventListener('change', () => { if (input.checked) settings.setVoiceMode(value); }, { signal });
+        const caption = document.createElement('span'); caption.textContent = text; label.append(input, caption); choices.append(label); this.voiceModes.push(input);
+      }
+      field.append(choices); this.element.append(field);
     }
     const tools = document.createElement('div'); tools.className = 'session-tools';
     this.mute = document.createElement('button'); this.mute.className = 'session-mute icon-button'; this.mute.type = 'button';
@@ -40,6 +56,7 @@ export class SettingsPanel {
     this.updateFullscreen(); this.unsubscribe = settings.subscribe(state => this.update(state));
   }
   private update(state: Readonly<SettingsState>): void {
+    for (const input of this.voiceModes) input.checked = input.value === state.voiceMode;
     for (const [key, input] of this.inputs) {
       input.value = String(state[key]);
       this.element.querySelector(`output[for="${input.id}"]`)!.textContent = key === 'sensitivity' ? `${state[key].toFixed(2)}x` : `${Math.round(state[key] * 100)}%`;

@@ -9,9 +9,10 @@ export class SettingsMenu {
   private readonly hudCheckbox: HTMLInputElement;
   constructor(container: HTMLElement, settings: PlayerSettings, close: () => void, private readonly hud: { hidden(): boolean; toggle(): void }) {
     this.element.className = 'settings-overlay'; this.element.hidden = true;
+    this.element.tabIndex = -1;
     this.element.setAttribute('role', 'dialog'); this.element.setAttribute('aria-modal', 'true');
     this.element.setAttribute('aria-label', 'Limbo settings');
-    this.element.innerHTML = `<div class="protocol-content"><span class="protocol-mark">SDP</span><div class="settings-slot"></div>
+    this.element.innerHTML = `<div class="protocol-content"><header class="settings-heading"><span class="protocol-mark">SDP</span><span>LIMBO / PREFERENCES</span></header><div class="settings-slot"></div>
       <button class="settings-close" type="button">RETURN <kbd>P</kbd></button></div>`;
     this.panel = new SettingsPanel(settings, 'limbo'); this.element.querySelector('.settings-slot')!.append(this.panel.element);
     const row = document.createElement('label'); row.className = 'hud-setting';
@@ -26,14 +27,20 @@ export class SettingsMenu {
     this.element.querySelector('.settings-close')!.addEventListener('click', close, { signal });
     this.element.addEventListener('keydown', event => {
       if (event.key !== 'Tab') return;
-      const controls = [...this.element.querySelectorAll<HTMLInputElement | HTMLButtonElement>('button,input')].filter(control => !control.disabled);
+      const controls = [...this.element.querySelectorAll<HTMLInputElement | HTMLButtonElement>('button,input')]
+        .filter(control => !control.disabled && (!(control instanceof HTMLInputElement) || control.type !== 'radio' || control.checked));
       const index = controls.indexOf(document.activeElement as HTMLInputElement);
-      event.preventDefault(); controls[(index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length]?.focus();
+      const next = index < 0 ? (event.shiftKey ? controls.length - 1 : 0) : (index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length;
+      event.preventDefault(); controls[next]?.focus();
     }, { signal });
     container.append(this.element);
   }
   get visible(): boolean { return !this.element.hidden; }
-  open(): void { this.hudCheckbox.checked = this.hud.hidden(); this.element.hidden = false; this.element.querySelector<HTMLButtonElement>('.settings-close')!.focus(); }
+  open(): void {
+    this.hudCheckbox.checked = this.hud.hidden(); this.element.hidden = false;
+    this.element.querySelector('.protocol-content')!.scrollTop = 0;
+    this.element.focus({ preventScroll: true });
+  }
   hide(): void {
     if (document.activeElement instanceof HTMLElement && this.element.contains(document.activeElement)) document.activeElement.blur();
     this.element.hidden = true;

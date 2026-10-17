@@ -35,11 +35,13 @@ export class AudioManager {
   constructor() {
     try { this.muted = localStorage.getItem(MUTE_KEY) === 'true'; } catch {}
     this.media.crossOrigin = 'anonymous'; this.media.preload = 'metadata'; this.media.preservesPitch = true;
+    this.media.playbackRate = 1;
     this.label.className = 'now-playing'; this.label.hidden = true; this.label.setAttribute('aria-label', 'Now playing');
     this.title.className = 'music-title'; this.artist.className = 'music-artist'; this.label.append(this.title, this.artist);
     const signal = this.abort.signal;
     this.media.addEventListener('loadedmetadata', () => this.sync(), { signal });
     this.media.addEventListener('playing', () => { this.label.hidden = false; }, { signal });
+    this.media.addEventListener('ended', () => { this.needsSeek = true; this.sync(); }, { signal });
     for (const event of ['error', 'waiting', 'pause']) this.media.addEventListener(event, () => { this.label.hidden = true; }, { signal });
     document.addEventListener('pointerdown', () => { if (this.started && this.media.paused) { void this.context?.resume(); this.sync(); } }, { signal });
     void fetch('/audio/playlist.json', { signal }).then(r => r.ok ? r.json() : []).then(raw => {
@@ -84,14 +86,9 @@ export class AudioManager {
       this.media.src = track.url; this.media.load();
     }
     if (this.media.readyState >= 1 && Number.isFinite(this.media.duration) && !this.media.seeking) {
-      const error = offset - this.media.currentTime, settings = lobbyAmbience.music;
-      if (this.needsSeek || Math.abs(error) > settings.hardSeekThreshold) {
+      if (this.needsSeek) {
         this.media.currentTime = Math.min(offset, Math.max(0, this.media.duration - .05));
         this.needsSeek = false; this.media.playbackRate = 1;
-      } else {
-        // Small clock/audio-route drift must not interrupt the stream with repeated seeks.
-        const correction = Math.abs(error) < settings.syncTolerance ? 0 : Math.max(-settings.maxRateCorrection, Math.min(settings.maxRateCorrection, error * .04));
-        this.media.playbackRate = 1 + correction;
       }
     }
     if (this.media.paused && !this.media.error) void this.media.play().catch(() => { this.label.hidden = true; });

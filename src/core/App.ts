@@ -108,6 +108,7 @@ export class App {
     this.unsubscribers.push(
       this.settings.subscribe(state => {
         this.player.sensitivity = state.sensitivity; this.audio.setVolume(state.musicVolume); this.audio.setMuted(state.muted);
+        this.voice.setMode(state.voiceMode); this.ui.controls.setVoiceMode(state.voiceMode); this.touchControls?.setVoiceMode(state.voiceMode);
       }),
       this.state.subscribe((state) => {
         this.player.setEnabled(this.modes.value === 'LIMBO' && state === 'EXPLORING' && !this.limited);
@@ -188,7 +189,7 @@ export class App {
     }, { signal });
     window.addEventListener('pointercancel', () => { this.hudTouch = this.lastHudTap = undefined; }, { signal });
     window.addEventListener('keydown', this.keydown, { signal });
-    window.addEventListener('keyup', (event) => { if (event.code === 'KeyV') this.voice.release(); }, { signal });
+    window.addEventListener('keyup', (event) => { if (event.code === 'KeyV') this.voice.deactivate(); }, { signal });
     window.addEventListener('blur', () => this.pause(), { signal });
     window.addEventListener('pagehide', (event) => {
       if (event.persisted) this.pause();
@@ -261,7 +262,7 @@ export class App {
     if (this.state.value === 'INSPECTING') {
       if (event.repeat) return;
       if (event.code === 'KeyE' || event.code === 'Escape') { event.preventDefault(); this.closeInspection(); }
-      else if (event.code === 'KeyV') { event.preventDefault(); this.voiceTransport.unlock(); void this.voice.press(); }
+      else if (event.code === 'KeyV') { event.preventDefault(); this.voiceTransport.unlock(); void this.voice.activate(); }
       else if (event.code === 'Enter') { event.preventDefault(); this.openChat(); }
       return;
     }
@@ -274,7 +275,7 @@ export class App {
       event.preventDefault();
       this.openChat();
     } else if (event.code === 'KeyV' && this.state.value === 'EXPLORING' && this.player.locked) {
-      event.preventDefault(); this.voiceTransport.unlock(); void this.voice.press();
+      event.preventDefault(); this.voiceTransport.unlock(); void this.voice.activate();
     }
   };
 
@@ -389,8 +390,8 @@ export class App {
   }
   private touchAction(action: TouchAction, active: boolean): void {
     if (action === 'voice') {
-      if (!active) { this.voice.release(); return; }
-      if (this.modes.value === 'LIMBO' && ['EXPLORING', 'INSPECTING'].includes(this.state.value)) { this.voiceTransport.unlock(); void this.voice.press(); }
+      if (!active) { this.voice.deactivate(); return; }
+      if (this.modes.value === 'LIMBO' && ['EXPLORING', 'INSPECTING'].includes(this.state.value)) { this.voiceTransport.unlock(); void this.voice.activate(); }
       return;
     }
     if (action === 'chat' && active) { this.openChat(); return; }
@@ -462,6 +463,8 @@ export class App {
         this.modes.setInspection(this.modes.value === 'LIMBO' && this.state.value === 'INSPECTING' && !this.settingsMenu.visible);
         if (this.modes.value === 'LIMBO') this.voiceTransport.update(this.scene.camera);
         this.scene.render(dt, this.elapsed, this.reveal, this.modes.value === 'LIMBO', this.state.value === 'CHATTING');
+        this.ui.focusVisitor(this.modes.value === 'LIMBO' && this.state.value === 'EXPLORING' && !this.settingsMenu.visible
+          ? this.scene.remotePlayers.focus(this.scene.camera, [this.scene.sculpture.root, ...this.scene.environment.occluders])?.name : undefined);
       }
     }
     if (this.diagnostics && dt > 0) {

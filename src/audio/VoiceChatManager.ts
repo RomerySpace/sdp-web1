@@ -1,3 +1,4 @@
+import type { VoiceMode } from '../core/PlayerSettings';
 export type VoiceState = 'idle' | 'requesting' | 'ready' | 'speaking' | 'denied' | 'unavailable';
 
 export interface SpatialVoiceTransport {
@@ -16,6 +17,14 @@ export class VoiceChatManager {
   private state: VoiceState = 'idle';
   private readonly listeners = new Set<(state: VoiceState) => void>();
   private permission?: PermissionStatus;
+  private mode: VoiceMode = 'hold';
+
+  setMode(mode: VoiceMode): void { if (mode !== this.mode) { this.release(); this.mode = mode; } }
+  async activate(): Promise<void> {
+    if (this.mode === 'toggle' && this.held) this.release();
+    else await this.press();
+  }
+  deactivate(): void { if (this.mode === 'hold') this.release(); }
 
   constructor(private readonly transport?: SpatialVoiceTransport) {
     void navigator.permissions?.query({ name: 'microphone' as PermissionName }).then((permission) => {

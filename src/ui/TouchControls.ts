@@ -2,6 +2,7 @@ import { createElement, Crosshair, Focus, ArrowUp, ChevronsUp, PersonStanding, R
 import type { VoiceState } from '../audio/VoiceChatManager';
 import type { VoiceConnectionState } from '../audio/LiveKitVoiceTransport';
 import { touchConfig } from '../input/InputCapabilities';
+import type { VoiceMode } from '../core/PlayerSettings';
 import '../styles/touch.css';
 
 export type TouchAction = 'fire' | 'aim' | 'jump' | 'crouch' | 'sprint' | 'reload' | 'mode' | 'flashlight' | 'voice' | 'chat' | 'menu';
@@ -103,7 +104,10 @@ export class TouchControls {
     const contact = this.contacts.get(id); if (!contact) return;
     this.contacts.delete(id);
     if (contact.kind === 'move') { this.actions.move(0, 0); this.thumb.style.transform = 'translate(0px, 0px)'; }
-    if (contact.action) { contact.element.setAttribute('aria-pressed', 'false'); this.actions.action(contact.action, false); }
+    if (contact.action) {
+      this.actions.action(contact.action, false);
+      contact.element.setAttribute('aria-pressed', String(contact.action === 'voice' && this.element.dataset.voice === 'speaking'));
+    }
     if (contact.element.hasPointerCapture(id)) contact.element.releasePointerCapture(id);
   }
   reset(): void {
@@ -123,8 +127,13 @@ export class TouchControls {
   }
   voice(state: VoiceState, connection: VoiceConnectionState): void {
     this.element.dataset.voice = state;
+    this.buttons.get('voice')!.setAttribute('aria-pressed', String(state === 'speaking'));
     const labels: Record<VoiceState, string> = { idle: 'MIC NOT AUTHORIZED', requesting: 'MIC REQUESTING', ready: 'MIC READY', speaking: 'TRANSMITTING', denied: 'MIC BLOCKED', unavailable: 'MIC UNAVAILABLE' };
     this.voiceNote.textContent = state === 'denied' || state === 'requesting' || state === 'speaking' ? labels[state] : `VOICE ${connection.toUpperCase()} / ${labels[state]}`;
+  }
+  setVoiceMode(mode: VoiceMode): void {
+    const button = this.buttons.get('voice')!, label = mode === 'hold' ? 'Hold to talk' : 'Toggle microphone';
+    button.setAttribute('aria-label', label); button.title = label;
   }
   dispose(): void { this.reset(); this.events.abort(); this.element.remove(); }
 }

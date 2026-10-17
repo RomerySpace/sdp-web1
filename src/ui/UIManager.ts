@@ -26,6 +26,7 @@ export class UIManager {
   private readonly notice: HTMLElement;
   private noticeTimer = 0;
   private hudHidden = false;
+  private readonly visitorName: HTMLElement;
   get isHudHidden(): boolean { return this.hudHidden; }
 
   constructor(container: HTMLElement, actions: UIActions, limited: boolean, savedName = '') {
@@ -42,10 +43,12 @@ export class UIManager {
         <span class="pause-hint">Cursor released · Take your time</span>
       </div>
       <p class="ui-notice" role="status"></p>
+      <p class="visitor-focus" hidden></p>
 
     `;
     this.pause = this.element.querySelector('.pause-prompt')!;
     this.notice = this.element.querySelector('.ui-notice')!;
+    this.visitorName = this.element.querySelector('.visitor-focus')!;
     this.connection = new ConnectionIndicator(this.element.querySelector('.top-controls')!);
     this.inspection = new InspectionControls(this.element, actions.inspect, actions.closeInspection);
     if (limited) { this.inspection.inspect.setAttribute('aria-label', 'Inspect sculpture'); this.inspection.inspect.querySelector('span')!.textContent = 'INSPECT'; }
@@ -66,6 +69,11 @@ export class UIManager {
     if (state === 'ENTERING') this.intro.hide();
     this.pause.hidden = state !== 'PAUSED';
     this.chat.setOpen(state === 'CHATTING');
+    if (state !== 'EXPLORING') this.focusVisitor();
+  }
+  focusVisitor(name?: string): void {
+    if (this.visitorName.textContent !== (name || '')) this.visitorName.textContent = name || '';
+    this.visitorName.hidden = !name;
   }
 
   notify(message: string): void {

@@ -1,6 +1,7 @@
 import type { VoiceState } from '../audio/VoiceChatManager';
 import type { VoiceConnectionState } from '../audio/LiveKitVoiceTransport';
 import { createElement, Settings2 } from 'lucide';
+import type { VoiceMode } from '../core/PlayerSettings';
 
 const voiceLabels: Record<VoiceState, string> = {
   idle: 'MIC NOT AUTHORIZED',
@@ -28,7 +29,7 @@ export class ControlsOverlay {
       <div class="control-row"><kbd class="wide-key">SHIFT</kbd><span>Sprint</span></div>
       <div class="control-row"><kbd class="wide-key">SPACE / CTRL</kbd><span>Jump / Crouch</span></div>
       <div class="control-row"><kbd class="wide-key">ENTER</kbd><span>Chat</span></div>
-      <div class="control-row"><span class="wide-key key-label">HOLD V</span><span>Voice</span><span class="mic-dot" aria-hidden="true"></span></div>
+      <div class="control-row"><span class="wide-key key-label voice-key">HOLD V</span><span>Voice</span><span class="mic-dot" aria-hidden="true"></span></div>
       <div class="control-row"><kbd class="wide-key">F</kbd><span>Fullscreen</span></div>
       <div class="control-row"><kbd class="wide-key">H</kbd><span>Ocultar HUD</span></div>
       <div class="control-row escape-row"><kbd class="wide-key">ESC</kbd><span>Release cursor</span></div>
@@ -52,6 +53,9 @@ export class ControlsOverlay {
     this.microphone = state;
     this.element.dataset.voice = state;
     this.updateVoiceLabel();
+  }
+  setVoiceMode(mode: VoiceMode): void {
+    const key = this.element.querySelector('.voice-key'); if (key) key.textContent = mode === 'hold' ? 'HOLD V' : 'V ON/OFF';
   }
 
   setVoiceConnection(state: VoiceConnectionState): void {

@@ -37,7 +37,7 @@ npm run preview
 | Mouse | Look around while pointer lock is active |
 | Enter | Open room chat; Enter again sends non-empty text |
 | Esc | Close chat, or release the cursor using browser behavior |
-| Hold V | Authorize microphone access and transmit proximity voice while held |
+| V | Microphone activation: HOLD or ON / OFF, selected in the Limbo P menu |
 | E near the pedestal, looking at the sculpture | Inspect directly; the discreet JOIN SHOOTER TEST button loads the simulation |
 | Hold SHIFT in Limbo | Sprint smoothly at the configured speed (currently 2.25x walking) |
 | P menu: HIDE HUD / H in Limbo | Hide or restore the entire lobby HUD, without floating icons; P always opens the menu (double-tap on touch devices while hidden) |
@@ -45,7 +45,7 @@ npm run preview
 | P | Open/close settings in Limbo, or the ranking/settings menu in Shooter |
 | F | Toggle fullscreen throughout the experience, except while typing |
 
-Press P to access settings without needing the cursor first. Fullscreen, mute, mouse sensitivity, game volume and music volume are inside the menu; there are no floating sound/fullscreen buttons. Preferences persist between modes and visits. Music volume controls the optional ambient track, currently absent, independently of Shooter effects. These controls do not mute proximity voice. Click the resume prompt to return to navigation after releasing the cursor with Esc. Chat disables movement, fullscreen and voice shortcuts. Microphone tracks stop and are unpublished on release, blur, pause, page exit and disposal; delayed permission results are discarded if V is no longer held. Voice is transmitted only to the corresponding LiveKit room, never recorded or played back to its sender. Spatial playback is full at 0-3m, smoothly attenuated at 3-15m, and silent beyond 15m; the listener follows the camera.
+Press P to access settings without needing the cursor first. Fullscreen, mute, sensitivity, game/music volume, microphone activation and Hide HUD are inside the menu. Preferences persist between modes and visits. Music volume controls the supplied playlist independently of Shooter effects; it does not mute proximity voice. Click the resume prompt after releasing the cursor with Esc. Chat disables movement, fullscreen and voice shortcuts. HOLD silences the microphone on release; ON/OFF silences it on the next press. Both modes also silence on blur/pause, and stop capture on room changes, hidden pages or disposal. Pending permissions never override a later mute. Voice stays in the corresponding LiveKit room and is never played back to its sender. Spatial playback is full at 0-3m, attenuated at 3-15m and silent beyond 15m; the listener follows the camera.
 
 Touch devices can explore both modes without pointer lock. The left analog joystick moves, the right side controls the camera, and the sprint button toggles running. Approach and face the sculpture to tap INTERACT; drag or pinch to inspect it, then tap X to return. Shooter adds a hold-to-fire button that also supports drag-to-look, toggle ADS/crouch, jump, reload and AUTO/SEMI switching. Separate fingers can move and fire/look simultaneously. Chat has send/close buttons; hold the microphone button for Limbo voice. The menu contains ranking, sensitivity, volumes and fullscreen where the browser supports it. Controls clear on pause, cancellation, orientation changes, death and respawn. Desktop controls remain unchanged; only non-touch browsers without pointer lock retain the limited viewing fallback. If WebGL 2 is unavailable, the page displays a readable fallback.
 
@@ -54,6 +54,12 @@ Touch controls use Pointer Events, safe-area insets and portrait/landscape layou
 On desktop, inspection opens directly after approaching within 3m and facing the sculpture (E / INTERACT). It renders a centered copy of the sculpture using Three.js OrbitControls and a separate camera, sharing geometry without moving the visitor or changing their multiplayer position. Walking is stopped, but push-to-talk remains available; Enter opens chat. E, Esc, the close button or focus loss leave inspection. The camera can zoom in to 1.12 times the model's bounding-sphere radius, staying outside the mesh, and out to 1.5 times its fitted distance. Pan is disabled and portrait viewports are reframed. Both sculptures keep rotating: the exhibition completes a turn in 54 seconds and inspection in 80 seconds. Soft key, fill and rim lighting reveal the matte-black details.
 
 ## Interaction And Atmosphere Refinements
+
+The Limbo preferences menu groups look sensitivity, independent game/music volumes, microphone HOLD / ON-OFF, fullscreen and Hide HUD. Microphone mode persists locally; selecting ON/OFF does not authorize or start the microphone by itself. V (or the touch mic button) starts/stops it. Chat, focus loss, pause, permission loss and room changes always silence it regardless of mode. The existing muted capture can remain prepared between transmissions to avoid audio-route interruptions.
+
+Music runs at the recording's original 1x rate. It aligns to the shared programme when entering/resuming or starting a track, without continuous clock-driven speed changes or mid-listening seeks. Small device-clock drift is tolerated instead of audibly correcting playback. The existing sky-positioned audio and hall reverb remain intact.
+
+The sky gradient is evaluated from world-space viewing direction, not viewport UVs, so its horizon no longer sticks to the camera. Visitor names appear only under the centre reticle within 6m, respect the sculpture/pedestal occlusion and disappear on look-away, disconnect or Hide HUD. Adjust this radius in `lobbyAmbience.identity.distance`.
 
 Chat freezes the current world framing, including ADS/FOV and sculpture inspection. The renderer ignores software-keyboard viewport reductions until chat closes and the viewport recovers. On phones this is covered by Chrome touch/viewport emulation, not physical-device certification.
 

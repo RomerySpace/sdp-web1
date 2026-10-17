@@ -1,7 +1,8 @@
-export interface SettingsState { sensitivity: number; volume: number; musicVolume: number; muted: boolean }
+export type VoiceMode = 'hold' | 'toggle';
+export interface SettingsState { sensitivity: number; volume: number; musicVolume: number; muted: boolean; voiceMode: VoiceMode }
 export const settingsLimits = { sensitivity: { min: .25, max: 2.5, step: .05 }, volume: { min: 0, max: 1, step: .05 }, musicVolume: { min: 0, max: 1, step: .05 } };
 export class PlayerSettings {
-  private current: SettingsState = { sensitivity: 1, volume: .5, musicVolume: .5, muted: false };
+  private current: SettingsState = { sensitivity: 1, volume: .5, musicVolume: .5, muted: false, voiceMode: 'hold' };
   private readonly listeners = new Set<(state: Readonly<SettingsState>) => void>();
   constructor() {
     try {
@@ -10,6 +11,7 @@ export class PlayerSettings {
         if (Number.isFinite(value)) this.current[key] = Math.max(limit.min, Math.min(limit.max, value));
       }
       this.current.muted = localStorage.getItem('sdp:muted') === 'true';
+      this.current.voiceMode = localStorage.getItem('sdp:voiceMode') === 'toggle' ? 'toggle' : 'hold';
     } catch { /* Preferences are optional in storage-restricted browsers. */ }
   }
   get value(): Readonly<SettingsState> { return this.current; }
@@ -18,6 +20,7 @@ export class PlayerSettings {
     const limit = settingsLimits[key]; this.change(key, Math.max(limit.min, Math.min(limit.max, value)));
   }
   toggleMute(): boolean { this.change('muted', !this.current.muted); return this.current.muted; }
+  setVoiceMode(mode: VoiceMode): void { if (mode === 'hold' || mode === 'toggle') this.change('voiceMode', mode); }
   private change<K extends keyof SettingsState>(key: K, value: SettingsState[K]): void {
     if (this.current[key] === value) return;
     this.current = { ...this.current, [key]: value };

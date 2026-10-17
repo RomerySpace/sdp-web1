@@ -7,6 +7,7 @@ import { createMonolithGeometry, monolithFinish } from './MonolithGeometry';
 import { lobbyAmbience } from '../core/LobbyAmbience';
 
 export class Environment {
+  readonly occluders: Mesh[] = [];
   private readonly meshes: Mesh[] = [];
   private readonly shadowTexture: CanvasTexture;
 
@@ -26,6 +27,7 @@ export class Environment {
     pedestal.castShadow = true;
     pedestal.receiveShadow = true;
     this.meshes.push(pedestal);
+    this.occluders.push(floor, pedestal);
 
     // A baked, feathered occlusion decal adds broad contact softness without
     // requiring a costly screen-space AO pass or extra architectural geometry.

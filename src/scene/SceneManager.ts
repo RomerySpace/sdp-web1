@@ -62,7 +62,7 @@ export class SceneManager {
   render(dt: number, time: number, reveal: number, limbo = true, chatting = false): void {
     this.garden.update(time, reveal, this.camera.position);
     this.sculpture.update(dt);
-    this.atmosphere.update(time, reveal);
+    this.atmosphere.update(time, reveal, this.camera);
     this.environment.update(reveal);
     this.graphics.update(dt, time, reveal);
     this.remotePlayers.update(performance.now(), reveal);
