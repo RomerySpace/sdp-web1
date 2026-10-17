@@ -113,7 +113,7 @@ export class App {
       },
       look: (dx, dy) => { if (this.modes.value === 'SHOOTER') this.modes.shooter?.input.touchLook(dx, dy); else this.player.touchLook(dx, dy); },
       action: (action, active) => this.touchAction(action, active),
-      reset: () => { this.player.input.clear(); this.modes.shooter?.input.clear(); this.voice.release(); },
+      reset: () => { this.player.input.clear(); this.modes.shooter?.input.clear(); this.voice.deactivate(); },
     });
     container.dataset.mode = 'LIMBO';
     this.unsubscribers.push(
@@ -125,7 +125,7 @@ export class App {
         this.player.setEnabled(this.modes.value === 'LIMBO' && state === 'EXPLORING' && !this.limited);
         this.touchControls?.reset();
         if (state !== 'EXPLORING') this.inputs.stop();
-        if (state !== 'EXPLORING' && state !== 'INSPECTING') this.voice.release();
+        if (state !== 'EXPLORING' && state !== 'INSPECTING') this.voice.deactivate();
         if (state !== 'INSPECTING' && !(state === 'CHATTING' && this.chatFromInspection)) this.scene.inspection.close();
         this.ui.setState(state);
         this.modes.setInspection(state === 'INSPECTING');
@@ -210,9 +210,9 @@ export class App {
     window.addEventListener('pointercancel', () => { this.hudTouch = this.lastHudTap = undefined; }, { signal });
     window.addEventListener('keydown', this.keydown, { signal });
     window.addEventListener('keyup', (event) => { if (event.code === 'KeyV') this.voice.deactivate(); }, { signal });
-    window.addEventListener('blur', () => this.pause(), { signal });
+    window.addEventListener('blur', () => { this.voice.release(); this.pause(); }, { signal });
     window.addEventListener('pagehide', (event) => {
-      if (event.persisted) this.pause();
+      if (event.persisted) { this.voice.suspend(); this.pause(); }
       else this.dispose();
     }, { signal });
     document.addEventListener('visibilitychange', () => {
@@ -235,7 +235,7 @@ export class App {
       else if (this.state.value === 'PAUSED') this.resume();
     }, { signal });
     this.scene.renderer.domElement.addEventListener('webglcontextlost', (event) => {
-      event.preventDefault(); this.contextLost = true; this.pause(); this.modes.pause();
+      event.preventDefault(); this.contextLost = true; this.voice.release(); this.pause(); this.modes.pause();
       this.ui.notify('Graphics paused. Waiting for your browser to restore the exhibition.');
     }, { signal });
     this.scene.renderer.domElement.addEventListener('webglcontextrestored', () => {
@@ -246,6 +246,10 @@ export class App {
 
   private readonly keydown = (event: KeyboardEvent): void => {
     if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
+    const voiceTyping = event.target instanceof HTMLElement && (event.target.isContentEditable || event.target.closest('input:not([type="range"]):not([type="checkbox"]),textarea'));
+    if (event.code === 'KeyV' && !event.repeat && !voiceTyping && this.modes.value === 'LIMBO' && (this.settingsMenu.visible || this.visitorOptions.visible || this.state.value === 'PAUSED')) {
+      event.preventDefault(); this.voiceTransport.unlock(); void this.voice.activate(); return;
+    }
     if (this.visitorOptions.visible) {
       if (!event.repeat && ['Escape', 'KeyE', 'KeyP'].includes(event.code)) { event.preventDefault(); this.closeVisitorOptions(); }
       return;
@@ -343,7 +347,7 @@ export class App {
       if (this.state.value === 'CHATTING') this.state.set('PAUSED');
       this.modes.pause(); return;
     }
-    this.voice.release(); this.player.input.clear();
+    this.voice.deactivate(); this.player.input.clear();
     if (this.settingsMenu.visible) { this.player.releaseLock(); return; }
     if (['EXPLORING', 'CHATTING', 'INSPECTING'].includes(this.state.value)) this.state.set('PAUSED');
     this.player.releaseLock();
@@ -369,7 +373,7 @@ export class App {
     if (!['EXPLORING', 'PAUSED'].includes(this.state.value)) return;
     if (!this.limited && !this.scene.sculpture.inRange(this.player.camera.position)) return;
     if (!this.scene.inspection.open(this.scene.sculpture)) return;
-    this.voice.release();
+    this.voice.deactivate();
     this.state.set('INSPECTING');
     this.player.releaseLock();
   }
@@ -461,7 +465,7 @@ export class App {
     if (this.modes.value !== 'LIMBO' || this.state.value === 'ENTERING' || this.settingsMenu.visible) return;
     if (this.state.value === 'EXPLORING' || this.state.value === 'CHATTING') this.pause();
     this.touchControls?.reset();
-    this.voice.release(); this.player.input.clear(); this.scene.inspection.controls.enabled = false;
+    this.voice.deactivate(); this.player.input.clear(); this.scene.inspection.controls.enabled = false;
     this.ui.element.inert = true; this.ui.element.classList.add('is-settings-open'); this.settingsMenu.open(); this.modes.setInspection(false);
   }
   private openVisitorOptions(selected?: string): void {
@@ -516,6 +520,12 @@ export class App {
         this.ui.focusVisitor(this.focusedVisitor?.name);
         const seatAvailable = this.modes.value === 'LIMBO' && this.state.value === 'EXPLORING' && !this.settingsMenu.visible && !this.visitorOptions.visible && !this.focusedVisitor;
         this.focusedSeat = seatAvailable && !this.player.seated ? this.scene.environment.retreat.focusSeat(this.scene.camera, [this.scene.sculpture.root, ...this.scene.environment.occluders]) : undefined;
+        // Offer the other half rather than marking a partly occupied bench unavailable.
+        if (this.focusedSeat !== undefined) {
+          const occupied = (seat: number) => !!this.network.snapshot?.players.some(player => player.connected && player.seatIndex === seat);
+          const neighbour = this.focusedSeat ^ 1;
+          if (occupied(this.focusedSeat) && !occupied(neighbour)) this.focusedSeat = neighbour;
+        }
         const seatOccupied = this.focusedSeat !== undefined && !!this.network.snapshot?.players.some(player => player.connected && player.seatIndex === this.focusedSeat);
         this.ui.seating(seatAvailable && (this.player.seated || this.focusedSeat !== undefined), this.player.seated, seatOccupied);
       }

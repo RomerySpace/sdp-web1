@@ -2,7 +2,7 @@ import { AdditiveBlending, BackSide, BoxGeometry, CapsuleGeometry, Group, MathUt
 import type { LobbySnapshot } from '../../shared/MultiplayerProtocol';
 import type { Atmosphere } from './Atmosphere';
 import { lobbyAmbience } from '../core/LobbyAmbience';
-import { lobbyRetreat } from '../../shared/LobbyRetreat';
+import { lobbyRetreat, lobbySeatSlots } from '../../shared/LobbyRetreat';
 
 interface Sample { time: number; x: number; y: number; z: number; yaw: number; pitch: number; crouching: boolean; seat: number }
 interface RemoteVisitor { group: Group; body: Mesh; legs: Group; posture: number; name: string; marker: Mesh; material: MeshStandardMaterial; halo: Mesh<CapsuleGeometry, ShaderMaterial>; level: number; samples: Sample[] }
@@ -126,7 +126,7 @@ export class RemotePlayerManager {
       );
       const angle = Math.atan2(Math.sin(after.yaw - before.yaw), Math.cos(after.yaw - before.yaw));
       visitor.group.rotation.y = before.yaw + angle * t;
-      if (after.seat >= 0) visitor.group.rotation.y = lobbyRetreat.seats[after.seat].yaw;
+      if (after.seat >= 0) visitor.group.rotation.y = lobbySeatSlots[after.seat].yaw;
       visitor.group.scale.y = (before.crouching ? .65 : 1) + ((after.crouching ? .65 : 1) - (before.crouching ? .65 : 1)) * t;
       visitor.posture = MathUtils.damp(visitor.posture, after.seat >= 0 ? 1 : 0, 12, dt);
       visitor.body.scale.y = 1 - visitor.posture * .4;

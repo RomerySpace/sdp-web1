@@ -3,7 +3,7 @@ import { enterExhibition } from './entry';
 import type { LobbySnapshot } from '../shared/MultiplayerProtocol';
 import type { VoiceChatManager } from '../src/audio/VoiceChatManager';
 import { CollisionManager } from '../src/player/CollisionManager';
-import { lobbyRetreat } from '../shared/LobbyRetreat';
+import { lobbyRetreat, lobbySeatSlots } from '../shared/LobbyRetreat';
 
 async function approachBench(page: Page): Promise<void> {
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
@@ -22,11 +22,11 @@ async function approachBench(page: Page): Promise<void> {
   await page.waitForTimeout(350); await aimAtBench(page);
 }
 async function aimAtBench(page: Page): Promise<void> {
-  await page.evaluate(config => {
+  await page.evaluate(({ config, slot }) => {
     const app = window.sdpUnified, local = app.network.snapshot!.players.find(player => player.playerId === app.network.snapshot!.localPlayerId)!;
-    const seat = config.seats[0], dx = seat.x - local.x, dz = seat.z - local.z;
+    const seat = slot, dx = seat.x - local.x, dz = seat.z - local.z;
     app.player.setSpawn({ ...local, yaw: Math.atan2(-dx, -dz), pitch: Math.atan2(config.seatHeight - local.y, Math.hypot(dx, dz)) });
-  }, lobbyRetreat);
+  }, { config: lobbyRetreat, slot: lobbySeatSlots[0] });
   await expect(page.getByRole('button', { name: 'Sit on bench', exact: true })).toBeVisible();
 }
 
@@ -202,7 +202,7 @@ async function enter(page: Page, name = 'Preferences Tester'): Promise<void> {
   await enterExhibition(page, name);
 }
 
-test('microphone ON/OFF latches until the next V and is force-muted by chat, focus loss and mode changes', async ({ page }) => {
+test('microphone ON/OFF survives menu and chat but stops on V or focus loss', async ({ page }) => {
   await enter(page); await page.keyboard.press('KeyP');
   const menu = page.getByRole('dialog', { name: 'Limbo settings' });
   await menu.getByText('ON / OFF', { exact: true }).click();
@@ -216,9 +216,16 @@ test('microphone ON/OFF latches until the next V and is force-muted by chat, foc
   expect(await page.evaluate(() => window.sdpUnified.voiceTransport.transmitting)).toBe(true);
   await page.keyboard.press('KeyV'); await expect.poll(() => page.evaluate(() => window.sdpUnified.voiceTransport.transmitting)).toBe(false);
   await page.keyboard.press('KeyV'); await expect.poll(() => page.evaluate(() => window.sdpUnified.voiceTransport.transmitting)).toBe(true);
-  await page.keyboard.press('Enter'); await expect.poll(() => page.evaluate(() => window.sdpUnified.voiceTransport.transmitting)).toBe(false);
-  await page.keyboard.press('Escape');
+  await page.keyboard.press('KeyP');
+  await expect(menu).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.sdpUnified.voiceTransport.transmitting)).toBe(true);
+  await page.keyboard.press('KeyV'); await expect.poll(() => page.evaluate(() => window.sdpUnified.voiceTransport.transmitting)).toBe(false);
   await page.keyboard.press('KeyV'); await expect.poll(() => page.evaluate(() => window.sdpUnified.voiceTransport.transmitting)).toBe(true);
+  await page.keyboard.press('KeyP');
+  await page.keyboard.press('Enter'); await expect.poll(() => page.evaluate(() => window.sdpUnified.voiceTransport.transmitting)).toBe(true);
+  await page.keyboard.type('v');
+  expect(await page.evaluate(() => window.sdpUnified.voiceTransport.transmitting)).toBe(true);
+  await page.keyboard.press('Escape');
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
   await expect.poll(() => page.evaluate(() => window.sdpUnified.voiceTransport.transmitting)).toBe(false);
   await page.keyboard.press('KeyP'); await menu.getByText('HOLD', { exact: true }).click(); await page.keyboard.press('KeyP');

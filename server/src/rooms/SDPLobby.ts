@@ -8,7 +8,7 @@ import { MAX_PLAYERS, SIMULATION_HZ, validateMovementInput, type MovementInput }
 import { MovementSimulation } from '../simulation/MovementSimulation';
 import { spawnPosition } from '../simulation/SpawnPositions';
 import { LobbyState, VisitorState } from '../state/LobbyState';
-import { lobbyRetreat, seatExits, validSeatRequest } from '../../../shared/LobbyRetreat';
+import { lobbyRetreat, lobbySeatSlots, seatExits, validSeatRequest } from '../../../shared/LobbyRetreat';
 import { CollisionManager } from '../../../src/player/CollisionManager';
 
 interface VisitorInput { value: MovementInput; receivedAt: number; slot: number }
@@ -43,7 +43,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
       if (now - (this.seatingRequests.get(client.sessionId) ?? -1000) < 250) return;
       this.seatingRequests.set(client.sessionId, now);
       if (player.seatIndex >= 0) return;
-      const seat = lobbyRetreat.seats[raw.seat];
+      const seat = lobbySeatSlots[raw.seat];
       if (Math.hypot(player.x - seat.x, player.z - seat.z) > lobbyRetreat.interactionDistance || player.y > 1.8) {
         client.send('lobby:notice', 'Move closer to sit.'); return;
       }

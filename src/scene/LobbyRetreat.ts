@@ -19,7 +19,8 @@ export class LobbyRetreat {
     if (!hit || this.raycaster.intersectObjects(occluders, true).some(other => other.object !== hit.object && other.distance < hit.distance - .03)) return;
     const index = this.seats.indexOf(hit.object as Mesh), seat = lobbyRetreat.seats[index];
     if (camera.position.y > 1.85 || Math.hypot(camera.position.x - seat.x, camera.position.z - seat.z) > lobbyRetreat.interactionDistance) return;
-    return index;
+    const local = hit.object.worldToLocal(hit.point.clone());
+    return index * 2 + (local.x >= 0 ? 1 : 0);
   }
   private readonly finish = new MeshStandardMaterial({ color: 0xf5f7f8, roughness: .91, metalness: 0 });
   private readonly seatGeometry = new RoundedBoxGeometry(lobbyRetreat.seatWidth, lobbyRetreat.seatHeight, lobbyRetreat.seatDepth, 5, .2);

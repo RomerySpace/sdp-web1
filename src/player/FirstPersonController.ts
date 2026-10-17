@@ -5,7 +5,7 @@ import { CollisionManager } from './CollisionManager';
 import { InputManager } from './InputManager';
 import { gameplayConfig } from '../../shared/GameplayConfig';
 import { touchConfig } from '../input/InputCapabilities';
-import { lobbyRetreat } from '../../shared/LobbyRetreat';
+import { lobbyRetreat, lobbySeatSlots } from '../../shared/LobbyRetreat';
 
 export class FirstPersonController {
   readonly input = new InputManager();
@@ -26,7 +26,7 @@ export class FirstPersonController {
     if (next >= 0) this.input.clear();
     this.motion.velocityX = this.motion.velocityZ = 0;
     this.motion.elevation = this.motion.verticalSpeed = 0; this.motion.jumpHeld = false;
-    if (next >= 0) { this.yaw = lobbyRetreat.seats[next].yaw; this.pitch = 0; }
+    if (next >= 0) { this.yaw = lobbySeatSlots[next].yaw; this.pitch = 0; }
     else if (wasSeated) { this.camera.position.x = player.x; this.camera.position.z = player.z; }
   }
   private yaw = 0;
@@ -90,7 +90,7 @@ export class FirstPersonController {
 
   update(dt: number): void {
     if (this.seated) {
-      const seat = lobbyRetreat.seats[this.seatIndex];
+      const seat = lobbySeatSlots[this.seatIndex];
       this.eye = MathUtils.damp(this.eye, lobbyRetreat.seatedEye, 10, dt);
       this.camera.position.set(MathUtils.damp(this.camera.position.x, seat.x, 10, dt), this.eye, MathUtils.damp(this.camera.position.z, seat.z, 10, dt));
       this.camera.rotation.set(this.pitch, this.yaw, MathUtils.damp(this.camera.rotation.z, 0, 10, dt), 'YXZ');
