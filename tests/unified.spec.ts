@@ -66,7 +66,7 @@ async function canvasContrast(page: Page): Promise<number> {
 test('chat holds the Limbo framing and inspection scene without scrolling or resetting the exhibit', async ({ page }) => {
   await enterLimbo(page);
   await expect(page.locator('.controls-overlay')).toContainText('Ocultar HUD');
-  await expect(page.locator('.lobby-hud-toggle kbd')).toHaveText('H');
+  await expect(page.locator('.lobby-hud-toggle')).toHaveCount(0);
   const before = await page.evaluate(() => {
     const { scene, player } = window.sdpUnified;
     player.camera.fov = 54; player.camera.updateProjectionMatrix();
@@ -196,35 +196,58 @@ test('lobby speaking glow changes rendered pixels, follows voice levels and rele
   await info.attach('voice-glow-check', { body: Buffer.from(JSON.stringify(result)), contentType: 'application/json' });
 });
 
-test('lobby HUD can be hidden and restored with its button or H without hiding chat input', async ({ page }) => {
+test('lobby HUD is controlled from P menu with no floating icon and restores through P or H', async ({ page }) => {
   await enterLimbo(page);
-  await page.evaluate(() => document.exitPointerLock());
-  await expect.poll(() => page.evaluate(() => document.pointerLockElement === null)).toBe(true);
-  await page.getByRole('button', { name: 'Hide lobby HUD' }).click();
+  await expect(page.locator('.lobby-hud-toggle')).toHaveCount(0);
+  await page.keyboard.press('KeyP');
+  const menu = page.getByRole('dialog', { name: 'Limbo settings' });
+  const toggle = menu.getByRole('checkbox', { name: 'Hide HUD' });
+  await toggle.check(); await page.keyboard.press('KeyP');
+  await expect(menu).toBeHidden();
   await expect(page.locator('.connection-indicator')).toBeHidden();
   await expect(page.locator('.controls-overlay')).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Show lobby HUD' })).toBeVisible();
+  await expect(page.locator('.ui button:visible')).toHaveCount(0);
+  await page.keyboard.press('KeyP'); await expect(menu).toBeVisible(); await expect(toggle).toBeChecked();
+  await toggle.uncheck(); await page.keyboard.press('KeyP');
+  await expect(page.locator('.connection-indicator')).toBeVisible();
+  await page.keyboard.press('KeyH');
+  await expect(page.locator('#app')).toHaveClass(/lobby-hud-hidden/);
   await page.keyboard.press('KeyH');
   await expect(page.locator('#app')).not.toHaveClass(/lobby-hud-hidden/);
   await page.keyboard.press('KeyH');
-  await page.locator('canvas.scene-canvas').click();
   await page.keyboard.press('Enter');
   const input = page.getByRole('textbox', { name: 'Chat message' });
   await expect(input).toBeVisible();
   await input.fill('h');
   await expect(page.locator('#app')).toHaveClass(/lobby-hud-hidden/);
   await page.keyboard.press('Escape');
-  await page.evaluate(() => document.exitPointerLock());
-  await page.getByRole('button', { name: 'Show lobby HUD' }).click();
+  await page.keyboard.press('KeyH');
   await expect(page.locator('#app')).not.toHaveClass(/lobby-hud-hidden/);
-  await page.locator('.resume-button').click();
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
   await openProtocol(page);
   await page.keyboard.press('KeyH');
   await expect(page.locator('.inspection-actions')).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Show lobby HUD' })).toBeVisible();
+  await expect(page.locator('.ui button:visible')).toHaveCount(0);
   await page.keyboard.press('KeyH');
   await expect(page.locator('.inspection-actions')).toBeVisible();
+});
+
+test('touch hidden HUD leaves no icon and double-tap restores the settings menu', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  try {
+    await enterLimbo(page); await page.getByRole('button', { name: 'Open game menu', exact: true }).tap();
+    const menu = page.getByRole('dialog', { name: 'Limbo settings' });
+    const toggle = menu.getByRole('checkbox', { name: 'Hide HUD' });
+    await toggle.check(); await page.getByRole('button', { name: 'RETURN', exact: false }).tap();
+    await expect(menu).toBeHidden(); await expect(page.locator('.connection-indicator')).toBeHidden();
+    await expect(page.locator('.lobby-hud-toggle')).toHaveCount(0);
+    await page.touchscreen.tap(300, 400); await page.touchscreen.tap(300, 400);
+    await expect(menu).toBeVisible(); await expect(toggle).toBeChecked();
+    await toggle.uncheck(); await page.getByRole('button', { name: 'RETURN', exact: false }).tap();
+    await expect(page.getByRole('button', { name: 'Open game menu', exact: true })).toBeVisible();
+    await expect(page.locator('.connection-indicator')).toBeVisible();
+  } finally { await context.close(); }
 });
 
 test('open chat scrolls older messages, does not jump on new messages and closes with empty Enter', async ({ page }, info) => {

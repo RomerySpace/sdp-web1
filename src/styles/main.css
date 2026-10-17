@@ -21,14 +21,13 @@ button { border: 0; background: none; }
 .scene-canvas { display: block; width: 100%; height: 100%; }
 .ui { position: fixed; inset: 0; pointer-events: none; user-select: none; }
 .ui button, .ui input { pointer-events: auto; }
-.lobby-hud-toggle { position: absolute; top: calc(var(--edge) - 7px); left: var(--edge); z-index: 45; width: 54px; display: flex; align-items: center; justify-content: center; gap: 7px; }
-.lobby-hud-toggle kbd { font-size: 10px; }
-.ui:is([data-state="EXPLORING"], [data-state="PAUSED"], [data-state="CHATTING"]) .lobby-hud-toggle { color: #d4dfe7; opacity: .85; }
+.session-settings .hud-setting { align-items: center; margin-top: 20px; gap: 12px; }
+.hud-setting kbd { margin-left: auto; }
+.session-settings .hud-setting input { width: 18px; min-height: 18px; height: 18px; margin: 0; }
+.hud-setting-hint { margin: 8px 0 0; font-size: 9px; line-height: 1.5; color: #758995; }
 #app[data-mode="LIMBO"].lobby-hud-hidden .inspection-actions { visibility: hidden; pointer-events: none; }
-#app:not([data-mode="LIMBO"]) .lobby-hud-toggle,
-.ui:is([data-state="INTRO"], [data-state="ENTERING"]) .lobby-hud-toggle { display: none; }
-#app[data-mode="LIMBO"].lobby-hud-hidden .ui > :not(.lobby-hud-toggle):not(.intro) { visibility: hidden !important; pointer-events: none !important; }
-#app[data-mode="LIMBO"].lobby-hud-hidden .ui > :not(.lobby-hud-toggle):not(.intro) * { visibility: hidden !important; pointer-events: none !important; }
+#app[data-mode="LIMBO"].lobby-hud-hidden .ui > :not(.intro) { visibility: hidden !important; pointer-events: none !important; }
+#app[data-mode="LIMBO"].lobby-hud-hidden .ui > :not(.intro) * { visibility: hidden !important; pointer-events: none !important; }
 #app[data-mode="LIMBO"].lobby-hud-hidden .touch-controls :is(.touch-button, .touch-voice-note, .touch-stick-thumb) { opacity: 0; }
 #app[data-mode="LIMBO"].lobby-hud-hidden .touch-controls .touch-button { pointer-events: none; }
 #app[data-mode="LIMBO"].lobby-hud-hidden .touch-stick { border-color: transparent; background: transparent; }

@@ -63,6 +63,8 @@ export class App {
   private entering = false;
   private chatFromInspection = false;
   private chatViewport?: { width: number; height: number };
+  private hudTouch?: { id: number; x: number; y: number; time: number };
+  private lastHudTap?: { x: number; y: number; time: number };
 
   constructor(container: HTMLElement) {
     this.scene = new SceneManager(container);
@@ -80,7 +82,9 @@ export class App {
       closeChat: () => this.closeChat(),
     }, this.limited, this.network.displayName);
     this.audio.attach(this.ui.element);
-    this.settingsMenu = new SettingsMenu(container, this.settings, () => this.closeSettings());
+    this.settingsMenu = new SettingsMenu(container, this.settings, () => this.closeSettings(), {
+      hidden: () => this.ui.isHudHidden, toggle: () => this.ui.toggleHud(),
+    });
     this.modes = new GameModeManager(container, this.scene.renderer, this.network, {
       pauseLimbo: () => { this.pause(); this.player.setEnabled(false); },
       suspendCommunication: () => { this.inputs.setEnabled(false); this.voice.suspend(); this.voiceTransport.setEnabled(false); },
@@ -167,6 +171,22 @@ export class App {
   private bindEvents(): void {
     const signal = this.events.signal;
     window.addEventListener('resize', () => this.resizeViewport(), { signal });
+    window.addEventListener('pointerdown', event => {
+      if (this.touch && event.pointerType === 'touch' && event.isPrimary && this.ui.isHudHidden && this.modes.value === 'LIMBO' && !this.settingsMenu.visible && this.state.value !== 'CHATTING') {
+        this.hudTouch = { id: event.pointerId, x: event.clientX, y: event.clientY, time: performance.now() };
+      }
+    }, { signal });
+    window.addEventListener('pointerup', event => {
+      const start = this.hudTouch; if (!start || start.id !== event.pointerId) return;
+      this.hudTouch = undefined;
+      const now = performance.now();
+      if (now - start.time > 300 || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 12) { this.lastHudTap = undefined; return; }
+      const previous = this.lastHudTap;
+      if (previous && now - previous.time < 350 && Math.hypot(event.clientX - previous.x, event.clientY - previous.y) < 24) {
+        this.lastHudTap = undefined; this.openSettings();
+      } else this.lastHudTap = { x: event.clientX, y: event.clientY, time: now };
+    }, { signal });
+    window.addEventListener('pointercancel', () => { this.hudTouch = this.lastHudTap = undefined; }, { signal });
     window.addEventListener('keydown', this.keydown, { signal });
     window.addEventListener('keyup', (event) => { if (event.code === 'KeyV') this.voice.release(); }, { signal });
     window.addEventListener('blur', () => this.pause(), { signal });

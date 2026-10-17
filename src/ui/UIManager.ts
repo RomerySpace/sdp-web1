@@ -4,7 +4,6 @@ import { ControlsOverlay } from './ControlsOverlay';
 import { IntroScreen } from './IntroScreen';
 import { ConnectionIndicator } from './ConnectionIndicator';
 import { InspectionControls } from './InspectionControls';
-import { createElement, Eye, EyeOff } from 'lucide';
 
 interface UIActions {
   enter(name?: string): void;
@@ -26,8 +25,8 @@ export class UIManager {
   private readonly pause: HTMLElement;
   private readonly notice: HTMLElement;
   private noticeTimer = 0;
-  private readonly hudToggle: HTMLButtonElement;
   private hudHidden = false;
+  get isHudHidden(): boolean { return this.hudHidden; }
 
   constructor(container: HTMLElement, actions: UIActions, limited: boolean, savedName = '') {
     this.element = document.createElement('div');
@@ -54,29 +53,12 @@ export class UIManager {
     this.intro = new IntroScreen(this.element, actions.enter, limited, savedName);
     this.chat = new ChatInterface(this.element, actions.submit, actions.closeChat);
     this.controls = new ControlsOverlay(this.element, limited, actions.menu);
-    this.hudToggle = document.createElement('button');
-    this.hudToggle.type = 'button';
-    this.hudToggle.className = 'icon-button lobby-hud-toggle';
-    this.hudToggle.addEventListener('click', () => this.toggleHud());
-    this.updateHudToggle();
-    this.element.append(this.hudToggle);
     container.append(this.element);
   }
 
   toggleHud(): void {
     this.hudHidden = !this.hudHidden;
     this.element.parentElement?.classList.toggle('lobby-hud-hidden', this.hudHidden);
-    this.updateHudToggle();
-  }
-
-  private updateHudToggle(): void {
-    const label = this.hudHidden ? 'Show lobby HUD' : 'Hide lobby HUD';
-    this.hudToggle.setAttribute('aria-label', label);
-    this.hudToggle.setAttribute('aria-pressed', String(this.hudHidden));
-    this.hudToggle.title = `${label} (H)`;
-    this.hudToggle.replaceChildren(createElement(this.hudHidden ? Eye : EyeOff));
-    const key = document.createElement('kbd'); key.textContent = 'H'; key.setAttribute('aria-hidden', 'true');
-    this.hudToggle.append(key);
   }
 
   setState(state: ExperienceState): void {

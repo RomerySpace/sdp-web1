@@ -40,7 +40,7 @@ npm run preview
 | Hold V | Authorize microphone access and transmit proximity voice while held |
 | E near the pedestal, looking at the sculpture | Inspect directly; the discreet JOIN SHOOTER TEST button loads the simulation |
 | Hold SHIFT in Limbo | Sprint smoothly at the configured speed (currently 2.25x walking) |
-| H / eye icon in Limbo | Hide or restore the lobby HUD; the eye control remains accessible |
+| P menu: HIDE HUD / H in Limbo | Hide or restore the entire lobby HUD, without floating icons; P always opens the menu (double-tap on touch devices while hidden) |
 | Drag / mouse wheel during inspection | Rotate the sculpture / zoom within fixed limits |
 | P | Open/close settings in Limbo, or the ranking/settings menu in Shooter |
 | F | Toggle fullscreen throughout the experience, except while typing |
