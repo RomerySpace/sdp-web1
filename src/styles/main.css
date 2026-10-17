@@ -23,10 +23,6 @@ button { border: 0; background: none; }
 .ui button, .ui input { pointer-events: auto; }
 .visitor-focus { position: absolute; left: 50%; top: calc(50% + 18px); transform: translateX(-50%); margin: 0; max-width: 70%; font-size: 11px; line-height: 1.4; color: #edf4f8; text-shadow: 0 1px 6px #202c36; overflow-wrap: anywhere; text-align: center; }
 #app:not([data-mode="LIMBO"]) .visitor-focus { display: none; }
-.session-settings .hud-setting { align-items: center; margin-top: 20px; gap: 12px; }
-.hud-setting kbd { margin-left: auto; }
-.session-settings .hud-setting input { width: 18px; min-height: 18px; height: 18px; margin: 0; }
-.hud-setting-hint { margin: 8px 0 0; font-size: 9px; line-height: 1.5; color: #758995; }
 #app[data-mode="LIMBO"].lobby-hud-hidden .inspection-actions { visibility: hidden; pointer-events: none; }
 #app[data-mode="LIMBO"].lobby-hud-hidden .ui > :not(.intro) { visibility: hidden !important; pointer-events: none !important; }
 #app[data-mode="LIMBO"].lobby-hud-hidden .ui > :not(.intro) * { visibility: hidden !important; pointer-events: none !important; }

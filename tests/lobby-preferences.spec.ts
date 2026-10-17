@@ -126,7 +126,7 @@ test('music stays at original speed and does not seek when broadcast clock estim
   for (const position of result.positions) expect(Math.abs(position - result.before)).toBeLessThan(.05);
 });
 
-test('compact preferences menu fits desktop and mobile with no overflowing labels or native oversized sliders', async ({ browser }) => {
+test('classic preferences menu fits desktop and mobile without redundant HUD hints', async ({ browser }) => {
   for (const [label, width, height, mobile] of [['desktop', 1440, 1000, false], ['mobile', 390, 844, true], ['landscape', 844, 390, true]] as const) {
     const context = await browser.newContext({ viewport: { width, height }, isMobile: mobile, hasTouch: mobile }); const page = await context.newPage();
     try {
@@ -134,7 +134,12 @@ test('compact preferences menu fits desktop and mobile with no overflowing label
       if (mobile) await page.getByRole('button', { name: 'Open game menu', exact: true }).tap(); else await page.keyboard.press('KeyP');
       const menu = page.getByRole('dialog', { name: 'Limbo settings' }); await expect(menu).toBeVisible();
       expect(await menu.locator('.protocol-content').evaluate(element => element.scrollTop)).toBe(0);
-      const heading = await menu.locator('.settings-heading').boundingBox(); expect(heading!.y).toBeGreaterThanOrEqual(10);
+      const heading = await menu.locator('.protocol-mark').boundingBox(); expect(heading!.y).toBeGreaterThanOrEqual(10);
+      await expect(menu.getByRole('checkbox', { name: 'Hide HUD' })).toHaveCount(0);
+      await expect(menu.getByText('P MENU / H HUD', { exact: true })).toHaveCount(0);
+      const sliders = await menu.getByRole('slider').evaluateAll(elements => elements.map(element => { const r = element.getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width }; }));
+      expect(sliders).toHaveLength(3);
+      for (let i = 1; i < sliders.length; i++) { expect(sliders[i].x).toBe(sliders[0].x); expect(sliders[i].width).toBe(sliders[0].width); expect(sliders[i].y).toBeGreaterThan(sliders[i - 1].y); }
       const size = await menu.locator('.protocol-content').evaluate(element => { const r = element.getBoundingClientRect(); return { x: r.x, y: r.y, right: r.right, bottom: r.bottom, overflow: element.scrollWidth - element.clientWidth }; });
       expect(size.x).toBeGreaterThanOrEqual(10); expect(size.y).toBeGreaterThanOrEqual(10); expect(size.right).toBeLessThanOrEqual(width - 10); expect(size.bottom).toBeLessThanOrEqual(height - 10); expect(size.overflow).toBeLessThanOrEqual(1);
       await expect(menu.getByRole('radio', { name: 'Hold to talk' })).toBeChecked();

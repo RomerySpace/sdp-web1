@@ -48,23 +48,7 @@
 .mode-overlay[data-phase="loading"],
 .mode-overlay[data-phase="error"] { background: #fff; }
 
-.settings-overlay { background: rgb(246 249 251 / 94%); }
 .settings-overlay:focus { outline: none; }
-.settings-overlay .protocol-content { width: min(380px, calc(100% - 40px)); padding: 4px; max-height: calc(100dvh - 40px); }
-.settings-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; text-align: left; padding-bottom: 20px; border-bottom: 1px solid #ccd5db; }
-.settings-heading .protocol-mark { font-size: 26px; font-weight: 400; }
-.settings-heading > span:last-child { font-size: 9px; color: #73828c; }
-.settings-overlay .session-settings { margin: 20px 0 24px; }
-.settings-overlay .session-settings h2 { margin-bottom: 14px; font-size: 10px; color: #425763; }
-.settings-ranges { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px 24px; }
-.setting-sensitivity { grid-column: 1 / -1; }
-.settings-ranges label { margin: 0 0 2px; align-items: center; font-size: 10px; line-height: 1.4; color: #536875; }
-.settings-ranges output { font-size: 10px; color: #314651; }
-.settings-ranges input[type="range"] { appearance: none; -webkit-appearance: none; display: block; width: 100%; height: 32px; background: transparent; padding: 0; border: 0; cursor: pointer; }
-.settings-ranges input[type="range"]::-webkit-slider-runnable-track { height: 2px; background: #bdcbd4; border-radius: 0; }
-.settings-ranges input[type="range"]::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 12px; height: 12px; margin-top: -5px; border: 1px solid #5f7888; border-radius: 50%; background: #f8fbfd; }
-.settings-ranges input[type="range"]::-moz-range-track { height: 2px; background: #bdcbd4; }
-.settings-ranges input[type="range"]::-moz-range-thumb { width: 10px; height: 10px; border: 1px solid #5f7888; border-radius: 50%; background: #f8fbfd; }
 .voice-activation { border: 0; border-top: 1px solid #d4dde3; padding: 16px 0 0; margin: 16px 0 0; min-width: 0; }
 .voice-activation legend { float: left; width: 100%; margin-bottom: 10px; font-size: 10px; color: #536875; }
 .voice-activation legend span { float: right; color: #7d8e99; }
@@ -75,8 +59,3 @@
 .voice-choices span { display: grid; place-items: center; min-height: 36px; font-size: 10px; color: #667c8a; }
 .voice-choices input:checked + span { background: #e0e9ef; color: #253f4e; }
 .voice-choices input:focus-visible + span { outline: 1px solid #486e84; outline-offset: -3px; }
-.settings-overlay .session-tools { border-top: 1px solid #d4dde3; margin-top: 18px; padding-top: 10px; }
-.settings-overlay .hud-setting { margin-top: 12px; color: #536875; }
-.settings-overlay .hud-setting-hint { font-size: 8px; color: #7a8e9a; }
-.settings-overlay .settings-close { min-height: 42px; border-color: #a8b9c5; background: transparent; font-size: 10px; margin-top: 0; }
-@media (max-height: 580px) { .settings-heading { padding-bottom: 10px; } .settings-overlay .session-settings { margin: 12px 0; } }

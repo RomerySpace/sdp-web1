@@ -82,9 +82,7 @@ export class App {
       closeChat: () => this.closeChat(),
     }, this.limited, this.network.displayName);
     this.audio.attach(this.ui.element);
-    this.settingsMenu = new SettingsMenu(container, this.settings, () => this.closeSettings(), {
-      hidden: () => this.ui.isHudHidden, toggle: () => this.ui.toggleHud(),
-    });
+    this.settingsMenu = new SettingsMenu(container, this.settings, () => this.closeSettings());
     this.modes = new GameModeManager(container, this.scene.renderer, this.network, {
       pauseLimbo: () => { this.pause(); this.player.setEnabled(false); },
       suspendCommunication: () => { this.inputs.setEnabled(false); this.voice.suspend(); this.voiceTransport.setEnabled(false); },

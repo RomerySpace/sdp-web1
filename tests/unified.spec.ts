@@ -196,19 +196,20 @@ test('lobby speaking glow changes rendered pixels, follows voice levels and rele
   await info.attach('voice-glow-check', { body: Buffer.from(JSON.stringify(result)), contentType: 'application/json' });
 });
 
-test('lobby HUD is controlled from P menu with no floating icon and restores through P or H', async ({ page }) => {
+test('lobby HUD uses H without redundant menu controls or floating icons', async ({ page }) => {
   await enterLimbo(page);
   await expect(page.locator('.lobby-hud-toggle')).toHaveCount(0);
   await page.keyboard.press('KeyP');
   const menu = page.getByRole('dialog', { name: 'Limbo settings' });
-  const toggle = menu.getByRole('checkbox', { name: 'Hide HUD' });
-  await toggle.check(); await page.keyboard.press('KeyP');
+  await expect(menu.getByRole('checkbox', { name: 'Hide HUD' })).toHaveCount(0);
+  await expect(menu.getByText('P MENU / H HUD', { exact: true })).toHaveCount(0);
+  await page.keyboard.press('KeyP'); await page.keyboard.press('KeyH');
   await expect(menu).toBeHidden();
   await expect(page.locator('.connection-indicator')).toBeHidden();
   await expect(page.locator('.controls-overlay')).toBeHidden();
   await expect(page.locator('.ui button:visible')).toHaveCount(0);
-  await page.keyboard.press('KeyP'); await expect(menu).toBeVisible(); await expect(toggle).toBeChecked();
-  await toggle.uncheck(); await page.keyboard.press('KeyP');
+  await page.keyboard.press('KeyP'); await expect(menu).toBeVisible();
+  await page.keyboard.press('KeyP'); await page.keyboard.press('KeyH');
   await expect(page.locator('.connection-indicator')).toBeVisible();
   await page.keyboard.press('KeyH');
   await expect(page.locator('#app')).toHaveClass(/lobby-hud-hidden/);
@@ -238,13 +239,13 @@ test('touch hidden HUD leaves no icon and double-tap restores the settings menu'
   try {
     await enterLimbo(page); await page.getByRole('button', { name: 'Open game menu', exact: true }).tap();
     const menu = page.getByRole('dialog', { name: 'Limbo settings' });
-    const toggle = menu.getByRole('checkbox', { name: 'Hide HUD' });
-    await toggle.check(); await page.getByRole('button', { name: 'RETURN', exact: false }).tap();
+    await expect(menu.getByRole('checkbox', { name: 'Hide HUD' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'RETURN', exact: false }).tap(); await page.keyboard.press('KeyH');
     await expect(menu).toBeHidden(); await expect(page.locator('.connection-indicator')).toBeHidden();
     await expect(page.locator('.lobby-hud-toggle')).toHaveCount(0);
     await page.touchscreen.tap(300, 400); await page.touchscreen.tap(300, 400);
-    await expect(menu).toBeVisible(); await expect(toggle).toBeChecked();
-    await toggle.uncheck(); await page.getByRole('button', { name: 'RETURN', exact: false }).tap();
+    await expect(menu).toBeVisible();
+    await page.getByRole('button', { name: 'RETURN', exact: false }).tap(); await page.keyboard.press('KeyH');
     await expect(page.getByRole('button', { name: 'Open game menu', exact: true })).toBeVisible();
     await expect(page.locator('.connection-indicator')).toBeVisible();
   } finally { await context.close(); }
