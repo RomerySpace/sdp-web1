@@ -5,6 +5,7 @@ import { CollisionManager } from './CollisionManager';
 import { InputManager } from './InputManager';
 import { gameplayConfig } from '../../shared/GameplayConfig';
 import { touchConfig } from '../input/InputCapabilities';
+import { lobbyRetreat } from '../../shared/LobbyRetreat';
 
 export class FirstPersonController {
   readonly input = new InputManager();
@@ -14,6 +15,20 @@ export class FirstPersonController {
   private readonly events = new AbortController();
   private phase = 0;
   private eye = 1.7;
+  private seatIndex = -1;
+  get seated(): boolean { return this.seatIndex >= 0; }
+  get seat(): number { return this.seatIndex; }
+
+  receiveSeating(player: NetworkPlayer): void {
+    const next = player.seatIndex ?? -1;
+    if (next === this.seatIndex) return;
+    const wasSeated = this.seated; this.seatIndex = next;
+    if (next >= 0) this.input.clear();
+    this.motion.velocityX = this.motion.velocityZ = 0;
+    this.motion.elevation = this.motion.verticalSpeed = 0; this.motion.jumpHeld = false;
+    if (next >= 0) { this.yaw = lobbyRetreat.seats[next].yaw; this.pitch = 0; }
+    else if (wasSeated) { this.camera.position.x = player.x; this.camera.position.z = player.z; }
+  }
   private yaw = 0;
   private pitch = 0;
   private active = false;
@@ -45,6 +60,7 @@ export class FirstPersonController {
   }
 
   setSpawn(player: NetworkPlayer): void {
+    this.seatIndex = -1;
     this.input.clear();
     this.motion.elevation = this.motion.verticalSpeed = 0; this.motion.jumpHeld = false;
     this.eye = 1.7;
@@ -73,6 +89,15 @@ export class FirstPersonController {
   releaseLock(): void { if (this.locked) document.exitPointerLock(); }
 
   update(dt: number): void {
+    if (this.seated) {
+      const seat = lobbyRetreat.seats[this.seatIndex];
+      this.eye = MathUtils.damp(this.eye, lobbyRetreat.seatedEye, 10, dt);
+      this.camera.position.set(MathUtils.damp(this.camera.position.x, seat.x, 10, dt), this.eye, MathUtils.damp(this.camera.position.z, seat.z, 10, dt));
+      this.camera.rotation.set(this.pitch, this.yaw, MathUtils.damp(this.camera.rotation.z, 0, 10, dt), 'YXZ');
+      const fov = MathUtils.damp(this.camera.fov, this.baseFov, 6, dt);
+      if (Math.abs(fov - this.camera.fov) > .001) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
+      return;
+    }
     if (!this.active || !this.controlling) return;
     const sprint = this.active && this.controlling && this.input.sprinting && (this.input.forward || this.input.sideways);
     const fov = MathUtils.damp(this.camera.fov, this.baseFov + (sprint ? gameplayConfig.limbo.sprintFovAdjustment : 0), 6, dt);

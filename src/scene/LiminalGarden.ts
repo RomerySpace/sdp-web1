@@ -2,6 +2,7 @@ import { BufferGeometry, DoubleSide, Float32BufferAttribute, InstancedMesh, Mesh
 import { createUpperMonolithGeometry, monolithFinish } from './MonolithGeometry';
 import type { Atmosphere } from './Atmosphere';
 import { lobbyAmbience } from '../core/LobbyAmbience';
+import { lobbyRetreat } from '../../shared/LobbyRetreat';
 
 /** Instanced tapered blades and a satin column; no external assets. */
 export class LiminalGarden {
@@ -52,6 +53,12 @@ export class LiminalGarden {
           float edge = max(abs(wrapped.x), abs(wrapped.y));
           float root = smoothstep(.94, 1.28, edge + .035 * sin(wrapped.x * 13. + wrapped.y * 9.));
           float fieldFade = ${distant ? 'smoothstep(21., 30., distanceFromViewer)' : '1. - smoothstep(26., 32., distanceFromViewer)'};
+          ${lobbyRetreat.seats.map((seat, i) => `
+          vec2 seatOffset${i} = wrapped - vec2(${seat.x.toFixed(2)}, ${seat.z.toFixed(2)});
+          vec2 seatLocal${i} = vec2(${Math.cos(seat.yaw).toFixed(5)} * seatOffset${i}.x - ${Math.sin(seat.yaw).toFixed(5)} * seatOffset${i}.y,
+            ${Math.sin(seat.yaw).toFixed(5)} * seatOffset${i}.x + ${Math.cos(seat.yaw).toFixed(5)} * seatOffset${i}.y);
+          vec2 seatEdge${i} = abs(seatLocal${i}) - vec2(${(lobbyRetreat.seatWidth / 2).toFixed(3)}, ${(lobbyRetreat.seatDepth / 2).toFixed(3)});
+          root *= smoothstep(-.04, .10, max(seatEdge${i}.x, seatEdge${i}.y));`).join('')}
           transformed *= root * fieldFade;
           float wave = sin(wrapped.x * .6 + wrapped.y * .35 + gardenTime * 1.4) + .35 * sin(wrapped.y * 1.8 - gardenTime * 2.1);
           transformed.x += wave * .11 * position.y * position.y * root * fieldFade;
@@ -67,7 +74,7 @@ export class LiminalGarden {
         shader.vertexShader = shader.vertexShader.replace('vAtmospherePosition = (modelMatrix * atmosphereVertex).xyz;',
           'atmosphereVertex.xz += wrapped - stem.xz; vAtmospherePosition = (modelMatrix * atmosphereVertex).xyz;');
       };
-      grass.customProgramCacheKey = () => `sdp-white-grass-v4-${span}`;
+      grass.customProgramCacheKey = () => `sdp-white-grass-tree-retreat-v6-${span}`;
       const blades = new InstancedMesh(geometry, grass, count), dummy = new Object3D();
       let seed = 83; const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
       for (let i = 0; i < blades.count; i++) {

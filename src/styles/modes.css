@@ -49,6 +49,24 @@
 .mode-overlay[data-phase="error"] { background: #fff; }
 
 .settings-overlay:focus { outline: none; }
+.protocol-content .settings-visitors { margin-top: 16px; border-color: transparent; background: transparent; font-size: 9px; }
+.visitor-options { position: fixed; inset: 0; z-index: 75; display: grid; place-items: center; background: rgba(248,251,253,.82); color: #34434d; }
+.visitor-options[hidden] { display: none; }
+.visitor-options:focus { outline: none; }
+.visitor-content { width: min(352px, calc(100% - 40px)); max-height: calc(100dvh - 40px); overflow: auto; padding: 6px; }
+.visitor-content header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #8297a633; margin-bottom: 22px; }
+.visitor-content button { min-height: 44px; color: inherit; font-size: 10px; }
+.visitor-back { padding: 0; }
+.visitor-close { display: grid; place-items: center; width: 44px; }
+.visitor-close svg { width: 18px; height: 18px; stroke-width: 1.2; }
+.visitor-body h2 { font-size: 18px; font-weight: 400; overflow-wrap: anywhere; margin: 0 0 8px; }
+.visitor-status { font-size: 9px; color: #728794; margin: 0 0 22px; }
+.visitor-body label { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 52px; font-size: 12px; border-bottom: 1px solid #8297a626; cursor: pointer; }
+.visitor-body input { width: 18px; height: 18px; accent-color: #728995; }
+.visitor-body > p { font-size: 10px; }
+.visitor-list-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; text-align: left; border-bottom: 1px solid #8297a626; padding: 12px 0; }
+.visitor-list-item span:first-child { overflow-wrap: anywhere; }
+.visitor-list-item span:last-child { font-size: 8px; color: #728794; }
 .voice-activation { border: 0; border-top: 1px solid #d4dde3; padding: 16px 0 0; margin: 16px 0 0; min-width: 0; }
 .voice-activation legend { float: left; width: 100%; margin-bottom: 10px; font-size: 10px; color: #536875; }
 .voice-activation legend span { float: right; color: #7d8e99; }

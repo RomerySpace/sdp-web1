@@ -23,6 +23,14 @@ export class LiveKitVoiceTransport implements SpatialVoiceTransport {
   private speaking = false;
   private disposed = false;
   private enabled = true;
+  private mutedIdentity: (identity: string) => boolean = () => false;
+  setMutedVisitors(predicate: (identity: string) => boolean): void {
+    this.mutedIdentity = predicate;
+    for (const [id, remote] of this.remotes) if (predicate(id)) {
+      remote.gain.gain.cancelScheduledValues(this.context?.currentTime ?? 0);
+      remote.gain.gain.value = 0; this.voiceLevels.set(id, 0);
+    }
+  }
   private snapshot?: LobbySnapshot;
   private readonly remotes = new Map<string, RemoteVoice>();
   private readonly listeners = new Set<(state: VoiceConnectionState) => void>();
@@ -218,6 +226,7 @@ export class LiveKitVoiceTransport implements SpatialVoiceTransport {
       listener.setOrientation(this.forward.x, this.forward.y, this.forward.z, this.up.x, this.up.y, this.up.z);
     }
     for (const [identity, remote] of this.remotes) {
+      if (this.mutedIdentity(identity)) { remote.gain.gain.value = 0; this.voiceLevels.set(identity, 0); continue; }
       remote.analyser.getFloatTimeDomainData(remote.samples);
       let energy = 0;
       for (const sample of remote.samples) energy += sample * sample;

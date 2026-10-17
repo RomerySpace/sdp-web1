@@ -4,6 +4,7 @@ import { ControlsOverlay } from './ControlsOverlay';
 import { IntroScreen } from './IntroScreen';
 import { ConnectionIndicator } from './ConnectionIndicator';
 import { InspectionControls } from './InspectionControls';
+import { Armchair, createElement } from 'lucide';
 
 interface UIActions {
   enter(name?: string): void;
@@ -13,6 +14,8 @@ interface UIActions {
   closeInspection(): void;
   menu(): void;
   closeChat(): void;
+  visitor(): void;
+  seat(): void;
 }
 
 export class UIManager {
@@ -27,6 +30,7 @@ export class UIManager {
   private noticeTimer = 0;
   private hudHidden = false;
   private readonly visitorName: HTMLElement;
+  readonly bench = document.createElement('button');
   get isHudHidden(): boolean { return this.hudHidden; }
 
   constructor(container: HTMLElement, actions: UIActions, limited: boolean, savedName = '') {
@@ -43,12 +47,16 @@ export class UIManager {
         <span class="pause-hint">Cursor released · Take your time</span>
       </div>
       <p class="ui-notice" role="status"></p>
-      <p class="visitor-focus" hidden></p>
+      <button class="visitor-focus" type="button" hidden title="Visitor options (E)"></button>
 
     `;
     this.pause = this.element.querySelector('.pause-prompt')!;
     this.notice = this.element.querySelector('.ui-notice')!;
     this.visitorName = this.element.querySelector('.visitor-focus')!;
+    this.visitorName.addEventListener('click', actions.visitor);
+    this.bench.className = 'bench-interaction'; this.bench.type = 'button'; this.bench.hidden = true;
+    this.bench.innerHTML = '<kbd>E</kbd><span>SIT</span>'; this.bench.prepend(createElement(Armchair));
+    this.bench.setAttribute('aria-keyshortcuts', 'E'); this.bench.addEventListener('click', actions.seat); this.element.append(this.bench);
     this.connection = new ConnectionIndicator(this.element.querySelector('.top-controls')!);
     this.inspection = new InspectionControls(this.element, actions.inspect, actions.closeInspection);
     if (limited) { this.inspection.inspect.setAttribute('aria-label', 'Inspect sculpture'); this.inspection.inspect.querySelector('span')!.textContent = 'INSPECT'; }
@@ -74,6 +82,11 @@ export class UIManager {
   focusVisitor(name?: string): void {
     if (this.visitorName.textContent !== (name || '')) this.visitorName.textContent = name || '';
     this.visitorName.hidden = !name;
+  }
+  seating(available: boolean, seated: boolean, occupied = false): void {
+    this.bench.hidden = !available; this.bench.disabled = occupied;
+    this.bench.querySelector('span')!.textContent = occupied ? 'OCCUPIED' : seated ? 'STAND UP' : 'SIT';
+    this.bench.setAttribute('aria-label', occupied ? 'Bench occupied' : seated ? 'Stand up' : 'Sit on bench'); this.bench.title = occupied ? 'Bench occupied' : seated ? 'Stand up (E)' : 'Sit on bench (E)';
   }
 
   notify(message: string): void {

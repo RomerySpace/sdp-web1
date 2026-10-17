@@ -1,0 +1,8 @@
+Lloque by hanandess
+Author: https://sketchfab.com/hanandess
+Source: https://sketchfab.com/3d-models/lloque-2d231d56b67941c8bfafcdb0bd57ae4c
+License: Creative Commons Attribution 4.0 International
+https://creativecommons.org/licenses/by/4.0/
+
+Adapted for SDP: reduced geometry, white materials, resized foliage alpha texture.
+The original asset was supplied as tree.glb. Attribution was embedded in its glTF metadata.

@@ -5,6 +5,11 @@ export class ChatManager {
   private readonly listeners = new Set<(message: ChatMessage) => void>();
   private readonly unsubscribe: () => void;
   readonly history: ChatMessage[] = [];
+  private hiddenSender: (id: string) => boolean = () => false;
+  setHiddenSenders(predicate: (id: string) => boolean): void {
+    this.hiddenSender = predicate;
+    for (let i = this.history.length - 1; i >= 0; i--) if (predicate(this.history[i].senderId)) this.history.splice(i, 1);
+  }
 
   constructor(private readonly network: MultiplayerConnection) {
     this.unsubscribe = network.subscribeToChat((message) => {
@@ -23,6 +28,7 @@ export class ChatManager {
   }
 
   private append(message: ChatMessage): void {
+    if (this.hiddenSender(message.senderId)) return;
     if (this.history.some((item) => item.messageId === message.messageId)) return;
     this.history.push(message);
     if (this.history.length > 30) this.history.shift();

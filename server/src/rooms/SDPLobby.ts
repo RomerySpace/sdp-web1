@@ -8,6 +8,8 @@ import { MAX_PLAYERS, SIMULATION_HZ, validateMovementInput, type MovementInput }
 import { MovementSimulation } from '../simulation/MovementSimulation';
 import { spawnPosition } from '../simulation/SpawnPositions';
 import { LobbyState, VisitorState } from '../state/LobbyState';
+import { lobbyRetreat, seatExits, validSeatRequest } from '../../../shared/LobbyRetreat';
+import { CollisionManager } from '../../../src/player/CollisionManager';
 
 interface VisitorInput { value: MovementInput; receivedAt: number; slot: number }
 const INPUT_TIMEOUT_MS = 250;
@@ -22,6 +24,8 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
   maxMessagesPerSecond = 60;
   private readonly inputs = new Map<string, VisitorInput>();
   private readonly simulation = new MovementSimulation();
+  private readonly seatingRequests = new Map<string, number>();
+  private readonly seatingWorld = new CollisionManager();
   private accumulator = 0;
   private readonly chat = new ChatPolicy();
   private voice!: VoiceSessions;
@@ -29,6 +33,28 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
 
   onCreate(): void {
     this.voice = new VoiceSessions(this.roomId);
+    this.onMessage('lobby:seat', (client, raw: unknown) => {
+      const player = this.state.players.get(client.sessionId), now = this.clock.elapsedTime;
+      if (!player?.connected || !validSeatRequest(raw)) return;
+      if (raw.seat === -1) {
+        if (!this.stand(client.sessionId) && player.seatIndex >= 0) client.send('lobby:notice', 'Please wait for space beside the bench.');
+        return;
+      }
+      if (now - (this.seatingRequests.get(client.sessionId) ?? -1000) < 250) return;
+      this.seatingRequests.set(client.sessionId, now);
+      if (player.seatIndex >= 0) return;
+      const seat = lobbyRetreat.seats[raw.seat];
+      if (Math.hypot(player.x - seat.x, player.z - seat.z) > lobbyRetreat.interactionDistance || player.y > 1.8) {
+        client.send('lobby:notice', 'Move closer to sit.'); return;
+      }
+      if ([...this.state.players.values()].some(other => other.connected && other.seatIndex === raw.seat)) {
+        client.send('lobby:notice', 'That bench is occupied.'); return;
+      }
+      player.seatIndex = raw.seat; player.x = seat.x; player.z = seat.z; player.y = lobbyRetreat.seatedEye; player.yaw = seat.yaw; player.crouching = false;
+      const entry = this.inputs.get(client.sessionId);
+      if (entry) { entry.value.active = false; entry.value.f = entry.value.r = 0; entry.value.y = seat.yaw; entry.value.p = 0; }
+      this.simulation.add(client.sessionId, seat);
+    });
     this.setPatchRate(1000 / SIMULATION_HZ);
     this.onMessage('chat:send', (client, raw: unknown) => {
       const player = this.state.players.get(client.sessionId);
@@ -91,6 +117,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
   }
 
   onDrop(client: Client): void {
+    this.stand(client.sessionId, true);
     void this.voice.remove(client.sessionId);
     const player = this.state.players.get(client.sessionId);
     if (player?.connected) { player.connected = false; this.state.online--; }
@@ -106,6 +133,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
   }
 
   onLeave(client: Client): void {
+    this.seatingRequests.delete(client.sessionId);
     void this.voice.remove(client.sessionId);
     this.voiceRequests.delete(client.sessionId);
     this.chat.remove(client.sessionId);
@@ -122,6 +150,10 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
       const player = this.state.players.get(id);
       if (!player?.connected) continue;
       if (this.clock.elapsedTime - entry.receivedAt > INPUT_TIMEOUT_MS) entry.value.active = false;
+      if (player.seatIndex >= 0 && entry.value.active && (entry.value.f !== 0 || entry.value.r !== 0 || entry.value.j)) this.stand(id);
+      if (player.seatIndex >= 0) {
+        player.yaw = entry.value.y; player.pitch = entry.value.p; player.lastProcessedInput = Math.max(0, entry.value.seq); continue;
+      }
       const position = this.simulation.step(id, entry.value)!;
       player.x = position.x;
       player.z = position.z;
@@ -136,8 +168,18 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
 
   private visitorName(id: string): string { return this.state.players.get(id)?.displayName ?? 'VISITOR'; }
 
+  private stand(id: string, force = false): boolean {
+    const player = this.state.players.get(id);
+    if (!player || player.seatIndex < 0) return false;
+    const exits = seatExits(player.seatIndex);
+    const position = exits.find(exit => this.seatingWorld.canOccupy(exit.x, exit.z) && [...this.state.players].every(([otherId, other]) => otherId === id || !other.connected || Math.hypot(other.x - exit.x, other.z - exit.z) >= .6)) ?? (force ? exits[0] : undefined);
+    if (!position) return false;
+    player.seatIndex = -1; player.x = position.x; player.z = position.z; player.y = 1.7;
+    this.simulation.add(id, position); return true;
+  }
+
   async onDispose(): Promise<void> {
-    this.inputs.clear(); this.simulation.clear(); this.chat.clear(); this.voiceRequests.clear();
+    this.inputs.clear(); this.simulation.clear(); this.chat.clear(); this.voiceRequests.clear(); this.seatingRequests.clear();
     await this.voice.dispose();
   }
 }

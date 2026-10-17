@@ -23,6 +23,16 @@ button { border: 0; background: none; }
 .ui button, .ui input { pointer-events: auto; }
 .visitor-focus { position: absolute; left: 50%; top: calc(50% + 18px); transform: translateX(-50%); margin: 0; max-width: 70%; font-size: 11px; line-height: 1.4; color: #edf4f8; text-shadow: 0 1px 6px #202c36; overflow-wrap: anywhere; text-align: center; }
 #app:not([data-mode="LIMBO"]) .visitor-focus { display: none; }
+.visitor-focus { min-height: 44px; padding: 8px; }
+.visitor-focus::after { content: 'E'; display: inline-block; margin-left: 10px; padding: 1px 4px; border: 1px solid #edf4f755; border-radius: 2px; font-size: 9px; }
+#app[data-input="touch"] .visitor-focus::after { content: '\00b7\00b7\00b7'; }
+.bench-interaction { position: absolute; left: 50%; top: calc(50% + 45px); transform: translateX(-50%); display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 10px 14px; border: 1px solid #edf4f733; border-radius: 4px; background: #edf4f722; color: #edf4f8; font-size: 10px; text-shadow: 0 1px 6px #202c36; }
+.bench-interaction svg { width: 18px; height: 18px; stroke-width: 1.2; }
+.bench-interaction { min-width: 136px; justify-content: center; background: rgb(248 250 251 / 86%); color: #56636d; border-color: #b8c5ce; text-shadow: none; }
+.bench-interaction kbd { border-color: #aeb9c0; }
+.bench-interaction:disabled { cursor: default; opacity: .65; }
+.bench-interaction kbd { font: inherit; padding: 2px 5px; border: 1px solid #edf4f766; border-radius: 2px; }
+#app[data-input="touch"] .bench-interaction kbd { display: none; }
 #app[data-mode="LIMBO"].lobby-hud-hidden .inspection-actions { visibility: hidden; pointer-events: none; }
 #app[data-mode="LIMBO"].lobby-hud-hidden .now-playing { display: none; }
 #app[data-mode="LIMBO"].lobby-hud-hidden .ui > :not(.intro) { visibility: hidden !important; pointer-events: none !important; }

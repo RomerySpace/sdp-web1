@@ -1,10 +1,11 @@
-import { AdditiveBlending, BackSide, BoxGeometry, CapsuleGeometry, Group, Mesh, MeshStandardMaterial, Raycaster, ShaderMaterial, Sphere, Vector2, Vector3, type Camera, type Object3D, type Scene } from 'three';
+import { AdditiveBlending, BackSide, BoxGeometry, CapsuleGeometry, Group, MathUtils, Mesh, MeshStandardMaterial, Raycaster, ShaderMaterial, Sphere, Vector2, Vector3, type Camera, type Object3D, type Scene } from 'three';
 import type { LobbySnapshot } from '../../shared/MultiplayerProtocol';
 import type { Atmosphere } from './Atmosphere';
 import { lobbyAmbience } from '../core/LobbyAmbience';
+import { lobbyRetreat } from '../../shared/LobbyRetreat';
 
-interface Sample { time: number; x: number; y: number; z: number; yaw: number; pitch: number; crouching: boolean }
-interface RemoteVisitor { group: Group; body: Mesh; name: string; marker: Mesh; material: MeshStandardMaterial; halo: Mesh<CapsuleGeometry, ShaderMaterial>; level: number; samples: Sample[] }
+interface Sample { time: number; x: number; y: number; z: number; yaw: number; pitch: number; crouching: boolean; seat: number }
+interface RemoteVisitor { group: Group; body: Mesh; legs: Group; posture: number; name: string; marker: Mesh; material: MeshStandardMaterial; halo: Mesh<CapsuleGeometry, ShaderMaterial>; level: number; samples: Sample[] }
 const INTERPOLATION_DELAY_MS = 100;
 
 export class RemotePlayerManager {
@@ -17,6 +18,7 @@ export class RemotePlayerManager {
   private readonly head = new Sphere(new Vector3(), .28);
   private readonly hit = new Vector3();
   private readonly body = new CapsuleGeometry(0.23, 1.1, 4, 8);
+  private readonly legGeometry = new CapsuleGeometry(.085, .24, 3, 6);
   private readonly markerGeometry = new BoxGeometry(0.07, 0.045, 0.1);
   private readonly material = new MeshStandardMaterial({
     color: 0xc6cfd3, roughness: 0.94, metalness: 0,
@@ -59,15 +61,20 @@ export class RemotePlayerManager {
         marker.position.set(0, 1.48, -0.22);
         const halo = new Mesh(this.body, this.haloMaterial.clone());
         halo.name = 'Voice glow'; halo.position.y = .8; halo.scale.set(1.18, 1.08, 1.18); halo.visible = false;
-        group.add(body, marker, halo);
+        const legs = new Group(); legs.name = 'Seated legs'; legs.visible = false;
+        for (const x of [-.13, .13]) {
+          const thigh = new Mesh(this.legGeometry, material); thigh.position.set(x, .46, -.18); thigh.rotation.x = Math.PI / 2;
+          const shin = new Mesh(this.legGeometry, material); shin.position.set(x, .22, -.38); legs.add(thigh, shin);
+        }
+        group.add(body, marker, halo, legs);
         group.position.set(player.x, player.y - 1.7, player.z);
         group.rotation.y = player.yaw;
-        visitor = { group, body, name: '', marker, material, halo, level: 0, samples: [] };
+        visitor = { group, body, legs, posture: 0, name: '', marker, material, halo, level: 0, samples: [] };
         this.visitors.set(player.playerId, visitor);
         this.group.add(group);
       }
       visitor.name = player.displayName || 'VISITOR';
-      visitor.samples.push({ time: snapshot.receivedAt, x: player.x, y: player.y, z: player.z, yaw: player.yaw, pitch: player.pitch, crouching: Boolean(player.crouching) });
+      visitor.samples.push({ time: snapshot.receivedAt, x: player.x, y: player.y, z: player.z, yaw: player.yaw, pitch: player.pitch, crouching: Boolean(player.crouching), seat: player.seatIndex ?? -1 });
       if (visitor.samples.length > 8) visitor.samples.shift();
     }
     for (const [id, visitor] of this.visitors) {
@@ -82,7 +89,7 @@ export class RemotePlayerManager {
     for (const [id, visitor] of this.visitors) {
       const intersection = this.raycaster.intersectObject(visitor.body, false)[0];
       let distance = intersection?.distance ?? Infinity;
-      this.head.center.set(0, 1.45, 0).applyMatrix4(visitor.group.matrixWorld);
+      this.head.center.set(0, visitor.marker.position.y, 0).applyMatrix4(visitor.group.matrixWorld);
       this.head.radius = .28;
       if (this.raycaster.ray.intersectSphere(this.head, this.hit)) distance = Math.min(distance, this.hit.distanceTo(this.raycaster.ray.origin));
       if (distance < nearest) { nearest = distance; focused = { id, name: visitor.name }; }
@@ -114,14 +121,21 @@ export class RemotePlayerManager {
       const t = after.time > before.time ? Math.max(0, Math.min(1, (renderTime - before.time) / (after.time - before.time))) : 1;
       visitor.group.position.set(
         before.x + (after.x - before.x) * t,
-        before.y + (after.y - before.y) * t - 1.7,
+        (before.y - (before.seat >= 0 ? lobbyRetreat.seatedEye : 1.7)) * (1 - t) + (after.y - (after.seat >= 0 ? lobbyRetreat.seatedEye : 1.7)) * t,
         before.z + (after.z - before.z) * t,
       );
       const angle = Math.atan2(Math.sin(after.yaw - before.yaw), Math.cos(after.yaw - before.yaw));
       visitor.group.rotation.y = before.yaw + angle * t;
+      if (after.seat >= 0) visitor.group.rotation.y = lobbyRetreat.seats[after.seat].yaw;
       visitor.group.scale.y = (before.crouching ? .65 : 1) + ((after.crouching ? .65 : 1) - (before.crouching ? .65 : 1)) * t;
+      visitor.posture = MathUtils.damp(visitor.posture, after.seat >= 0 ? 1 : 0, 12, dt);
+      visitor.body.scale.y = 1 - visitor.posture * .4;
+      visitor.body.position.y = .8 + visitor.posture * .11;
+      visitor.legs.visible = visitor.posture > .05; visitor.legs.scale.setScalar(visitor.posture);
+      visitor.halo.position.y = visitor.body.position.y; visitor.halo.scale.y = 1.08 * visitor.body.scale.y;
       const pitch = before.pitch + (after.pitch - before.pitch) * t;
-      visitor.marker.position.y = 1.48 + Math.sin(pitch) * 0.08;
+      visitor.marker.position.y = 1.48 - visitor.posture * .23 + Math.sin(pitch) * 0.08;
+      visitor.marker.rotation.y = after.seat >= 0 ? after.yaw - visitor.group.rotation.y : 0;
     }
   }
 
@@ -129,6 +143,6 @@ export class RemotePlayerManager {
     for (const visitor of this.visitors.values()) { visitor.group.removeFromParent(); visitor.group.clear(); visitor.material.dispose(); visitor.halo.material.dispose(); }
     this.visitors.clear();
     this.group.removeFromParent();
-    this.body.dispose(); this.markerGeometry.dispose(); this.material.dispose(); this.haloMaterial.dispose();
+    this.body.dispose(); this.legGeometry.dispose(); this.markerGeometry.dispose(); this.material.dispose(); this.haloMaterial.dispose();
   }
 }

@@ -52,6 +52,7 @@ export class ChatInterface {
     const follow = !this.element.classList.contains('is-open') || this.history.scrollHeight - this.history.clientHeight - this.history.scrollTop < 24;
     const row = document.createElement('p');
     row.className = 'chat-message';
+    row.dataset.senderId = message.senderId;
     const name = document.createElement('span');
     name.className = 'chat-sender';
     name.textContent = `${message.senderName}:`;
@@ -64,6 +65,9 @@ export class ChatInterface {
   }
 
   clear(): void { this.input.value = ''; }
+  removeSenders(hidden: (id: string) => boolean): void {
+    for (const row of this.history.querySelectorAll<HTMLElement>('.chat-message')) if (hidden(row.dataset.senderId || '')) row.remove();
+  }
   reset(): void { this.clear(); this.history.replaceChildren(); this.element.classList.remove('show-history'); }
   private scheduleFade(): void {
     window.clearTimeout(this.fadeTimer);

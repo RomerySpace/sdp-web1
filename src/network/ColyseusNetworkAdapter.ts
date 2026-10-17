@@ -107,6 +107,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
         for (const callback of this.messages) callback(message);
       });
       room.onMessage<string>('chat:error', (message) => { if (this.room === room) for (const callback of this.notices) callback(message); });
+      room.onMessage<string>('lobby:notice', message => { if (this.room === room) for (const callback of this.notices) callback(message); });
       room.onMessage<WeaponEvent>('weapon:event', event => {
         if (this.room !== room || event.roomId !== room.roomId) return;
         for (const callback of this.weapons) callback(event);
@@ -164,7 +165,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
       playerId: id, x: player.x, y: player.y, z: player.z,
       yaw: player.yaw, pitch: player.pitch, connected: player.connected,
       lastProcessedInput: player.lastProcessedInput,
-      crouching: player.crouching, sprinting: player.sprinting, grounded: player.grounded, height: player.height, lean: player.lean,
+      seatIndex: player.seatIndex, crouching: player.crouching, sprinting: player.sprinting, grounded: player.grounded, height: player.height, lean: player.lean,
       gaitPhase: player.gaitPhase, gaitX: player.gaitX, gaitZ: player.gaitZ,
       flashlight: player.flashlight,
       ammo: player.ammo, reserve: player.reserve, reloading: player.reloading, weaponSeq: player.weaponSeq, health: player.health,
@@ -217,6 +218,9 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
 
   sendInput(input: MovementInput): void {
     if (this.currentStatus.state === 'connected' && this.room?.connection.isOpen) this.room.send('input', input);
+  }
+  requestSeat(seat: number): void {
+    if (this.roomType === LOBBY_NAME && this.currentStatus.state === 'connected' && this.room?.connection.isOpen) this.room.send('lobby:seat', { seat });
   }
   sendShooterInput(input: ShooterInput): void {
     if (this.currentStatus.state === 'connected' && this.room?.connection.isOpen) this.room.send('shooter:input', input);

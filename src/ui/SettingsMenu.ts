@@ -5,7 +5,7 @@ export class SettingsMenu {
   readonly element = document.createElement('section');
   private readonly panel: SettingsPanel;
   private readonly events = new AbortController();
-  constructor(container: HTMLElement, settings: PlayerSettings, close: () => void) {
+  constructor(container: HTMLElement, settings: PlayerSettings, close: () => void, visitors?: () => void) {
     this.element.className = 'settings-overlay'; this.element.hidden = true;
     this.element.tabIndex = -1;
     this.element.setAttribute('role', 'dialog'); this.element.setAttribute('aria-modal', 'true');
@@ -14,6 +14,10 @@ export class SettingsMenu {
       <button class="settings-close" type="button">RETURN <kbd>P</kbd></button></div>`;
     this.panel = new SettingsPanel(settings, 'limbo'); this.element.querySelector('.settings-slot')!.append(this.panel.element);
     const signal = this.events.signal;
+    if (visitors) {
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'settings-visitors'; button.textContent = 'VISITORS';
+      button.addEventListener('click', visitors, { signal }); this.panel.element.append(button);
+    }
     this.element.querySelector('.settings-close')!.addEventListener('click', close, { signal });
     this.element.addEventListener('keydown', event => {
       if (event.key !== 'Tab') return;
