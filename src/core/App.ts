@@ -364,7 +364,7 @@ export class App {
     if (action === 'fire') input.touchFire(active);
     else if (action === 'aim') input.aiming = active && input.enabled;
     else {
-      const keys: Partial<Record<TouchAction, string>> = { jump: 'Space', crouch: 'ControlLeft', sprint: 'ShiftLeft', reload: 'KeyR', mode: 'KeyB' };
+      const keys: Partial<Record<TouchAction, string>> = { jump: 'Space', crouch: 'ControlLeft', sprint: 'ShiftLeft', reload: 'KeyR', mode: 'KeyB', flashlight: 'KeyZ' };
       const key = keys[action];
       if (key) input.touchKey(key, active);
     }
@@ -375,7 +375,7 @@ export class App {
     if (this.contextLost || this.settingsMenu.visible || (this.modes.value === 'SHOOTER' && (this.state.value === 'CHATTING' || !shooter || shooter.paused || shooter.roundComplete || shooter.targeting.blocking))) {
       this.touchControls.update('hidden', '');
     } else if (this.modes.value === 'SHOOTER' && shooter) {
-      this.touchControls.update(shooter.dead ? 'dead' : 'shooter', String(shooter.life), shooter.weapon.automatic);
+      this.touchControls.update(shooter.dead ? 'dead' : 'shooter', String(shooter.life), shooter.weapon.automatic, !shooter.dead && shooter.flashlightEnabled);
     } else if (this.modes.value === 'LIMBO' && ['EXPLORING', 'INSPECTING'].includes(this.state.value)) {
       this.touchControls.update(this.state.value === 'INSPECTING' ? 'inspection' : 'limbo', '');
     } else this.touchControls.update('hidden', '');

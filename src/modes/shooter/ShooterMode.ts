@@ -27,6 +27,7 @@ import { TargetingMap } from './strikes/TargetingMap';
 import { AirstrikeVisuals } from './strikes/AirstrikeVisuals';
 import { airstrikeConfig, strikeBit, type StrikeSlot } from '../../../shared/AirstrikeProtocol';
 import { strikePresentation } from './strikes/StrikePresentation';
+import { Flashlights } from './effects/Flashlights';
 
 export class ShooterMode {
   readonly scene = new Scene(); readonly input: InputManager; readonly camera: FirstPersonCamera;
@@ -38,6 +39,8 @@ export class ShooterMode {
   readonly menu: ShooterMenu;
   readonly targeting: TargetingMap;
   readonly airstrikes: AirstrikeVisuals;
+  readonly flashlights: Flashlights;
+  flashlightEnabled = false;
   health = gameplayConfig.combat.maxHealth; dead = false; life = 0;
   physics?: PhysicsWorld; player?: CharacterController; shooting?: ShootingSystem;
   paused = true; active = false; colliderCount = 0; fixedSteps = 0;
@@ -60,6 +63,7 @@ export class ShooterMode {
     this.input = new InputManager(renderer.domElement, touch); this.camera = new FirstPersonCamera(this.input);
     this.scene.add(this.camera.root); this.camera.camera.add(this.weapon.root);
     this.environment = new Environment(this.scene, renderer); this.contactShading = new ContactShading(this.scene, this.camera.camera);
+    this.flashlights = new Flashlights(this.scene, renderer);
     this.scene.traverse(object => { if ('isLight' in object) object.layers.enable(1); });
     this.remotes = new RemoteShooterPlayers(this.scene, this.weapon.modelRoot); this.hud = new ShooterHUD(container, () => this.pause(), slot=>this.openTargeting(slot));
     this.targeting = new TargetingMap(container,(slot,x,z)=>{
@@ -102,11 +106,14 @@ export class ShooterMode {
           }
         }
         if ((local.weaponSeq ?? 0) >= this.actionSequence) {
-          this.weapon.ammo = local.ammo ?? this.weapon.ammo; this.weapon.reserve = local.reserve ?? this.weapon.reserve;
-          this.weapon.automatic = local.automatic ?? false;
-          if (!local.reloading) { this.weapon.reloading = false; this.weapon.reloadElapsed = 0; }
+          this.weapon.reconcile(local.ammo ?? this.weapon.ammo, local.reserve ?? this.weapon.reserve, !!local.reloading, !!local.automatic);
         }
-      }), network.subscribeToWeapons(event => this.remotes.action(event)),
+      }), network.subscribeToWeapons(event => {
+        this.remotes.action(event);
+        if (event.playerId !== network.snapshot?.localPlayerId && event.action === 'fire' && event.origin && event.target) {
+          this.shooting?.trails.emit(new Vector3().fromArray(event.origin), new Vector3().fromArray(event.target));
+        }
+      }),
       network.subscribeToStrikes(result=>this.hud.notice(result.message)),
       network.subscribeToCombat(event => {
 
@@ -137,6 +144,7 @@ export class ShooterMode {
     this.player?.spawn.set(player.spawnX ?? player.x, player.spawnY ?? player.y, player.spawnZ ?? player.z);
     this.player?.respawn(); this.camera.reset(); this.weapon.reset(player.ammo, player.reserve, player.automatic); this.feedback.reset();
     this.health = player.health ?? gameplayConfig.combat.maxHealth; this.life = player.life ?? 1; this.dead = false;
+    this.flashlightEnabled = false;
     this.prediction.reset(this.life); this.viewCorrection.set(0, 0, 0); this.lastInput = undefined; this.lastInputSent = 0;
     this.accumulator = this.stepDistance = 0;
     this.player?.correct(player); this.input.yaw = player.yaw; this.input.pitch = player.pitch; this.input.clear();
@@ -208,10 +216,10 @@ export class ShooterMode {
     const now = performance.now(), input: ShooterInput = { seq: this.sequence + 1, life: this.life, f: active ? this.input.forward : 0, r: active ? this.input.sideways : 0,
       y: Math.atan2(Math.sin(this.input.yaw), Math.cos(this.input.yaw)), p: this.input.pitch,
       s: active && this.input.keys.has('ShiftLeft'), c: active && (this.input.keys.has('ControlLeft') || this.input.keys.has('ControlRight')),
-      l: active ? Number(this.input.keys.has('KeyE')) - Number(this.input.keys.has('KeyQ')) : 0,
+      l: active ? Number(this.input.keys.has('KeyE')) - Number(this.input.keys.has('KeyQ')) : 0, t: active && this.flashlightEnabled,
       j: active && this.input.pending('Space'), a: active && this.input.aiming, active };
     const previous = this.lastInput;
-    const changed = !previous || ['f', 'r', 's', 'c', 'j', 'a', 'l', 'active'].some(key => input[key as keyof ShooterInput] !== previous[key as keyof ShooterInput]);
+    const changed = !previous || ['f', 'r', 's', 'c', 'j', 'a', 'l', 't', 'active'].some(key => input[key as keyof ShooterInput] !== previous[key as keyof ShooterInput]);
     if (!force && !changed && now - this.lastInputSent < 1000 / shooterNetworkConfig.inputHz) return;
     this.sequence = input.seq; this.lastInput = input; this.lastInputSent = now;
     this.network.sendShooterInput(input);
@@ -230,6 +238,9 @@ export class ShooterMode {
     this.targeting.update(dt,local);
     const blocked=this.targeting.blocking;
     this.input.enabled=!this.paused&&!this.dead&&!blocked&&this.input.controlling;
+    if (this.input.enabled && this.input.consume('KeyZ')) this.flashlightEnabled = !this.flashlightEnabled;
+    this.hud.element.dataset.flashlight = String(this.flashlightEnabled);
+    this.hud.element.parentElement!.dataset.lighting = this.scene.userData.lighting;
     this.hud.element.dataset.targeting=String(blocked);
     if (!this.paused && !this.dead) {
       this.accumulator = Math.min(this.accumulator + dt, gameConfig.physics.timestep * gameConfig.physics.maxSubsteps);
@@ -268,6 +279,7 @@ export class ShooterMode {
     this.shooting?.update(activeDt); this.input.lookX = this.input.lookY = 0;
     this.remotes.update(performance.now()); this.hud.update(p, this.weapon, this.health, this.dead); this.menu.update(this.network.snapshot);
     this.feedback.update(dt, this.health, this.dead); this.environment.follow(this.camera.root.position);
+    this.flashlights.update(this.camera.camera, this.flashlightEnabled && !this.dead && !this.paused && !blocked, this.network.snapshot);
     const snapshot=this.network.snapshot;
     this.airstrikes.update((snapshot?.serverTime??0)+Math.min(500,Math.max(0,performance.now()-(snapshot?.receivedAt??performance.now()))));
     const camera = this.camera.camera, renderer = this.renderer;
@@ -291,7 +303,7 @@ export class ShooterMode {
     if (this.disposed) return;
     this.active = false; this.disposed = true; this.events.abort(); this.unsubscribers.forEach(fn => fn());
     this.targeting.dispose();this.airstrikes.dispose();this.media.dispose(); this.input.dispose(); this.audio.dispose(); this.hud.dispose(); this.menu.dispose(); this.feedback.dispose(); this.shooting?.dispose(); this.remotes.dispose();
-    this.contactShading.dispose(); this.weapon.dispose(); this.map.dispose(); this.environment.dispose(); this.physics?.dispose(); this.scene.clear();
+    this.contactShading.dispose(); this.flashlights.dispose(); this.weapon.dispose(); this.map.dispose(); this.environment.dispose(); this.physics?.dispose(); this.scene.clear();
     const r = this.renderer, previous = this.previousRenderer;
     r.toneMapping = previous.toneMapping; r.toneMappingExposure = previous.exposure; r.autoClear = previous.autoClear;
     r.info.autoReset = previous.autoReset; r.shadowMap.type = previous.shadowType; r.shadowMap.autoUpdate = previous.shadowAutoUpdate;

@@ -17,6 +17,7 @@ export class Environment {
     scene.background = new Color(e.background);
     scene.fog = new FogExp2(e.fogColor, e.fogDensity);
     this.key.castShadow = true;
+    this.key.shadow.autoUpdate = false;
     this.key.shadow.mapSize.setScalar(e.shadowResolution);
     this.key.shadow.camera.near = 1; this.key.shadow.camera.far = 120;
     this.key.shadow.bias = -0.00015;
@@ -39,13 +40,15 @@ export class Environment {
     (this.scene.fog as FogExp2).density = e.fogDensity;
     (this.scene.fog as FogExp2).color.set(e.fogColor);
     const night = this.lighting === 'night';
-    (this.scene.background as Color).set(night ? '#111b29' : '#8b98a3');
-    (this.scene.fog as FogExp2).color.set(night ? '#182534' : '#8b98a3');
-    this.scene.environmentIntensity = night ? .12 : .36;
-    this.renderer.toneMappingExposure = night ? .62 : .82;
-    this.key.intensity = night ? .32 : 1.15; this.key.color.set(night ? '#a6c8ed' : '#fff9f0');
+    this.scene.userData.lighting = this.lighting;
+    (this.scene.background as Color).set(night ? '#010204' : '#8b98a3');
+    (this.scene.fog as FogExp2).color.set(night ? '#020407' : '#8b98a3');
+    this.scene.environmentIntensity = night ? .006 : .36;
+    this.renderer.toneMappingExposure = night ? .8 : .82;
+    this.key.intensity = night ? .012 : 1.15; this.key.color.set(night ? '#a6c8ed' : '#fff9f0');
     this.key.shadow.intensity = e.shadowIntensity;
-    this.fill.intensity = night ? .24 : .48;
+    this.fill.intensity = night ? .008 : .48;
+    this.key.shadow.needsUpdate = true; this.renderer.shadowMap.needsUpdate = true;
     const c = this.key.shadow.camera, r = e.shadowRadius;
     c.left = c.bottom = -r; c.right = c.top = r; c.updateProjectionMatrix();
   }
@@ -56,6 +59,7 @@ export class Environment {
     this.target.set(x, position.y, z);
     this.key.target.position.copy(this.target);
     this.key.position.copy(this.target).add(new Vector3(-24, 45, 18));
+    this.key.shadow.needsUpdate = true;
     this.renderer.shadowMap.needsUpdate = true;
   }
   dispose(): void { this.disposed = true; this.environment?.dispose(); this.key.shadow.dispose(); }

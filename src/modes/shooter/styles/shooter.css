@@ -14,6 +14,9 @@
 .shooter-ammo { position: absolute; bottom: 30px; right: 30px; display: grid; grid-template-columns: auto auto; align-items: baseline; gap: 8px; text-align: right; }
 .shooter-fire-control, .shooter-action { grid-column: 1 / -1; font-size: 9px; min-height: 16px; }
 .shooter-fire-control { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
+.shooter-flashlight-hint { grid-column: 1 / -1; font-size: 9px; min-height: 12px; opacity: .7; }
+.shooter-hud[data-flashlight="true"] .shooter-flashlight-hint { opacity: 1; }
+#app[data-input="touch"] .shooter-flashlight-hint { display: none; }
 .shooter-fire-hint { color: #637986; font-size: 9px; white-space: nowrap; }
 .shooter-fire-hint kbd, .shooter-menu-button kbd { font: inherit; color: #354b58; }
 .shooter-menu-button { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); min-height: 44px; padding: 10px 12px; display: flex; align-items: center; gap: 8px; color: #506674; font: inherit; font-size: 9px; background: transparent; cursor: pointer; pointer-events: auto; }
@@ -54,6 +57,12 @@
 .shooter-hud[data-dead="true"] .shooter-crosshair { display: none; }
 
 .shooter-round { left: 50%; top: 30px; transform: translateX(-50%); font-size: 14px; letter-spacing: .12em; color: #edf2f5; text-shadow: 0 1px 8px #101b25; }
+@media (max-width: 600px) {
+  .shooter-round { top: 52px; left: 18px; transform: none; font-size: 11px; letter-spacing: 0; }
+}
+#app[data-mode="SHOOTER"][data-lighting="night"] .touch-button { color: #dae5ec; background: rgba(15,22,28,.6); border-color: rgba(206,225,237,.4); }
+#app[data-mode="SHOOTER"][data-lighting="night"] .touch-stick { border-color: rgba(206,225,237,.4); background: rgba(15,22,28,.3); }
+#app[data-mode="SHOOTER"][data-lighting="night"] .touch-stick-thumb { background: rgba(210,225,234,.4); }
 .kill-announcement { position: absolute; top: 29%; left: 50%; transform: translateX(-50%); width: min(600px, 85vw); text-align: center; color: #f4f8fb; text-shadow: 0 2px 16px #132533; }
 .kill-announcement strong { display: block; font-size: clamp(16px, 2vw, 28px); font-weight: 400; overflow-wrap: anywhere; }
 .kill-announcement span { display: block; margin-top: 10px; font-size: 16px; letter-spacing: .12em; }

@@ -623,6 +623,105 @@ test('Limbo sprint is immediate, smooth and visible in authoritative movement', 
     return Math.abs(server.z - app.player.camera.position.z);
   }), { timeout: 2500 }).toBeLessThan(.5);
 });
+test('night flashlights, 30-round automatic clips, POV flash, traces and clean return work with two clients', async ({ browser }, info) => {
+  test.setTimeout(240000);
+  const contexts = await Promise.all([browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }), browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })]);
+  const [first, second] = await Promise.all(contexts.map(context => context.newPage()));
+  const errors: string[] = [];
+  try {
+    for (const page of [first, second]) {
+      page.on('pageerror', error => errors.push(error.message));
+      await enterLimbo(page);
+      await page.evaluate(() => window.sdpUnified.modes.joinShooter());
+      await expect(page.locator('#app')).toHaveAttribute('data-mode', 'SHOOTER');
+      await page.getByRole('button', { name: 'ENTER SIMULATION' }).tap();
+      await expect.poll(() => page.evaluate(() => window.sdpUnified.modes.shooter!.player!.grounded)).toBe(true);
+      await page.evaluate(() => {
+        const s = window.sdpUnified.modes.shooter!, set = s.environment.setLighting.bind(s.environment);
+        s.environment.setLighting = () => set('night'); set('night'); s.input.pitch = -.35;
+      });
+    }
+    await expect.poll(() => first.evaluate(() => window.sdpUnified.modes.shooter!.remotes.count)).toBe(1);
+    const brightness = () => first.evaluate(() => {
+      const s = window.sdpUnified.modes.shooter!, r = window.sdpUnified.scene.renderer;
+      s.update(0); const gl = r.getContext(), width = gl.drawingBufferWidth, height = gl.drawingBufferHeight;
+      const data = new Uint8Array(width * height * 4); gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, data);
+      let sum = 0; for (let n = 0; n < data.length; n += 4) sum += (data[n] + data[n + 1] + data[n + 2]) / 3;
+      return sum / (width * height);
+    });
+    const dark = await brightness(); await first.screenshot({ path: info.outputPath('night-light-off.png') });
+    await first.getByRole('button', { name: 'Toggle flashlight' }).tap();
+    await expect.poll(() => second.evaluate(() => window.sdpUnified.network.snapshot!.players.some(p => p.playerId !== window.sdpUnified.network.snapshot!.localPlayerId && p.flashlight))).toBe(true);
+    await expect.poll(brightness).toBeGreaterThan(dark + 1);
+    await first.screenshot({ path: info.outputPath('night-light-on.png') });
+    await expect.poll(() => second.evaluate(() => {
+      const lights = window.sdpUnified.modes.shooter!.scene.children.filter(o => o.type === 'SpotLight');
+      return lights.some(o => 'intensity' in o && typeof o.intensity === 'number' && o.intensity > 0);
+    })).toBe(true);
+    await first.getByRole('button', { name: 'Toggle flashlight' }).tap();
+    await expect.poll(() => second.evaluate(() => window.sdpUnified.network.snapshot!.players.some(p => p.playerId !== window.sdpUnified.network.snapshot!.localPlayerId && p.flashlight))).toBe(false);
+    await first.evaluate(() => {
+      const s = window.sdpUnified.modes.shooter!; s.input.pitch = -1;
+      const w = s.weapon;
+      for (let n = 0; n < 30; n++) { w.time += .12; if (!w.shoot()) throw new Error('Predicted shot failed'); w.reconcile(30 - Math.floor(n / 2), 120, false, true); }
+      if (w.ammo !== 0) throw new Error('Snapshot restored a predicted bullet');
+      w.time += 1; if (w.shoot()) throw new Error('Magazine fired a 31st bullet');
+      const local = window.sdpUnified.network.snapshot!.players.find(p => p.playerId === window.sdpUnified.network.snapshot!.localPlayerId)!;
+      w.reset(local.ammo, local.reserve, local.automatic);
+    });
+    await first.getByRole('button', { name: 'Switch fire mode' }).tap();
+    await expect(first.locator('.shooter-fire-mode')).toHaveText('SDP / AUTO');
+    await first.evaluate(() => { const s = window.sdpUnified.modes.shooter!; s.input.touchFire(true); });
+    await expect.poll(() => first.evaluate(() => window.sdpUnified.modes.shooter!.shooting!.shotsFired)).toBeGreaterThan(0);
+    const effects = await first.evaluate(() => {
+      const s = window.sdpUnified.modes.shooter!;
+      s.weapon.time += .2; s.weapon.shoot(); s.weapon.muzzleFlash.updateWorldMatrix(true, true);
+      const flash = s.weapon.muzzleFlash.visible;
+      // Freeze a real trail in its visible flight phase for the screenshot.
+      const start = s.weapon.muzzlePosition(s.camera.aimDirection.clone()), end = start.clone().add(s.camera.aimDirection.clone().multiplyScalar(20));
+      s.shooting!.trails.emit(start, end); s.shooting!.trails.update(.025);
+      const renderer = window.sdpUnified.scene.renderer, camera = s.camera.camera, gl = renderer.getContext();
+      const capture = () => {
+        renderer.clear(); camera.layers.set(0); renderer.render(s.scene, camera);
+        const background = s.scene.background; s.scene.background = null; renderer.clearDepth(); camera.layers.set(1);
+        renderer.render(s.scene, camera); s.scene.background = background; camera.layers.set(0);
+        const pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
+        gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels); return pixels;
+      };
+      const difference = (a: Uint8Array, b: Uint8Array) => {
+        let changed = 0; for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 12) changed++; return changed;
+      };
+      s.weapon.muzzleFlash.material.opacity = 1; const baseline = capture();
+      s.weapon.muzzleFlash.material.opacity = 0; const noFlash = capture(); s.weapon.muzzleFlash.material.opacity = 1;
+      const traces = s.scene.children.filter(o => o.visible && o.name === 'shot-tracer'); traces.forEach(o => { o.visible = false; });
+      const noTrails = capture(); traces.forEach(o => { o.visible = true; });
+      return { flash, traces: traces.length, flashPixels: difference(baseline, noFlash), tracePixels: difference(baseline, noTrails) };
+    });
+    expect(effects.flash).toBe(true); expect(effects.traces).toBeGreaterThan(0);
+    expect(effects.flashPixels).toBeGreaterThan(2); expect(effects.tracePixels).toBeGreaterThan(2);
+    await first.screenshot({ path: info.outputPath('night-firing.png') });
+    await expect(first.locator('.shooter-magazine')).toHaveText('00');
+    const fired = await first.evaluate(() => window.sdpUnified.modes.shooter!.shooting!.shotsFired);
+    await first.waitForTimeout(700); expect(await first.evaluate(() => window.sdpUnified.modes.shooter!.shooting!.shotsFired)).toBe(fired);
+    await first.evaluate(() => window.sdpUnified.modes.shooter!.input.touchFire(false));
+    await first.getByRole('button', { name: 'Reload weapon' }).tap();
+    await expect(first.locator('.shooter-magazine')).toHaveText('30');
+    await expect(first.locator('.shooter-reserve')).toHaveText('/ \u221e');
+    const returnGate = await first.evaluate(() => {
+      const modes = window.sdpUnified.modes, network = window.sdpUnified.network, switchRoom = network.switchRoom.bind(network);
+      network.switchRoom = async type => { await new Promise(resolve => setTimeout(resolve, 800)); await switchRoom(type); };
+      void modes.returnToLimbo(); return true;
+    });
+    expect(returnGate).toBe(true);
+    await expect(first.locator('.mode-overlay')).toHaveAttribute('data-phase', 'loading');
+    await expect(first.getByRole('button', { name: 'RESUME', exact: true })).toBeHidden();
+    await expect(first.getByRole('button', { name: 'RETURN TO LIMBO', exact: true })).toBeHidden();
+    await first.screenshot({ path: info.outputPath('return-loading.png') });
+    await expect(first.locator('#app')).toHaveAttribute('data-mode', 'LIMBO');
+    expect(errors).toEqual([]);
+  } finally { await Promise.all(contexts.map(context => context.close())); }
+});
+
 test('actual requests stay lazy; both scenes render; controls and repeated return work', async ({ page }, info) => {
   const requests: string[] = [], errors: string[] = [];
   page.on('request', request => requests.push(request.url())); page.on('pageerror', error => errors.push(error.message));

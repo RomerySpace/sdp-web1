@@ -16,7 +16,7 @@ import { ShooterMatch } from '../simulation/ShooterMatch';
 import { roomDisplayName, validateDisplayName } from '../../../shared/PlayerIdentity';
 import { shotRecoil } from '../../../shared/WeaponRecoil';
 import { advanceGait } from '../../../shared/AvatarAnimation';
-interface Entry { input: ShooterInput; received: number; slot: number; lastAction: number; lastShot: number; reloadUntil: number;
+interface Entry { input: ShooterInput; received: number; slot: number; lastAction: number; lastShot: number; nextShotAt: number; reloadUntil: number;
   probe: string; probeAt: number; rtt: number; recovery: HealthRecovery; burstShots: number; awardedStrikes: number; strikeSequence: number; lastStrike: number }
 export class SDPShooterRoom extends Room<{ state: ShooterState }> {
   static async onAuth(_token: string, options: { displayName?: unknown } = {}): Promise<boolean> {
@@ -73,7 +73,8 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
       const now = this.clock.elapsedTime, w = gameConfig.weapon;
       if (action.action === 'fire') {
         const interval = player.automatic ? gameplayConfig.combat.automaticFireInterval : w.fireInterval;
-        if (!entry.input.active || now - entry.received > shooterNetworkConfig.inputTimeoutMs || player.reloading || player.ammo <= 0 || now - entry.lastShot < interval * 1000) return;
+        if (!entry.input.active || now - entry.received > shooterNetworkConfig.inputTimeoutMs || player.reloading || player.ammo <= 0 || now + gameplayConfig.combat.fireJitterTolerance * 1000 < entry.nextShotAt) return;
+        entry.nextShotAt = Math.max(now, entry.nextShotAt) + interval * 1000;
         const burst = now - entry.lastShot > gameplayConfig.combat.recoilReset * 1000 ? 0 : entry.burstShots;
         entry.burstShots = burst + 1;
         entry.lastShot = now; player.ammo--;
@@ -89,10 +90,10 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
         if (player.reloading) return;
         player.automatic = !player.automatic; entry.burstShots = 0;
       } else {
-        if (player.reloading || player.ammo >= w.magazineSize || player.reserve <= 0) return;
+        if (player.reloading || player.ammo >= w.magazineSize || !gameplayConfig.combat.infiniteReserve && player.reserve <= 0) return;
         player.reloading = true; entry.reloadUntil = now + w.reloadDuration * 1000;
       }
-      this.broadcast('weapon:event', { ...action, playerId: client.sessionId, roomId: this.roomId, timestamp: Date.now() });
+      this.broadcast('weapon:event', { ...action, ...(action.action === 'fire' ? this.combat.lastTrace : {}), playerId: client.sessionId, roomId: this.roomId, timestamp: Date.now() });
     });
     this.onMessage('combat:pong', (client, nonce: unknown) => {
       const entry = this.entries.get(client.sessionId), now = this.clock.elapsedTime;
@@ -137,7 +138,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
       spawnX: character.spawn.x, spawnY: character.spawn.y, spawnZ: character.spawn.z });
     player.bornAt = this.clock.elapsedTime; player.protectedUntil = player.bornAt + gameplayConfig.combat.spawnProtection * 1000;
     this.state.players.set(client.sessionId, player); this.state.online++;
-    this.entries.set(client.sessionId, { slot, received: this.clock.elapsedTime, lastAction: -1, lastShot: -1000, reloadUntil: 0, probe: '', probeAt: 0, rtt: 0, recovery: new HealthRecovery(), burstShots: 0, awardedStrikes: 0, strikeSequence: -1, lastStrike: -1000,
+    this.entries.set(client.sessionId, { slot, received: this.clock.elapsedTime, lastAction: -1, lastShot: -1000, nextShotAt: -1000, reloadUntil: 0, probe: '', probeAt: 0, rtt: 0, recovery: new HealthRecovery(), burstShots: 0, awardedStrikes: 0, strikeSequence: -1, lastStrike: -1000,
       input: { seq: -1, life: player.life, f: 0, r: 0, y: player.yaw, p: 0, s: false, c: false, j: false, a: false, active: false } });
     this.combat.record(this.poses(this.clock.elapsedTime));
     if (this.match.phase === 'waiting') this.startMatch(this.clock.elapsedTime, false);
@@ -176,13 +177,17 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     for (const [id, entry] of this.entries) {
       const player = this.state.players.get(id)!;
       if (player.dead) {
+        player.flashlight = false;
         if (now >= player.respawnAt) this.respawn(id, now);
         continue;
       }
       if (!player.connected || now - entry.received > shooterNetworkConfig.inputTimeoutMs) { entry.input.active = false; this.world.input(id, entry.input); }
+      player.flashlight = player.connected && entry.input.active && !!entry.input.t;
       if (player.reloading && now >= entry.reloadUntil) {
-        const transfer = Math.min(gameConfig.weapon.magazineSize - player.ammo, player.reserve);
-        player.ammo += transfer; player.reserve -= transfer; player.reloading = false;
+        const transfer = Math.min(gameConfig.weapon.magazineSize - player.ammo, gameplayConfig.combat.infiniteReserve ? gameConfig.weapon.magazineSize : player.reserve);
+        player.ammo += transfer;
+        if (!gameplayConfig.combat.infiniteReserve) player.reserve -= transfer;
+        player.reloading = false;
       }
       entry.recovery.step(player, now, 1 / SHOOTER_HZ);
     }
@@ -238,7 +243,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     this.state.results.clear(); for (const score of scores) this.state.results.push(Object.assign(new RoundScoreState(), score));
     for (const [id, entry] of this.entries) {
       entry.input.active = false; entry.reloadUntil = 0; entry.recovery.interrupt();
-      const player = this.state.players.get(id)!; player.reloading = false; player.sprinting = false;
+      const player = this.state.players.get(id)!; player.reloading = false; player.sprinting = false; player.flashlight = false;
       this.world.freeze(id);
     }
     this.syncMatch();
@@ -297,10 +302,10 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
       protectedUntil: now + gameplayConfig.combat.spawnProtection * 1000,
       health: gameplayConfig.combat.maxHealth, lastDamageAt: now, ammo: gameConfig.weapon.magazineSize, reserve: gameConfig.weapon.reserveAmmo,
       strikes: 0,
-      reloading: false, crouching: false, sprinting: false, grounded: false, height: gameConfig.player.height, lean: 0,
+      reloading: false, crouching: false, sprinting: false, grounded: false, flashlight: false, height: gameConfig.player.height, lean: 0,
       gaitPhase: 0, gaitX: 0, gaitZ: 0 });
-    entry.input = { ...entry.input, life: p.life, f: 0, r: 0, s: false, c: false, j: false, a: false, active: false, y: p.yaw, p: 0 };
-    entry.received = now; entry.lastShot = -1000; entry.reloadUntil = 0; entry.burstShots = 0; entry.awardedStrikes = 0; entry.recovery.interrupt();
+    entry.input = { ...entry.input, life: p.life, f: 0, r: 0, s: false, c: false, j: false, a: false, t: false, active: false, y: p.yaw, p: 0 };
+    entry.received = now; entry.lastShot = entry.nextShotAt = -1000; entry.reloadUntil = 0; entry.burstShots = 0; entry.awardedStrikes = 0; entry.recovery.interrupt();
     this.broadcast('combat:event', { type: 'respawn', playerId: id, health: p.health, life: p.life, roomId: this.roomId, timestamp: now });
   }
   onDispose(): void { this.world?.dispose(); this.entries.clear(); this.chat.clear(); this.combat.clear(); this.state.airstrikes.clear(); this.impacted.clear(); }

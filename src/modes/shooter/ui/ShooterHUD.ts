@@ -4,6 +4,7 @@ import type { Weapon } from '../weapon/Weapon';
 import type { LobbySnapshot } from '../../../../shared/MultiplayerProtocol';
 import { createElement, ListOrdered } from 'lucide';
 import { airstrikeConfig, strikeBit, type StrikeSlot } from '../../../../shared/AirstrikeProtocol';
+import { gameplayConfig } from '../../../../shared/GameplayConfig';
 export class ShooterHUD {
   readonly element = document.createElement('div');
   private readonly strike: HTMLElement;
@@ -30,6 +31,7 @@ export class ShooterHUD {
       <div class="shooter-crosshair" aria-hidden="true"></div>
       <button class="shooter-menu-button" type="button" aria-label="Open session menu" title="P: session menu"><kbd>P</kbd><span>MENU</span></button>
       <div class="shooter-movement"></div><div class="shooter-health" aria-label="Health"></div><div class="shooter-ammo" aria-label="Ammunition"><div class="shooter-fire-control"><span class="shooter-fire-mode">SDP / SEMI-AUTO</span><span class="shooter-fire-hint" title="B: switch fire mode"><kbd>B</kbd> CHANGE</span></div>
+      <span class="shooter-flashlight-hint"><kbd>Z</kbd> LIGHT</span>
       <strong class="shooter-magazine">30</strong><span class="shooter-reserve">/ 120</span><span class="shooter-action"></span></div>`;
     this.banner.className = 'kill-announcement'; this.banner.hidden = true; this.banner.setAttribute('role', 'status');
     this.streakMeter.className = 'streak-meter';
@@ -85,7 +87,7 @@ export class ShooterHUD {
     this.fireMode.textContent = weapon.automatic ? 'SDP / AUTO' : 'SDP / SEMI-AUTO';
     this.fireMode.title = 'Fire mode';
     this.element.querySelector('.shooter-magazine')!.textContent = String(weapon.ammo).padStart(2, '0');
-    this.element.querySelector('.shooter-reserve')!.textContent = `/ ${weapon.reserve}`;
+    this.element.querySelector('.shooter-reserve')!.textContent = gameplayConfig.combat.infiniteReserve ? '/ \u221e' : `/ ${weapon.reserve}`;
     this.element.querySelector('.shooter-action')!.textContent = weapon.reloading ? 'RELOADING' : weapon.ads > .6 ? 'AIMING' : '';
     this.element.querySelector('.shooter-movement')!.textContent = dead ? '' : player.state;
     this.element.querySelector('.shooter-health')!.textContent = `${health} / HP`;

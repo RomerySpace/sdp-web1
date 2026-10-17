@@ -34,6 +34,7 @@ export function regionalHit(pose: CombatPose, ray: RAPIER.Ray, range: number): P
   return hit;
 }
 export class CombatSimulation {
+  lastTrace?: { origin: number[]; target: number[] };
   private readonly history = new Map<string, CombatPose[]>();
   record(poses: Iterable<CombatPose>): void {
     const present = new Set<string>();
@@ -92,6 +93,7 @@ export class CombatSimulation {
         target = now >= live.protectedUntil && time >= pose.protectedUntil ? hit : null;
       }
     }
+    this.lastTrace = { origin: [origin.x, origin.y, origin.z], target: [origin.x + direction.x * nearest, origin.y + direction.y * nearest, origin.z + direction.z * nearest] };
     return target;
   }
   clear(): void { this.history.clear(); }

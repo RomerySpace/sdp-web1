@@ -9,7 +9,7 @@ export const shooterNetworkConfig = {
 };
 export interface ShooterInput {
   seq: number; life: number; f: number; r: number; y: number; p: number;
-  s: boolean; c: boolean; j: boolean; a: boolean; active: boolean; l?: number;
+  s: boolean; c: boolean; j: boolean; a: boolean; active: boolean; l?: number; t?: boolean;
 }
 export interface CharacterInput {
   readonly keys: Set<string>; readonly forward: number; readonly sideways: number;
@@ -30,19 +30,19 @@ export function roundWinners(scores: readonly RoundScore[]): RoundScore[] {
   return first ? ranked.filter(p => p.kills === first.kills && p.deaths === first.deaths) : [];
 }
 export interface WeaponAction { seq: number; life: number; action: 'fire' | 'reload' | 'mode' }
-export interface WeaponEvent extends WeaponAction { playerId: string; roomId: string; timestamp: number }
+export interface WeaponEvent extends WeaponAction { playerId: string; roomId: string; timestamp: number; origin?: number[]; target?: number[] }
 export interface CombatEvent { type: 'damage' | 'death' | 'respawn'; roomId: string; playerId: string;
   life: number; timestamp: number; health: number; damage?: number; attackerId?: string; region?: HitRegion | 'blast' }
 export function validateShooterInput(raw: unknown): ShooterInput | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const v = raw as Record<string, unknown>;
-  if (Object.keys(v).length !== ('l' in v ? 12 : 11) || ('l' in v && !isMovementAxis(v.l)) || !Number.isSafeInteger(v.life) || (v.life as number) < 1 || (v.life as number) > 0x7fffffff ||
+  if (Object.keys(v).length !== 11 + Number('l' in v) + Number('t' in v) || ('t' in v && typeof v.t !== 'boolean') || ('l' in v && !isMovementAxis(v.l)) || !Number.isSafeInteger(v.life) || (v.life as number) < 1 || (v.life as number) > 0x7fffffff ||
     !Number.isSafeInteger(v.seq) || (v.seq as number) < 0 || (v.seq as number) > 0x7fffffff ||
     !isMovementAxis(v.f) || !isMovementAxis(v.r) ||
     typeof v.y !== 'number' || !Number.isFinite(v.y) || Math.abs(v.y) > Math.PI * 2 ||
     typeof v.p !== 'number' || !Number.isFinite(v.p) || Math.abs(v.p) > 1.5 ||
     !['s', 'c', 'j', 'a', 'active'].every(k => typeof v[k] === 'boolean')) return null;
-  return { ...('l' in v ? { l: v.l as number } : {}), seq: v.seq as number, life: v.life as number, f: v.f as number, r: v.r as number,
+  return { ...('t' in v ? { t: v.t as boolean } : {}), ...('l' in v ? { l: v.l as number } : {}), seq: v.seq as number, life: v.life as number, f: v.f as number, r: v.r as number,
     y: Math.atan2(Math.sin(v.y as number), Math.cos(v.y as number)), p: v.p as number,
     s: v.s as boolean, c: v.c as boolean, j: v.j as boolean, a: v.a as boolean, active: v.active as boolean };
 }

@@ -6,6 +6,7 @@ import type { CharacterController } from '../physics/CharacterController';
 import type { FirstPersonCamera } from '../player/FirstPersonCamera';
 import type { Weapon } from './Weapon';
 import type { AudioManager } from '../audio/AudioManager';
+import { ShotTrails } from '../effects/ShotTrails';
 
 export class ShootingSystem {
   readonly impacts: { mesh: Mesh<CircleGeometry, MeshBasicMaterial>; life: number }[] = [];
@@ -16,9 +17,11 @@ export class ShootingSystem {
   private readonly normal = new Vector3();
   private readonly forward = new Vector3(0, 0, 1);
   private readonly geometry = new CircleGeometry(0.018, 8);
+  readonly trails: ShotTrails;
   constructor(private readonly scene: Scene, private readonly physics: PhysicsWorld,
     private readonly player: CharacterController, private readonly camera: FirstPersonCamera,
     private readonly weapon: Weapon, private readonly audio: AudioManager) {
+    this.trails = new ShotTrails(scene);
     for (let i = 0; i < gameConfig.weapon.maxImpacts; i++) {
       const mesh = new Mesh(this.geometry, new MeshBasicMaterial({ color: '#8a9ca6', transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
       mesh.visible = false; scene.add(mesh); this.impacts.push({ mesh, life: 0 });
@@ -30,6 +33,7 @@ export class ShootingSystem {
     this.camera.onShot(); this.audio.shot();
     this.camera.camera.getWorldPosition(this.origin);
     const hit = this.physics.ray(this.origin, this.camera.aimDirection, gameConfig.weapon.range, this.player.collider);
+    this.trails.emit(this.weapon.muzzlePosition(new Vector3()), this.origin.clone().addScaledVector(this.camera.aimDirection, hit?.toi ?? gameConfig.weapon.range));
     this.camera.input.pitch = MathUtils.clamp(this.camera.input.pitch + this.weapon.recoil.pitch, -1.48, 1.48);
     this.camera.input.yaw += this.weapon.recoil.yaw;
     this.lastHit = null;
@@ -46,6 +50,7 @@ export class ShootingSystem {
     impact.mesh.scale.setScalar(1); impact.mesh.material.opacity = 0.7;
   }
   update(dt: number): void {
+    this.trails.update(dt);
     this.camera.camera.getWorldPosition(this.origin);
     const obstruction = this.physics.ray(this.origin, this.camera.aimDirection, gameConfig.weapon.obstructionDistance, this.player.collider);
     this.weapon.obstruction = obstruction ? 1 - Math.min(1, Math.max(0, obstruction.toi - 0.15) / (gameConfig.weapon.obstructionDistance - 0.15)) : 0;
@@ -57,5 +62,5 @@ export class ShootingSystem {
       impact.mesh.scale.setScalar(1 + (gameConfig.weapon.impactLifetime - impact.life) * 0.8);
     }
   }
-  dispose(): void { this.geometry.dispose(); this.impacts.forEach(i => { i.mesh.material.dispose(); this.scene.remove(i.mesh); }); }
+  dispose(): void { this.trails.dispose(); this.geometry.dispose(); this.impacts.forEach(i => { i.mesh.material.dispose(); this.scene.remove(i.mesh); }); }
 }

@@ -28,6 +28,7 @@
 .touch-controls[data-voice="denied"] .touch-voice-note { color: #6b565d; }
 .touch-controls[data-voice="speaking"] .touch-voice { color: #466d5e; border-color: #718c7b; }
 .touch-controls:not([data-context="shooter"]) :is(.touch-fire, .touch-aim, .touch-jump, .touch-crouch, .touch-reload, .touch-mode) { display: none; }
+.touch-controls:not([data-context="shooter"]) .touch-flashlight { display: none; }
 .touch-controls:is([data-context="shooter"], [data-context="dead"]) :is(.touch-voice, .touch-voice-note) { display: none; }
 .touch-controls:is([data-context="inspection"], [data-context="dead"]) :is(.touch-stick, .touch-look, .touch-sprint) { display: none; }
 #app[data-input="touch"] :is(.controls-overlay, .exhibit-caption, .shooter-menu-button, .shooter-fire-hint, .chat-note, .chat-input-hint, .pause-hint) { display: none; }

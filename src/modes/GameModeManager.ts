@@ -74,7 +74,9 @@ export class GameModeManager {
     this.returning = true; ++this.generation; this.abort?.abort(); this.set('RETURNING_TO_LIMBO');
     this.ui.loading('Returning to Limbo');
     try {
-      this.shooter?.pause();
+      this.shooter?.pause(true);
+      // Present loading before releasing a large world's GPU resources.
+      await new Promise<void>(resolve => requestAnimationFrame(() => { setTimeout(resolve, 0); }));
       if (this.operation) await this.operation;
       this.shooter?.dispose(); this.shooter = undefined; this.ui.attachSession();
       this.hooks.resetChat();
@@ -99,6 +101,7 @@ export class GameModeManager {
     }
   }
   private showShooterMenu(): void {
+    if (this.value !== 'SHOOTER') return;
     const snapshot = this.network.snapshot;
     if (snapshot?.match?.phase === 'results') {
       const seconds = Math.max(0, Math.ceil((snapshot.match.nextRoundAt - (snapshot.serverTime ?? 0)) / 1000));

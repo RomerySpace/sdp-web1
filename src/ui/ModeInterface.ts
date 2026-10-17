@@ -52,9 +52,14 @@ export class ModeInterface {
     this.element.classList.remove('has-session'); if (this.session) this.session.hidden = true;
     this.progress.hidden = state !== 'loading'; this.join.hidden = state !== 'error';
     this.resume.hidden = state !== 'paused'; this.inspectionActions.hidden = true;
+    this.back.hidden = false;
   }
   inspection(visible: boolean): void { this.inspectionActions.hidden = !visible; this.testJoin.hidden = !visible; }
-  loading(text: string): void { this.show('INITIALIZING SIMULATION', text, 'loading'); }
+  loading(text: string): void {
+    const returning = text === 'Returning to Limbo';
+    this.show(returning ? 'RETURNING TO LIMBO' : 'INITIALIZING SIMULATION', text, 'loading');
+    this.back.hidden = returning;
+  }
   attachSession(element?: HTMLElement): void {
     this.session = element; this.element.querySelector('.protocol-session-slot')!.replaceChildren(...element ? [element] : []);
   }

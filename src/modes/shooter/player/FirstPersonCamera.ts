@@ -24,6 +24,7 @@ export class FirstPersonCamera {
   private phase = 0;
   private eye = gameConfig.player.eyeHeight;
   private amplitude = 0;
+  private sprintBlend = 0;
   private readonly damagePitch = new Spring();
   private readonly damageRoll = new Spring();
   private hitSide = 1;
@@ -39,11 +40,12 @@ export class FirstPersonCamera {
   }
   reset(): void {
     [this.landing, this.recoil, this.roll, this.inertiaX, this.inertiaY, this.damagePitch, this.damageRoll].forEach(s => s.reset());
-    this.phase = this.amplitude = 0; this.eye = gameConfig.player.eyeHeight;
+    this.phase = this.amplitude = this.sprintBlend = 0; this.eye = gameConfig.player.eyeHeight;
     this.pitch.position.set(0, this.eye, 0); this.motion.position.set(0, 0, 0); this.motion.rotation.set(0, 0, 0);
   }
   update(dt: number, player: CharacterController, alpha: number, ads: number): void {
     const c = gameConfig.camera, p = gameConfig.player;
+    this.sprintBlend = MathUtils.damp(this.sprintBlend, player.sprinting ? 1 : 0, 14, dt);
     this.root.position.copy(player.interpolate(alpha));
     this.yaw.rotation.y = this.input.yaw; this.pitch.rotation.x = this.input.pitch;
     this.eye = MathUtils.damp(this.eye, player.crouching ? p.crouchEyeHeight : p.eyeHeight, 14, dt);
@@ -62,9 +64,9 @@ export class FirstPersonCamera {
     const ix = this.inertiaX.update(MathUtils.clamp(this.input.lookX / Math.max(dt, 0.008), -5, 5) * c.inertia, dt, k, d);
     const iy = this.inertiaY.update(MathUtils.clamp(this.input.lookY / Math.max(dt, 0.008), -5, 5) * c.inertia, dt, k, d);
     this.motion.position.set(Math.sin(this.phase) * bob * 0.6, (Math.cos(this.phase * 2) * 0.65 + Math.sin(this.phase * 3.13) * 0.18) * bob + land, 0);
-    this.motion.rotation.set(iy * 0.12 + recoil + land * 0.1 - (player.sprinting ? 0.006 : 0) + this.damagePitch.update(0, dt, 90, 15), ix * 0.12,
+    this.motion.rotation.set(iy * 0.12 + recoil + land * 0.1 - this.sprintBlend * .006 + this.damagePitch.update(0, dt, 90, 15), ix * 0.12,
       -player.lean / leanConfig.distance * leanConfig.roll + roll + Math.sin(this.phase) * bob * 0.16 + this.damageRoll.update(0, dt, 95, 16), 'YXZ');
-    const targetFov = MathUtils.lerp(player.sprinting ? c.sprintFov : c.baseFov, c.adsFov, ads);
+    const targetFov = MathUtils.lerp(MathUtils.lerp(c.baseFov, c.sprintFov, this.sprintBlend), c.adsFov, ads);
     const fov = MathUtils.damp(this.camera.fov, targetFov, c.fovResponse, dt);
     if (Math.abs(fov - this.camera.fov) > 0.001) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
     this.root.updateMatrixWorld(true);

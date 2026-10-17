@@ -166,6 +166,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
       lastProcessedInput: player.lastProcessedInput,
       crouching: player.crouching, sprinting: player.sprinting, grounded: player.grounded, height: player.height, lean: player.lean,
       gaitPhase: player.gaitPhase, gaitX: player.gaitX, gaitZ: player.gaitZ,
+      flashlight: player.flashlight,
       ammo: player.ammo, reserve: player.reserve, reloading: player.reloading, weaponSeq: player.weaponSeq, health: player.health,
       dead: player.dead, life: player.life, diedAt: player.diedAt, respawnAt: player.respawnAt, bornAt: player.bornAt, protectedUntil: player.protectedUntil,
       spawnX: player.spawnX, spawnY: player.spawnY, spawnZ: player.spawnZ,

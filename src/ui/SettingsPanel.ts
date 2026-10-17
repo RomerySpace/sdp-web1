@@ -1,6 +1,6 @@
 import { createElement, Maximize, Minimize, Volume2, VolumeX } from 'lucide';
 import { PlayerSettings, settingsLimits, type SettingsState } from '../core/PlayerSettings';
-import { fullscreenState, toggleFullscreen } from './Fullscreen';
+import { fullscreenState, supportsFullscreen, toggleFullscreen } from './Fullscreen';
 import { usesTouchControls } from '../input/InputCapabilities';
 
 export class SettingsPanel {
@@ -53,7 +53,7 @@ export class SettingsPanel {
     this.fullscreen.title = installed ? 'Fullscreen app' : `${active ? 'Exit' : 'Enter'} fullscreen${touch ? '' : ' (F)'}`;
     this.fullscreen.setAttribute('aria-label', installed ? 'Fullscreen app' : active ? 'Exit fullscreen' : 'Enter fullscreen');
     this.fullscreen.setAttribute('aria-pressed', String(active));
-    const label = document.createElement('span'); label.textContent = 'FULLSCREEN';
+    const label = document.createElement('span'); label.textContent = touch && !active && !supportsFullscreen() ? 'ADD TO HOME SCREEN' : 'FULLSCREEN';
     const key = document.createElement('kbd'); key.textContent = 'F';
     this.fullscreen.replaceChildren(createElement(active && !installed ? Minimize : Maximize), label, ...(touch ? [] : [key]));
   }

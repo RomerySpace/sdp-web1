@@ -1,4 +1,4 @@
-import { Box3, Group, MathUtils, Mesh, Vector3, AxesHelper } from 'three';
+import { AdditiveBlending, Box3, ConeGeometry, Group, MathUtils, Mesh, MeshBasicMaterial, PointLight, Vector3, AxesHelper } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { gameConfig } from '../config/gameConfig';
 import { Spring } from '../core/Spring';
@@ -20,10 +20,14 @@ export class Weapon {
   readonly axes = new AxesHelper(0.25);
   readonly springs = { x: new Spring(), y: new Spring(), z: new Spring(), pitch: new Spring(), yaw: new Spring(), roll: new Spring(), recoil: new Spring() };
   readonly material = createWeaponMaterial();
+  readonly muzzleFlash = new Mesh(new ConeGeometry(.028, .12, 6), new MeshBasicMaterial({ color: 0xf1f7ff, transparent: true, blending: AdditiveBlending, depthTest: false, depthWrite: false, toneMapped: false }));
+  private readonly flashLight = new PointLight(0xeaf3ff, 0, 3);
+  private flashRemaining = 0;
   ammo = gameConfig.weapon.magazineSize;
   reserve = gameConfig.weapon.reserveAmmo;
   reloading = false;
   reloadElapsed = 0;
+  private reloadConfirmed = false;
   ads = 0;
   obstruction = 0;
   time = 0;
@@ -42,6 +46,11 @@ export class Weapon {
   constructor() {
     this.root.add(this.positionPivot); this.positionPivot.add(this.rotationPivot);
     this.rotationPivot.add(this.recoilPivot); this.recoilPivot.add(this.modelRoot, this.hands.group);
+    this.muzzleFlash.position.set(0, .035, -gameConfig.weapon.length / 2 - .045);
+    this.muzzleFlash.rotation.x = -Math.PI / 2; this.muzzleFlash.layers.set(1); this.muzzleFlash.visible = false;
+    this.muzzleFlash.renderOrder = 10;
+    this.flashLight.layers.enable(1); this.flashLight.position.copy(this.muzzleFlash.position);
+    this.recoilPivot.add(this.muzzleFlash, this.flashLight);
     this.axes.visible = false; this.rotationPivot.add(this.axes);
   }
   async load(): Promise<void> {
@@ -64,8 +73,16 @@ export class Weapon {
     this.loaded = true;
   }
   startReload(): boolean {
-    if (this.reloading || this.ammo >= gameConfig.weapon.magazineSize || this.reserve <= 0) return false;
-    this.reloading = true; this.reloadElapsed = 0; return true;
+    if (this.reloading || this.ammo >= gameConfig.weapon.magazineSize || !gameplayConfig.combat.infiniteReserve && this.reserve <= 0) return false;
+    this.reloading = true; this.reloadConfirmed = false; this.reloadElapsed = 0; return true;
+  }
+  reconcile(ammo: number, reserve: number, reloading: boolean, automatic: boolean): void {
+    const completed = this.reloading && !reloading && (this.reloadConfirmed || this.reloadElapsed >= gameConfig.weapon.reloadDuration);
+    // Ordinary snapshots must never put a locally predicted bullet back into the magazine.
+    this.ammo = MathUtils.clamp(completed ? ammo : Math.min(this.ammo, ammo), 0, gameConfig.weapon.magazineSize);
+    this.reserve = reserve; this.automatic = automatic;
+    if (reloading) { this.reloading = true; this.reloadConfirmed = true; }
+    else { this.reloading = false; this.reloadConfirmed = false; this.reloadElapsed = 0; }
   }
   canShoot(): boolean {
     const interval = this.automatic ? gameplayConfig.combat.automaticFireInterval : gameConfig.weapon.fireInterval;
@@ -76,6 +93,8 @@ export class Weapon {
     if (this.time - this.lastShot > gameplayConfig.combat.recoilReset) this.burstShots = 0;
     this.recoil = shotRecoil(this.burstShots++, this.automatic, this.ads > .5);
     this.lastShot = this.time; this.ammo--;
+    this.flashRemaining = gameplayConfig.shots.flashDuration;
+    this.muzzleFlash.visible = true; this.muzzleFlash.material.opacity = 1; this.flashLight.intensity = 2;
     this.springs.recoil.kick(0.9 * gameConfig.weapon.recoil);
     this.springs.pitch.kick(0.55 * gameConfig.weapon.recoil);
     this.springs.yaw.kick((this.ammo % 2 ? 1 : -1) * 0.09 * gameConfig.weapon.recoil);
@@ -85,6 +104,7 @@ export class Weapon {
     this.springs.y.kick(-Math.min(speed, 9) * 0.13);
     this.springs.pitch.kick(Math.min(speed, 9) * 0.07);
   }
+  muzzlePosition(target: Vector3): Vector3 { this.root.updateWorldMatrix(true, true); return this.muzzleFlash.getWorldPosition(target); }
   onJump(): void { this.springs.y.kick(-0.16); }
   setAspect(aspect: number): void { this.aspect = MathUtils.clamp(aspect, .3, 1); }
   setHolster(amount: number, lowering: number, tilt: number): void {
@@ -94,20 +114,22 @@ export class Weapon {
   }
   reset(ammo = gameConfig.weapon.magazineSize, reserve = gameConfig.weapon.reserveAmmo, automatic = false): void {
     this.automatic = automatic; this.burstShots = 0; this.recoil = { pitch: 0, yaw: 0 };
-    this.ammo = ammo; this.reserve = reserve; this.reloading = false; this.reloadElapsed = 0;
+    this.ammo = ammo; this.reserve = reserve; this.reloading = false; this.reloadConfirmed = false; this.reloadElapsed = 0;
     this.ads = this.obstruction = this.phase = this.sprintAmount = this.crouchAmount = this.obstructionAmount = 0;
     this.lastShot = -100; Object.values(this.springs).forEach(s => s.reset());
+    this.flashRemaining = 0; this.muzzleFlash.visible = false; this.flashLight.intensity = 0;
     this.recoilPivot.position.set(0, 0, 0); this.setHolster(0, 0, 0); this.root.visible = true;
   }
   update(dt: number, player: CharacterController, input: InputManager): void {
     const w = gameConfig.weapon;
     this.time += dt;
+    this.flashRemaining = Math.max(0, this.flashRemaining - dt);
+    this.muzzleFlash.visible = this.flashRemaining > 0;
+    this.muzzleFlash.material.opacity = this.flashRemaining / gameplayConfig.shots.flashDuration;
+    this.flashLight.intensity = 2 * this.muzzleFlash.material.opacity;
     if (this.reloading) {
-      this.reloadElapsed += dt;
-      if (this.reloadElapsed >= w.reloadDuration) {
-        const transfer = Math.min(w.magazineSize - this.ammo, this.reserve);
-        this.ammo += transfer; this.reserve -= transfer; this.reloading = false;
-      }
+      // Only the authoritative completion can refill the magazine.
+      this.reloadElapsed = Math.min(w.reloadDuration, this.reloadElapsed + dt);
     }
     const aiming = input.aiming && !player.sprinting && !this.reloading;
     this.ads = MathUtils.damp(this.ads, aiming ? 1 : 0, 4 / w.adsDuration, dt);
@@ -123,7 +145,7 @@ export class Weapon {
     const sway = (1 - this.ads * 0.83) * (player.crouching ? 0.65 : 1);
     const side = player.velocity.x * Math.cos(input.yaw) - player.velocity.z * Math.sin(input.yaw);
     const forwardAccel = -player.acceleration.x * Math.sin(input.yaw) - player.acceleration.z * Math.cos(input.yaw);
-    const sideAccel = player.acceleration.x * Math.cos(input.yaw) - player.acceleration.z * Math.sin(input.yaw);
+    const sideAccel = MathUtils.clamp(player.acceleration.x * Math.cos(input.yaw) - player.acceleration.z * Math.sin(input.yaw), -38, 38);
     const mouseX = MathUtils.clamp(input.lookX / Math.max(dt, 0.008), -5, 5);
     const mouseY = MathUtils.clamp(input.lookY / Math.max(dt, 0.008), -5, 5);
     const reloadT = this.reloading ? MathUtils.clamp(this.reloadElapsed / w.reloadDuration, 0, 1) : 0;
@@ -152,6 +174,7 @@ export class Weapon {
   dispose(): void {
     this.model?.traverse(o => { if (o instanceof Mesh) o.geometry.dispose(); });
     this.material.dispose(); this.axes.dispose(); this.root.removeFromParent();
+    this.muzzleFlash.geometry.dispose(); this.muzzleFlash.material.dispose(); this.flashLight.dispose();
     this.hands.dispose();
   }
 }

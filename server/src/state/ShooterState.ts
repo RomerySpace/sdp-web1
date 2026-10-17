@@ -7,6 +7,7 @@ export class ShooterPlayer extends Schema {
   strikes = 0;
   x = 0; y = 0; z = 0; yaw = 0; pitch = 0; connected = true;
   gaitPhase = 0; gaitX = 0; gaitZ = 0;
+  flashlight = false;
   lastProcessedInput = 0; crouching = false; sprinting = false; grounded = false; height = 1.8; lean = 0;
   ammo = gameplayConfig.combat.magazineSize; reserve = gameplayConfig.combat.reserveAmmo;
   reloading = false; weaponSeq = 0; health = gameplayConfig.combat.maxHealth;
@@ -14,7 +15,7 @@ export class ShooterPlayer extends Schema {
   spawnX = 0; spawnY = 0; spawnZ = 0;
 }
 defineTypes(ShooterPlayer, { x: 'float32', y: 'float32', z: 'float32', yaw: 'float32', pitch: 'float32',
-  gaitPhase: 'float32', gaitX: 'float32', gaitZ: 'float32',
+  gaitPhase: 'float32', gaitX: 'float32', gaitZ: 'float32', flashlight: 'boolean',
   displayName: 'string', automatic: 'boolean', kills: 'uint32', deaths: 'uint32', streak: 'uint32', lastDamageAt: 'float64',
   connected: 'boolean', lastProcessedInput: 'uint32', crouching: 'boolean', sprinting: 'boolean', grounded: 'boolean', height: 'float32', lean: 'float32',
   ammo: 'uint16', reserve: 'uint16', reloading: 'boolean', weaponSeq: 'uint32', health: 'uint16',

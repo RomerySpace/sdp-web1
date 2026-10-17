@@ -1,10 +1,10 @@
-import { createElement, Crosshair, Focus, ArrowUp, ChevronsUp, PersonStanding, RotateCw, Repeat2, Mic, MessageSquare, Settings2 } from 'lucide';
+import { createElement, Crosshair, Focus, ArrowUp, ChevronsUp, PersonStanding, RotateCw, Repeat2, Mic, MessageSquare, Settings2, Flashlight } from 'lucide';
 import type { VoiceState } from '../audio/VoiceChatManager';
 import type { VoiceConnectionState } from '../audio/LiveKitVoiceTransport';
 import { touchConfig } from '../input/InputCapabilities';
 import '../styles/touch.css';
 
-export type TouchAction = 'fire' | 'aim' | 'jump' | 'crouch' | 'sprint' | 'reload' | 'mode' | 'voice' | 'chat' | 'menu';
+export type TouchAction = 'fire' | 'aim' | 'jump' | 'crouch' | 'sprint' | 'reload' | 'mode' | 'flashlight' | 'voice' | 'chat' | 'menu';
 type Context = 'hidden' | 'limbo' | 'inspection' | 'shooter' | 'dead';
 interface Actions { move(forward: number, side: number): void; look(dx: number, dy: number): void; action(action: TouchAction, active: boolean): void; reset(): void }
 interface Contact { kind: 'move' | 'look' | 'hold'; element: HTMLElement; x: number; y: number; action?: TouchAction }
@@ -34,6 +34,7 @@ export class TouchControls {
       ['jump', ArrowUp, 'Jump', 'tap'], ['crouch', PersonStanding, 'Crouch', 'toggle'],
       ['sprint', ChevronsUp, 'Sprint', 'toggle'], ['reload', RotateCw, 'Reload weapon', 'tap'],
       ['mode', Repeat2, 'Switch fire mode', 'tap'], ['voice', Mic, 'Hold to talk', 'hold'],
+      ['flashlight', Flashlight, 'Toggle flashlight', 'tap'],
       ['chat', MessageSquare, 'Open chat', 'tap'], ['menu', Settings2, 'Open game menu', 'tap'],
     ] as const) {
       const button = document.createElement('button'); button.type = 'button'; button.className = `touch-button touch-${action}`;
@@ -51,7 +52,7 @@ export class TouchControls {
       }, { signal });
       button.addEventListener('lostpointercapture', e => this.end(e.pointerId), { signal });
       this.buttons.set(action, button);
-      if (action === 'voice' || action === 'chat' || action === 'menu') this.element.querySelector('.touch-tools')!.append(button);
+      if (action === 'voice' || action === 'chat' || action === 'menu' || action === 'flashlight') this.element.querySelector('.touch-tools')!.append(button);
       else this.element.append(button);
     }
     this.voiceNote.id = 'touch-voice-state';
@@ -110,7 +111,7 @@ export class TouchControls {
     for (const action of this.toggled) { this.buttons.get(action)!.setAttribute('aria-pressed', 'false'); this.actions.action(action, false); }
     this.toggled.clear(); this.actions.reset();
   }
-  update(context: Context, epoch: string, automatic = false): void {
+  update(context: Context, epoch: string, automatic = false, flashlight = false): void {
     const signature = `${context}:${epoch}`;
     if (signature !== this.signature) {
       this.reset(); this.signature = signature; this.context = context;
@@ -118,6 +119,7 @@ export class TouchControls {
     }
     const label = this.element.querySelector('.touch-mode-label')!;
     if (label.textContent !== (automatic ? 'AUTO' : 'SEMI')) label.textContent = automatic ? 'AUTO' : 'SEMI';
+    this.buttons.get('flashlight')!.setAttribute('aria-pressed', String(flashlight));
   }
   voice(state: VoiceState, connection: VoiceConnectionState): void {
     this.element.dataset.voice = state;
