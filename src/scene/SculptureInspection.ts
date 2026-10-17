@@ -1,25 +1,26 @@
 import {
-  Box3, Color, DirectionalLight, Group, HemisphereLight, MathUtils, Mesh, MeshStandardMaterial,
+  Box3, Color, DirectionalLight, Group, HemisphereLight, MathUtils, Mesh,
   PerspectiveCamera, Scene, Sphere, type WebGLRenderer,
 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { SCULPTURE_COLOR, SCULPTURE_ROUGHNESS, type Sculpture } from './Sculpture';
+import type { Sculpture } from './Sculpture';
+import { createWeaponMaterial } from '../assets/WeaponAppearance';
 
 export class SculptureInspection {
   readonly scene = new Scene();
   readonly camera = new PerspectiveCamera(40, 1, 0.02, 100);
   readonly controls: OrbitControls;
-  private readonly material = new MeshStandardMaterial({ color: SCULPTURE_COLOR, metalness: 0, roughness: SCULPTURE_ROUGHNESS, envMapIntensity: 0.6 });
+  private readonly material = createWeaponMaterial();
   private model?: Group;
   private radius = 1;
 
   constructor(canvas: HTMLCanvasElement) {
     this.scene.background = new Color(0xf8fafb);
-    const key = new DirectionalLight(0xfffcf7, 4);
+    const key = new DirectionalLight(0xfffcf7, 2.4);
     key.position.set(-3, 4, 5);
     const fill = new DirectionalLight(0xeaf4fa, 1.3);
     fill.position.set(4, 1, 3);
-    const rim = new DirectionalLight(0xf4f8fc, 3);
+    const rim = new DirectionalLight(0xf4f8fc, 2);
     rim.position.set(2, 3, -4);
     this.scene.add(new HemisphereLight(0xffffff, 0xc5ced4, 1.2), key, fill, rim);
     this.controls = new OrbitControls(this.camera, canvas);

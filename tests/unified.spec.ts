@@ -633,7 +633,24 @@ test('actual requests stay lazy; both scenes render; controls and repeated retur
   await openProtocol(page); await page.waitForTimeout(1000);
   await page.screenshot({ path: info.outputPath('protocol-menu.png') });
   expect(requests.filter(shooterRequest)).toEqual([]);
-  await enterShooter(page);
+  await page.route('**/dust2plainmap.glb', async route => {
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    await route.continue();
+  });
+  const joining = enterShooter(page);
+  await expect(page.locator('.mode-overlay')).toHaveAttribute('data-phase', 'loading');
+  await expect(page.locator('.mode-overlay')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await page.screenshot({ path: info.outputPath('opaque-white-loading.png') });
+  await joining;
+  expect(await page.evaluate(() => {
+    const materials: MeshStandardMaterial[] = [];
+    window.sdpUnified.scene.sculpture.root.traverse(object => {
+      if ('isMesh' in object) materials.push((object as Mesh).material as MeshStandardMaterial);
+    });
+    const weapon = window.sdpUnified.modes.shooter!.weapon!.material;
+    return materials.every(material => material.color.equals(weapon.color)
+      && material.roughness === weapon.roughness && material.metalness === weapon.metalness);
+  })).toBe(true);
   expect(requests.some(url => url.includes('dust2plainmap.glb'))).toBe(true);
   await expect(page.locator('canvas.scene-canvas')).toHaveCount(1);
   await expect.poll(() => page.evaluate(() => window.sdpUnified.modes.shooter?.player?.grounded)).toBe(true);

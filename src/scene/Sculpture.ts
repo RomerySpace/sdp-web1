@@ -5,9 +5,10 @@ import {
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import type { Atmosphere } from './Atmosphere';
 import { assetBuffer } from '../assets/AssetCache';
+import { createWeaponMaterial, weaponFinish } from '../assets/WeaponAppearance';
 
-export const SCULPTURE_COLOR = 0x080808;
-export const SCULPTURE_ROUGHNESS = 0.82;
+export const SCULPTURE_COLOR = weaponFinish.color;
+export const SCULPTURE_ROUGHNESS = weaponFinish.roughness;
 export const SCULPTURE_HEIGHT = 0.95;
 
 /** Keep the exhibit at the original floating baseline and world scale. */
@@ -57,7 +58,7 @@ export class Sculpture {
     const scale = SCULPTURE_HEIGHT / size.y;
     model.scale.multiplyScalar(scale);
     model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
-    const material = new MeshStandardMaterial({ color: SCULPTURE_COLOR, metalness: 0, roughness: SCULPTURE_ROUGHNESS, envMapIntensity: 0.6 });
+    const material = createWeaponMaterial();
     this.atmosphere.apply(material);
     const authoredMaterials = new Set<Material>();
     model.traverse((object) => {

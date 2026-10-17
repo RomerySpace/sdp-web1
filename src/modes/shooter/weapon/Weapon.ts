@@ -1,4 +1,4 @@
-import { Box3, Group, MathUtils, Mesh, MeshPhysicalMaterial, Vector3, AxesHelper } from 'three';
+import { Box3, Group, MathUtils, Mesh, Vector3, AxesHelper } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { gameConfig } from '../config/gameConfig';
 import { Spring } from '../core/Spring';
@@ -8,6 +8,7 @@ import { assetBuffer } from '../../../assets/AssetCache';
 import { gameplayConfig } from '../../../../shared/GameplayConfig';
 import { shotRecoil } from '../../../../shared/WeaponRecoil';
 import { FirstPersonHands } from './FirstPersonHands';
+import { createWeaponMaterial } from '../../../assets/WeaponAppearance';
 
 export class Weapon {
   readonly root = new Group();
@@ -18,7 +19,7 @@ export class Weapon {
   readonly hands = new FirstPersonHands();
   readonly axes = new AxesHelper(0.25);
   readonly springs = { x: new Spring(), y: new Spring(), z: new Spring(), pitch: new Spring(), yaw: new Spring(), roll: new Spring(), recoil: new Spring() };
-  readonly material = new MeshPhysicalMaterial({ color: '#b9b7ad', metalness: 0.72, roughness: 0.28, clearcoat: 0.15 });
+  readonly material = createWeaponMaterial();
   ammo = gameConfig.weapon.magazineSize;
   reserve = gameConfig.weapon.reserveAmmo;
   reloading = false;

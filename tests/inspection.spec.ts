@@ -6,7 +6,7 @@ import type { FirstPersonController } from '../src/player/FirstPersonController'
 import type { Sculpture } from '../src/scene/Sculpture';
 import type { SculptureInspection } from '../src/scene/SculptureInspection';
 import type { ExperienceStateMachine } from '../src/core/ExperienceState';
-import { SCULPTURE_HEIGHT, SCULPTURE_ROUGHNESS } from '../src/scene/Sculpture';
+import { SCULPTURE_COLOR, SCULPTURE_HEIGHT, SCULPTURE_ROUGHNESS } from '../src/scene/Sculpture';
 
 declare global {
   interface Window {
@@ -25,7 +25,7 @@ async function inspect(page: Page): Promise<void> {
   await page.keyboard.press('KeyE');
 }
 
-test('SDPv1 loads in matte black, rotates, and inspection preserves the player', async ({ page }, testInfo) => {
+test('SDPv1 loads in the shared product finish, rotates, and inspection preserves the player', async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await enter(page);
@@ -42,7 +42,7 @@ test('SDPv1 loads in matte black, rotates, and inspection preserves the player',
     return { vertices, materials, rotation: root.rotation.y };
   });
   expect(model.vertices).toBe(429040);
-  expect(model.materials).toEqual([{ color: 0x080808, metalness: 0, roughness: SCULPTURE_ROUGHNESS, map: false }]);
+  expect(model.materials).toEqual([{ color: SCULPTURE_COLOR, metalness: 0.72, roughness: SCULPTURE_ROUGHNESS, map: false }]);
   const worldSize = await page.evaluate(async (moduleURL) => {
     const { Box3, Vector3 } = await import(moduleURL);
     return new Box3().setFromObject(window.sdpInspection.sculpture.root).getSize(new Vector3()).toArray();

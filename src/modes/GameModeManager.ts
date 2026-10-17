@@ -42,8 +42,8 @@ export class GameModeManager {
   private async loadShooter(): Promise<void> {
     const generation = ++this.generation;
     const abort = this.abort = new AbortController();
-    this.hooks.pauseLimbo(); this.hooks.suspendCommunication();
     this.set('SHOOTER_LOADING'); this.ui.loading('Loading simulation module');
+    this.hooks.pauseLimbo(); this.hooks.suspendCommunication();
     let candidate: ShooterMode | undefined;
     try {
       // Inspection never reaches this import; only an explicit join does.

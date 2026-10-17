@@ -34,6 +34,10 @@ export class Lighting {
     exhibitRim.position.set(2.5, 3.8, -2.5);
     exhibitRim.target.position.set(0, 1.8, 0);
     scene.add(exhibitRim, exhibitRim.target);
+    const exhibitKey = new SpotLight(0xfffcf7, 24, 8, Math.PI / 5, 1, 2);
+    exhibitKey.position.set(-2.4, 4.2, 3);
+    exhibitKey.target.position.set(0, 1.8, 0);
+    scene.add(exhibitKey, exhibitKey.target);
   }
 
   async loadEnvironment(renderer: WebGLRenderer): Promise<boolean> {
