@@ -126,7 +126,8 @@ export class RemotePlayerManager {
       );
       const angle = Math.atan2(Math.sin(after.yaw - before.yaw), Math.cos(after.yaw - before.yaw));
       visitor.group.rotation.y = before.yaw + angle * t;
-      if (after.seat >= 0) visitor.group.rotation.y = lobbySeatSlots[after.seat].yaw;
+      // The torso follows the gaze; only seated legs stay anchored to the bench.
+      visitor.legs.rotation.y = after.seat >= 0 ? lobbySeatSlots[after.seat].yaw - visitor.group.rotation.y : 0;
       visitor.group.scale.y = (before.crouching ? .65 : 1) + ((after.crouching ? .65 : 1) - (before.crouching ? .65 : 1)) * t;
       visitor.posture = MathUtils.damp(visitor.posture, after.seat >= 0 ? 1 : 0, 12, dt);
       visitor.body.scale.y = 1 - visitor.posture * .4;
@@ -135,7 +136,7 @@ export class RemotePlayerManager {
       visitor.halo.position.y = visitor.body.position.y; visitor.halo.scale.y = 1.08 * visitor.body.scale.y;
       const pitch = before.pitch + (after.pitch - before.pitch) * t;
       visitor.marker.position.y = 1.48 - visitor.posture * .23 + Math.sin(pitch) * 0.08;
-      visitor.marker.rotation.y = after.seat >= 0 ? after.yaw - visitor.group.rotation.y : 0;
+      visitor.marker.rotation.y = 0;
     }
   }
 

@@ -49,12 +49,26 @@ test('E seats a visitor smoothly, keeps chat available and shows the seated pose
     await first.keyboard.press('KeyE'); await expect.poll(() => first.evaluate(() => window.sdpUnified.player.seated)).toBe(false);
     await expect.poll(() => first.evaluate(() => window.sdpUnified.scene.camera.position.y)).toBeGreaterThan(1.6);
     await aimAtBench(first); await first.keyboard.press('KeyE'); await expect.poll(() => first.evaluate(() => window.sdpUnified.player.seated)).toBe(true);
+    await first.mouse.move(980, 400);
+    await expect.poll(() => first.evaluate(yaw => {
+      const snapshot = window.sdpUnified.network.snapshot!;
+      const player = snapshot.players.find(p => p.playerId === snapshot.localPlayerId)!;
+      return Math.abs(Math.atan2(Math.sin(player.yaw - yaw), Math.cos(player.yaw - yaw)));
+    }, lobbySeatSlots[0].yaw)).toBeGreaterThan(.2);
     await second.bringToFront(); if (await second.locator('.resume-button').isVisible()) await second.locator('.resume-button').click();
     await second.evaluate(config => { const app = window.sdpUnified; app.player.setEnabled(false); app.scene.camera.position.set(config.seats[0].x + 3, 1.7, config.seats[0].z + 4); app.scene.camera.lookAt(config.seats[0].x, .9, config.seats[0].z); }, lobbyRetreat);
     await expect.poll(() => second.evaluate(() => {
       const app = window.sdpUnified, snapshot = app.network.snapshot!, other = snapshot.players.find(player => player.displayName === 'Seated Visitor')!;
       return other.seatIndex === 0 && app.scene.remotePlayers.group.getObjectByName(`Visitor:${other.playerId}`)?.getObjectByName('Seated legs')?.visible;
     })).toBe(true);
+    await expect.poll(() => second.evaluate(yaw => {
+      const app = window.sdpUnified, snapshot = app.network.snapshot!;
+      const other = snapshot.players.find(player => player.displayName === 'Seated Visitor')!;
+      const avatar = app.scene.remotePlayers.group.getObjectByName(`Visitor:${other.playerId}`)!;
+      const legs = avatar.getObjectByName('Seated legs')!;
+      const difference = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+      return difference(avatar.rotation.y, other.yaw) < .05 && difference(avatar.rotation.y + legs.rotation.y, yaw) < .001;
+    }, lobbySeatSlots[0].yaw)).toBe(true);
     await second.screenshot({ path: '/private/tmp/sdp-seated-visitor.png' });
     await first.bringToFront(); if (await first.locator('.resume-button').isVisible()) await first.locator('.resume-button').click();
     await first.keyboard.down('KeyW'); await expect.poll(() => first.evaluate(() => window.sdpUnified.player.seated)).toBe(false);
