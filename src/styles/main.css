@@ -21,6 +21,17 @@ button { border: 0; background: none; }
 .scene-canvas { display: block; width: 100%; height: 100%; }
 .ui { position: fixed; inset: 0; pointer-events: none; user-select: none; }
 .ui button, .ui input { pointer-events: auto; }
+.lobby-hud-toggle { position: absolute; top: calc(var(--edge) - 7px); left: var(--edge); z-index: 45; }
+#app:not([data-mode="LIMBO"]) .lobby-hud-toggle,
+.ui:is([data-state="INTRO"], [data-state="ENTERING"]) .lobby-hud-toggle { display: none; }
+#app[data-mode="LIMBO"].lobby-hud-hidden .ui > :not(.lobby-hud-toggle):not(.intro) { visibility: hidden !important; pointer-events: none !important; }
+#app[data-mode="LIMBO"].lobby-hud-hidden .ui > :not(.lobby-hud-toggle):not(.intro) * { visibility: hidden !important; pointer-events: none !important; }
+#app[data-mode="LIMBO"].lobby-hud-hidden .touch-controls :is(.touch-button, .touch-voice-note, .touch-stick-thumb) { opacity: 0; }
+#app[data-mode="LIMBO"].lobby-hud-hidden .touch-controls .touch-button { pointer-events: none; }
+#app[data-mode="LIMBO"].lobby-hud-hidden .touch-stick { border-color: transparent; background: transparent; }
+/* Opening chat or settings remains possible without trapping focus in hidden UI. */
+#app[data-mode="LIMBO"].lobby-hud-hidden .ui[data-state="CHATTING"] > .chat,
+#app[data-mode="LIMBO"].lobby-hud-hidden .ui[data-state="CHATTING"] > .chat * { visibility: visible !important; pointer-events: auto !important; }
 
 .top-controls {
   position: absolute; top: calc(var(--edge) - 7px); right: calc(var(--edge) - 10px);

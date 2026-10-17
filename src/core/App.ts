@@ -203,6 +203,9 @@ export class App {
   private readonly keydown = (event: KeyboardEvent): void => {
     if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
     const typing = event.target instanceof HTMLElement && (event.target.isContentEditable || event.target.closest('input:not([type="range"]):not([type="checkbox"]),textarea'));
+    if (event.code === 'KeyH' && !typing && !this.settingsMenu.visible && this.modes.value === 'LIMBO' && ['EXPLORING', 'PAUSED', 'INSPECTING'].includes(this.state.value)) {
+      event.preventDefault(); if (!event.repeat) this.ui.toggleHud(); return;
+    }
     if (event.code === 'KeyF' && !typing && this.state.value !== 'CHATTING') {
       event.preventDefault(); if (!event.repeat) toggleFullscreen(message => this.ui.notify(message)); return;
     }

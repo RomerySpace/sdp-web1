@@ -62,6 +62,29 @@ async function canvasContrast(page: Page): Promise<number> {
     return contrast;
   });
 }
+test('lobby HUD can be hidden and restored with its button or H without hiding chat input', async ({ page }) => {
+  await enterLimbo(page);
+  await page.evaluate(() => document.exitPointerLock());
+  await expect.poll(() => page.evaluate(() => document.pointerLockElement === null)).toBe(true);
+  await page.getByRole('button', { name: 'Hide lobby HUD' }).click();
+  await expect(page.locator('.connection-indicator')).toBeHidden();
+  await expect(page.locator('.controls-overlay')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Show lobby HUD' })).toBeVisible();
+  await page.keyboard.press('KeyH');
+  await expect(page.locator('#app')).not.toHaveClass(/lobby-hud-hidden/);
+  await page.keyboard.press('KeyH');
+  await page.locator('canvas.scene-canvas').click();
+  await page.keyboard.press('Enter');
+  const input = page.getByRole('textbox', { name: 'Chat message' });
+  await expect(input).toBeVisible();
+  await input.fill('h');
+  await expect(page.locator('#app')).toHaveClass(/lobby-hud-hidden/);
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => document.exitPointerLock());
+  await page.getByRole('button', { name: 'Show lobby HUD' }).click();
+  await expect(page.locator('#app')).not.toHaveClass(/lobby-hud-hidden/);
+});
+
 test('open chat scrolls older messages, does not jump on new messages and closes with empty Enter', async ({ page }, info) => {
   await enterLimbo(page); await page.keyboard.press('Enter'); await page.keyboard.press('Enter');
   await expect(page.getByRole('textbox', { name: 'Chat message' })).toBeHidden();
