@@ -25,6 +25,7 @@ export class CharacterController {
   private time = 0;
   private lastGrounded = -100;
   private lastJump = -100;
+  private jumpRequestedAt = -100;
   private preStepVy = 0;
   private readonly oldVelocity = new Vector3();
   private readonly wish = new Vector3();
@@ -52,8 +53,10 @@ export class CharacterController {
     const p = gameConfig.player, world = this.physics.world;
     const wantsCrouch = this.input.keys.has('ControlLeft') || this.input.keys.has('ControlRight');
     const pos = this.body.translation(), feet = pos.y - this.height / 2;
+    // In flight, draw the knees up under the head instead of lowering the head.
+    const airborneDuck = !this.grounded && this.time - this.lastJump < 1;
     // Test the entire expanded capsule, retaining a floor tolerance. Includes doors/cars/ceilings.
-    const standingCenter = { x: pos.x, y: feet + p.height / 2 + 0.025, z: pos.z };
+    const standingCenter = { x: pos.x, y: airborneDuck ? pos.y + (this.height - p.height) / 2 : feet + p.height / 2 + 0.025, z: pos.z };
     const blocked = !wantsCrouch && this.height < p.height - 0.001 && world.intersectionWithShape(
       standingCenter, identityRotation, new RAPIER.Capsule(p.height / 2 - p.radius, p.radius - 0.005),
       RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, this.collider, this.body);
@@ -62,7 +65,7 @@ export class CharacterController {
     const next = MathUtils.clamp(desired, this.height - (p.height - p.crouchHeight) * dt / p.crouchDuration,
       this.height + (p.height - p.crouchHeight) * dt / p.crouchDuration);
     if (Math.abs(next - this.height) < 1e-6) return;
-    const shift = (next - this.height) / 2;
+    const shift = (next - this.height) / 2 * (airborneDuck ? -1 : 1);
     this.collider.setShape(new RAPIER.Capsule(next / 2 - p.radius, p.radius));
     this.motorCollider.setShape(new RAPIER.Capsule(next / 2 - p.radius, p.radius - 0.025));
     this.collider.setMass(p.mass);
@@ -74,6 +77,7 @@ export class CharacterController {
     const p = gameConfig.player;
     this.landingSpeed = 0; this.tookOff = false;
     this.time += dt;
+    if (this.input.consume('Space')) this.jumpRequestedAt = this.time;
     this.resizeCapsule(dt);
     this.previous.copy(this.current);
     const forward = this.input.forward, side = this.input.sideways;
@@ -131,15 +135,15 @@ export class CharacterController {
       this.body.setTranslation({ x: position.x, y: position.y + move.y, z: position.z }, true);
       this.velocity.y = Math.max(0, this.velocity.y);
     }
-    if (this.input.consume('Space') && this.time - this.lastGrounded < p.coyoteTime && this.time - this.lastJump > 0.18) {
+    if (this.time - this.jumpRequestedAt <= p.jumpBuffer && this.time - this.lastGrounded < p.coyoteTime && this.time - this.lastJump > 0.18) {
       this.velocity.y = Math.sqrt(2 * Math.abs(p.gravity) * p.jumpHeight);
-      this.grounded = false; this.lastGrounded = -100; this.lastJump = this.time; this.tookOff = true;
+      this.grounded = false; this.lastGrounded = -100; this.lastJump = this.time; this.jumpRequestedAt = -100; this.tookOff = true;
     }
     if (this.velocity.y > 0) {
       const ceiling = this.physics.world.castShape(this.body.translation(), identityRotation,
         { x: 0, y: 1, z: 0 }, this.collider.shape, this.velocity.y * dt + 0.02, false,
         RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, this.collider, this.body);
-      if (ceiling) this.velocity.y = Math.min(this.velocity.y, Math.max(0, (ceiling.toi - 0.012) / dt));
+      if (ceiling && ceiling.normal1.y < -.35) this.velocity.y = Math.min(this.velocity.y, Math.max(0, (ceiling.toi - 0.012) / dt));
     }
     this.body.setLinvel(this.velocity, true);
     this.preStepVy = this.velocity.y;
@@ -204,7 +208,7 @@ export class CharacterController {
     this.motorCollider.setShape(new RAPIER.Capsule(this.height / 2 - gameConfig.player.radius, gameConfig.player.radius - .025));
     this.collider.setMass(gameConfig.player.mass);
     this.crouching = this.sprinting = false; this.landingSpeed = 0; this.tookOff = false;
-    this.lastGrounded = this.lastJump = -100; this.preStepVy = 0;
+    this.lastGrounded = this.lastJump = this.jumpRequestedAt = -100; this.preStepVy = 0;
     this.body.setTranslation({ x: this.spawn.x, y: this.spawn.y + this.height / 2, z: this.spawn.z }, true);
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     this.current.copy(this.body.translation()); this.previous.copy(this.current);

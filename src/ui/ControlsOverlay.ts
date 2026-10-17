@@ -30,6 +30,7 @@ export class ControlsOverlay {
       <div class="control-row"><kbd class="wide-key">ENTER</kbd><span>Chat</span></div>
       <div class="control-row"><span class="wide-key key-label">HOLD V</span><span>Voice</span><span class="mic-dot" aria-hidden="true"></span></div>
       <div class="control-row"><kbd class="wide-key">F</kbd><span>Fullscreen</span></div>
+      <div class="control-row"><kbd class="wide-key">H</kbd><span>Ocultar HUD</span></div>
       <div class="control-row escape-row"><kbd class="wide-key">ESC</kbd><span>Release cursor</span></div>
     `;
     const menu = document.createElement('button'); menu.type = 'button'; menu.className = 'control-row menu-row';

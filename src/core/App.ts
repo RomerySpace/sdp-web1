@@ -61,6 +61,8 @@ export class App {
   private entryProgress = 0;
   private reveal = 0;
   private entering = false;
+  private chatFromInspection = false;
+  private chatViewport?: { width: number; height: number };
 
   constructor(container: HTMLElement) {
     this.scene = new SceneManager(container);
@@ -108,7 +110,7 @@ export class App {
         this.touchControls?.reset();
         if (state !== 'EXPLORING') this.inputs.stop();
         if (state !== 'EXPLORING' && state !== 'INSPECTING') this.voice.release();
-        if (state !== 'INSPECTING') this.scene.inspection.close();
+        if (state !== 'INSPECTING' && !(state === 'CHATTING' && this.chatFromInspection)) this.scene.inspection.close();
         this.ui.setState(state);
         this.modes.setInspection(state === 'INSPECTING');
       }),
@@ -164,7 +166,7 @@ export class App {
 
   private bindEvents(): void {
     const signal = this.events.signal;
-    window.addEventListener('resize', () => { if (this.modes.value === 'SHOOTER') this.modes.resize(); else this.scene.resize(); }, { signal });
+    window.addEventListener('resize', () => this.resizeViewport(), { signal });
     window.addEventListener('keydown', this.keydown, { signal });
     window.addEventListener('keyup', (event) => { if (event.code === 'KeyV') this.voice.release(); }, { signal });
     window.addEventListener('blur', () => this.pause(), { signal });
@@ -240,7 +242,7 @@ export class App {
       if (event.repeat) return;
       if (event.code === 'KeyE' || event.code === 'Escape') { event.preventDefault(); this.closeInspection(); }
       else if (event.code === 'KeyV') { event.preventDefault(); this.voiceTransport.unlock(); void this.voice.press(); }
-      else if (event.code === 'Enter') { event.preventDefault(); this.state.set('CHATTING'); }
+      else if (event.code === 'Enter') { event.preventDefault(); this.openChat(); }
       return;
     }
     const target = event.target;
@@ -337,7 +339,12 @@ export class App {
 
   private closeChat(): void {
     if (this.state.value !== 'CHATTING') return;
+    if (this.chatFromInspection && this.modes.value === 'LIMBO') {
+      this.chatFromInspection = false; this.state.set('INSPECTING'); this.scene.inspection.controls.enabled = true;
+      requestAnimationFrame(() => this.resizeViewport()); return;
+    }
     this.state.set('PAUSED');
+    requestAnimationFrame(() => this.resizeViewport());
     if (this.modes.value === 'SHOOTER') { this.modes.shooter?.resume(); return; }
     // Enter/Escape are trusted keyboard gestures; denied relocking leaves the
     // existing pause prompt available for a fresh click.
@@ -346,9 +353,19 @@ export class App {
   }
   private openChat(): void {
     if (this.state.value === 'CHATTING') return;
+    this.chatViewport = { width: window.innerWidth, height: window.innerHeight };
+    this.chatFromInspection = this.state.value === 'INSPECTING';
+    if (this.chatFromInspection) this.scene.inspection.controls.enabled = false;
     this.touchControls?.reset();
     if (this.modes.value === 'SHOOTER') { this.modes.shooter?.pause(true); this.modes.ui.hide(); }
     this.state.set('CHATTING'); this.player.releaseLock();
+  }
+  private resizeViewport(): void {
+    if (this.disposed || this.state.value === 'CHATTING') return;
+    // Mobile keyboards may resize the layout viewport before they finish closing.
+    if (this.touch && this.chatViewport && window.innerWidth === this.chatViewport.width && window.innerHeight < this.chatViewport.height * .8) return;
+    this.chatViewport = undefined;
+    if (this.modes.value === 'SHOOTER') this.modes.resize(); else this.scene.resize();
   }
   private touchAction(action: TouchAction, active: boolean): void {
     if (action === 'voice') {
@@ -424,7 +441,7 @@ export class App {
         );
         this.modes.setInspection(this.modes.value === 'LIMBO' && this.state.value === 'INSPECTING' && !this.settingsMenu.visible);
         if (this.modes.value === 'LIMBO') this.voiceTransport.update(this.scene.camera);
-        this.scene.render(dt, this.elapsed, this.reveal);
+        this.scene.render(dt, this.elapsed, this.reveal, this.modes.value === 'LIMBO', this.state.value === 'CHATTING');
       }
     }
     if (this.diagnostics && dt > 0) {

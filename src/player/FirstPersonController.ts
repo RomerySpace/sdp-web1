@@ -73,10 +73,10 @@ export class FirstPersonController {
   releaseLock(): void { if (this.locked) document.exitPointerLock(); }
 
   update(dt: number): void {
+    if (!this.active || !this.controlling) return;
     const sprint = this.active && this.controlling && this.input.sprinting && (this.input.forward || this.input.sideways);
     const fov = MathUtils.damp(this.camera.fov, this.baseFov + (sprint ? gameplayConfig.limbo.sprintFovAdjustment : 0), 6, dt);
     if (Math.abs(fov - this.camera.fov) > .001) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
-    if (!this.active || !this.controlling) return;
     this.motion.x = this.camera.position.x;
     this.motion.z = this.camera.position.z;
     this.movementInput.f = this.input.forward;

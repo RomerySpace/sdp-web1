@@ -44,7 +44,7 @@ export class ChatInterface {
     this.form.hidden = !open;
     this.element.querySelector<HTMLElement>('.chat-note')!.hidden = !open;
     this.element.classList.toggle('is-open', open);
-    if (open) { window.clearTimeout(this.fadeTimer); this.element.classList.add('show-history'); this.input.focus(); }
+    if (open) { window.clearTimeout(this.fadeTimer); this.element.classList.add('show-history'); this.input.focus({ preventScroll: true }); }
     else { this.input.blur(); this.scheduleFade(); }
   }
 

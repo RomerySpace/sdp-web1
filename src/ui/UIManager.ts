@@ -75,6 +75,8 @@ export class UIManager {
     this.hudToggle.setAttribute('aria-pressed', String(this.hudHidden));
     this.hudToggle.title = `${label} (H)`;
     this.hudToggle.replaceChildren(createElement(this.hudHidden ? Eye : EyeOff));
+    const key = document.createElement('kbd'); key.textContent = 'H'; key.setAttribute('aria-hidden', 'true');
+    this.hudToggle.append(key);
   }
 
   setState(state: ExperienceState): void {

@@ -55,6 +55,7 @@ export class ShooterMode {
   private lastInput?: ShooterInput;
   private lastInputSent = 0;
   private strikeSequence = 0;
+  private viewFrozen = false;
   constructor(container: HTMLElement, private readonly renderer: WebGLRenderer, private readonly network: ColyseusNetworkAdapter,
     private readonly onPaused: () => void, private readonly onResumed: () => void, settings = new PlayerSettings(), readonly touch = false) {
     this.previousRenderer = { toneMapping: renderer.toneMapping, exposure: renderer.toneMappingExposure,
@@ -144,11 +145,13 @@ export class ShooterMode {
   private spawn(player: NetworkPlayer): void {
     this.player?.spawn.set(player.spawnX ?? player.x, player.spawnY ?? player.y, player.spawnZ ?? player.z);
     this.player?.respawn(); this.camera.reset(); this.weapon.reset(player.ammo, player.reserve, player.automatic); this.feedback.reset();
+    this.shooting?.recoilRecovery.reset(); this.viewFrozen = false;
     this.health = player.health ?? gameplayConfig.combat.maxHealth; this.life = player.life ?? 1; this.dead = false;
     this.flashlightEnabled = false;
     this.prediction.reset(this.life); this.viewCorrection.set(0, 0, 0); this.lastInput = undefined; this.lastInputSent = 0;
     this.accumulator = this.stepDistance = 0;
     this.player?.correct(player); this.input.yaw = player.yaw; this.input.pitch = player.pitch; this.input.clear();
+    if (this.player) { this.camera.update(0, this.player, 1, 0); this.weapon.update(0, this.player, this.input); }
     this.sequence = Math.max(this.sequence, player.lastProcessedInput + 1); this.actionSequence = player.weaponSeq ?? 0;
     this.input.enabled = this.active && !this.paused && !this.roundComplete && this.input.controlling;
     if (player.dead) this.die();
@@ -259,6 +262,7 @@ export class ShooterMode {
       }
     }
     const activeDt = this.paused || this.dead || blocked ? 0 : dt;
+    this.shooting?.recoverAim(activeDt);
     if (!this.paused && !this.dead && !blocked && this.input.consume('KeyB') && !this.weapon.reloading) {
       this.weapon.automatic = !this.weapon.automatic; this.weapon.burstShots = 0; this.input.trigger = false;
       this.network.sendWeaponAction({ seq: ++this.actionSequence, life: this.life, action: 'mode' });
@@ -266,11 +270,16 @@ export class ShooterMode {
     if (!this.paused && !this.dead && !blocked && this.input.consume('KeyR') && this.weapon.startReload()) {
       this.audio.reload(); this.network.sendWeaponAction({ seq: ++this.actionSequence, life: this.life, action: 'reload' });
     }
-    this.weapon.update(activeDt, p, this.input);
-    this.weapon.setHolster(this.targeting.blend,strikePresentation.weaponLowering,strikePresentation.weaponTilt);
-    this.camera.update(this.dead ? dt : activeDt, p, this.paused || this.dead ? 1 : this.accumulator / gameConfig.physics.timestep, this.weapon.ads);
-    this.viewCorrection.multiplyScalar(Math.exp(-shooterNetworkConfig.correctionResponse * dt));
-    this.camera.root.position.add(this.viewCorrection); this.camera.root.updateMatrixWorld(true);
+    if (!this.paused || this.dead) {
+      const frozenPosition = this.viewFrozen ? this.camera.root.position.clone() : undefined;
+      this.weapon.update(activeDt, p, this.input);
+      this.weapon.setHolster(this.targeting.blend,strikePresentation.weaponLowering,strikePresentation.weaponTilt);
+      this.camera.update(this.dead ? dt : activeDt, p, this.dead ? 1 : this.accumulator / gameConfig.physics.timestep, this.weapon.ads);
+      if (frozenPosition) this.viewCorrection.copy(frozenPosition).sub(this.camera.root.position);
+      this.viewCorrection.multiplyScalar(Math.exp(-shooterNetworkConfig.correctionResponse * dt));
+      this.camera.root.position.add(this.viewCorrection); this.camera.root.updateMatrixWorld(true);
+      this.viewFrozen = false;
+    } else this.viewFrozen = true;
     const clicks = this.input.shots; this.input.shots = 0;
     if (!this.paused && !this.dead && !this.targeting.visible && this.weapon.canShoot() && (clicks > 0 || this.weapon.automatic && this.input.trigger)) {
       this.sendInput(true, true);

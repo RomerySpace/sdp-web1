@@ -79,7 +79,7 @@ export class SculptureInspection {
 
   render(renderer: WebGLRenderer, environment: Scene, dt: number): void {
     if (this.model) this.model.rotation.y = (this.model.rotation.y + dt * Math.PI * 2 / 80) % (Math.PI * 2);
-    this.controls.update(dt);
+    if (this.controls.enabled) this.controls.update(dt);
     this.scene.environment = environment.environment;
     renderer.render(this.scene, this.camera);
   }

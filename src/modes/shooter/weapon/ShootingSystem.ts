@@ -7,6 +7,7 @@ import type { FirstPersonCamera } from '../player/FirstPersonCamera';
 import type { Weapon } from './Weapon';
 import type { AudioManager } from '../audio/AudioManager';
 import { ShotTrails } from '../effects/ShotTrails';
+import { RecoilRecovery } from '../../../../shared/RecoilRecovery';
 
 export class ShootingSystem {
   readonly impacts: { mesh: Mesh<CircleGeometry, MeshBasicMaterial>; life: number }[] = [];
@@ -18,6 +19,7 @@ export class ShootingSystem {
   private readonly forward = new Vector3(0, 0, 1);
   private readonly geometry = new CircleGeometry(0.018, 8);
   readonly trails: ShotTrails;
+  readonly recoilRecovery = new RecoilRecovery();
   constructor(private readonly scene: Scene, private readonly physics: PhysicsWorld,
     private readonly player: CharacterController, private readonly camera: FirstPersonCamera,
     private readonly weapon: Weapon, private readonly audio: AudioManager) {
@@ -34,8 +36,10 @@ export class ShootingSystem {
     this.camera.camera.getWorldPosition(this.origin);
     const hit = this.physics.ray(this.origin, this.camera.aimDirection, gameConfig.weapon.range, this.player.collider);
     this.trails.emit(this.weapon.muzzlePosition(new Vector3()), this.origin.clone().addScaledVector(this.camera.aimDirection, hit?.toi ?? gameConfig.weapon.range));
-    this.camera.input.pitch = MathUtils.clamp(this.camera.input.pitch + this.weapon.recoil.pitch, -1.48, 1.48);
+    const beforePitch = this.camera.input.pitch;
+    this.camera.input.pitch = MathUtils.clamp(beforePitch + this.weapon.recoil.pitch, -1.48, 1.48);
     this.camera.input.yaw += this.weapon.recoil.yaw;
+    this.recoilRecovery.add(this.camera.input.pitch - beforePitch, this.weapon.recoil.yaw);
     this.lastHit = null;
     if (!hit) return;
     const point = this.origin.clone().addScaledVector(this.camera.aimDirection, hit.toi);
@@ -61,6 +65,13 @@ export class ShootingSystem {
       impact.mesh.material.opacity = Math.min(0.7, impact.life * 1.3);
       impact.mesh.scale.setScalar(1 + (gameConfig.weapon.impactLifetime - impact.life) * 0.8);
     }
+  }
+  recoverAim(dt: number): void {
+    if (dt <= 0) return;
+    const input = this.camera.input;
+    const recovery = this.recoilRecovery.update(dt, -input.lookY, -input.lookX);
+    input.pitch = MathUtils.clamp(input.pitch + recovery.pitch, -1.48, 1.48);
+    input.yaw += recovery.yaw;
   }
   dispose(): void { this.trails.dispose(); this.geometry.dispose(); this.impacts.forEach(i => { i.mesh.material.dispose(); this.scene.remove(i.mesh); }); }
 }

@@ -1,10 +1,10 @@
-import { BoxGeometry, CapsuleGeometry, Group, Mesh, MeshStandardMaterial, type Scene } from 'three';
+import { AdditiveBlending, BackSide, BoxGeometry, CapsuleGeometry, Group, Mesh, MeshStandardMaterial, ShaderMaterial, type Scene } from 'three';
 import type { LobbySnapshot } from '../../shared/MultiplayerProtocol';
 import type { Atmosphere } from './Atmosphere';
 import { lobbyAmbience } from '../core/LobbyAmbience';
 
 interface Sample { time: number; x: number; y: number; z: number; yaw: number; pitch: number; crouching: boolean }
-interface RemoteVisitor { group: Group; marker: Mesh; material: MeshStandardMaterial; samples: Sample[] }
+interface RemoteVisitor { group: Group; marker: Mesh; material: MeshStandardMaterial; halo: Mesh<CapsuleGeometry, ShaderMaterial>; level: number; samples: Sample[] }
 const INTERPOLATION_DELAY_MS = 100;
 
 export class RemotePlayerManager {
@@ -16,7 +16,18 @@ export class RemotePlayerManager {
   private readonly markerGeometry = new BoxGeometry(0.07, 0.045, 0.1);
   private readonly material = new MeshStandardMaterial({
     color: 0xc6cfd3, roughness: 0.94, metalness: 0,
-    transparent: true, opacity: 0.68, depthWrite: false,
+    transparent: true, opacity: 0.68, depthWrite: false, emissive: 0xdcefff, emissiveIntensity: 0,
+  });
+  private readonly haloMaterial = new ShaderMaterial({
+    transparent: true, blending: AdditiveBlending, depthWrite: false, side: BackSide, toneMapped: false,
+    uniforms: { strength: { value: 0 } },
+    vertexShader: `varying vec3 vNormal; varying vec3 vView;
+      void main() { vec4 view = modelViewMatrix * vec4(position, 1.0); vNormal = normalize(normalMatrix * normal); vView = -view.xyz;
+        gl_Position = projectionMatrix * view; }`,
+    fragmentShader: `uniform float strength; varying vec3 vNormal; varying vec3 vView;
+      void main() { float rim = pow(1.0 - abs(dot(normalize(vNormal), normalize(vView))), 1.8);
+        float fog = exp(-dot(vView, vView) * .0012);
+        gl_FragColor = vec4(.72, .88, 1.0, rim * fog * strength); }`,
   });
 
   constructor(scene: Scene, private readonly atmosphere: Atmosphere) {
@@ -42,10 +53,12 @@ export class RemotePlayerManager {
         body.position.y = 0.8;
         const marker = new Mesh(this.markerGeometry, material);
         marker.position.set(0, 1.48, -0.22);
-        group.add(body, marker);
+        const halo = new Mesh(this.body, this.haloMaterial.clone());
+        halo.name = 'Voice glow'; halo.position.y = .8; halo.scale.set(1.18, 1.08, 1.18); halo.visible = false;
+        group.add(body, marker, halo);
         group.position.set(player.x, player.y - 1.7, player.z);
         group.rotation.y = player.yaw;
-        visitor = { group, marker, material, samples: [] };
+        visitor = { group, marker, material, halo, level: 0, samples: [] };
         this.visitors.set(player.playerId, visitor);
         this.group.add(group);
       }
@@ -53,7 +66,7 @@ export class RemotePlayerManager {
       if (visitor.samples.length > 8) visitor.samples.shift();
     }
     for (const [id, visitor] of this.visitors) {
-      if (!present.has(id)) { visitor.group.removeFromParent(); visitor.group.clear(); visitor.material.dispose(); this.visitors.delete(id); }
+      if (!present.has(id)) { visitor.group.removeFromParent(); visitor.group.clear(); visitor.material.dispose(); visitor.halo.material.dispose(); this.visitors.delete(id); }
     }
   }
 
@@ -64,9 +77,12 @@ export class RemotePlayerManager {
     this.lastUpdate = now;
     for (const [id, visitor] of this.visitors) {
       const settings = lobbyAmbience.voice;
-      const opacity = settings.silentOpacity + (settings.speakingOpacity - settings.silentOpacity) * (this.voiceLevels.get(id) ?? 0);
-      const speed = opacity > visitor.material.opacity ? 18 : 8;
-      visitor.material.opacity += (opacity - visitor.material.opacity) * (1 - Math.exp(-dt * speed));
+      const level = Math.max(0, Math.min(1, this.voiceLevels.get(id) ?? 0));
+      visitor.level += (level - visitor.level) * (1 - Math.exp(-dt * (level > visitor.level ? 18 : 8)));
+      visitor.material.opacity = settings.silentOpacity + (settings.speakingOpacity - settings.silentOpacity) * visitor.level;
+      visitor.material.emissiveIntensity = settings.glowIntensity * visitor.level;
+      visitor.halo.material.uniforms.strength.value = settings.haloOpacity * visitor.level;
+      visitor.halo.visible = visitor.level > .015;
       const samples = visitor.samples;
       if (!samples.length) continue;
       let before = samples[0], after = samples[samples.length - 1];
@@ -89,9 +105,9 @@ export class RemotePlayerManager {
   }
 
   dispose(): void {
-    for (const visitor of this.visitors.values()) { visitor.group.removeFromParent(); visitor.group.clear(); visitor.material.dispose(); }
+    for (const visitor of this.visitors.values()) { visitor.group.removeFromParent(); visitor.group.clear(); visitor.material.dispose(); visitor.halo.material.dispose(); }
     this.visitors.clear();
     this.group.removeFromParent();
-    this.body.dispose(); this.markerGeometry.dispose(); this.material.dispose();
+    this.body.dispose(); this.markerGeometry.dispose(); this.material.dispose(); this.haloMaterial.dispose();
   }
 }

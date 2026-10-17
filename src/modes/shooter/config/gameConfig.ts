@@ -6,10 +6,10 @@ export const gameConfig = {
   map: { scale: 1, batchSize: 24, colliderTriangleLimit: 16000 },
   player: {
     walkSpeed: 4.3, sprintSpeed: 6.2, crouchSpeed: 2.2, acceleration: 38, deceleration: 34,
-    airControl: 0.3, gravity: -20, jumpHeight: 1.14, height: 1.8, crouchHeight: 1.16,
+    airControl: 0.42, gravity: -20, jumpHeight: 1.14, height: 1.8, crouchHeight: 1.16,
     eyeHeight: 1.7, crouchEyeHeight: 1.05, radius: 0.3, mass: 75,
     mouseSensitivity: 0.0017, stepHeight: 0.38, maxSlope: 48, groundProbe: 0.09,
-    coyoteTime: 0.08, crouchDuration: 0.2, adsSpeedMultiplier: 0.73,
+    coyoteTime: 0.1, jumpBuffer: 0.12, crouchDuration: 0.2, adsSpeedMultiplier: 0.73,
     // Authored street/courtyard seeds, not a ray cast from above the rooftops.
     spawn: { x: 38.4, y: 0.06, z: -5.6, yaw: Math.PI },
     spawnSearch: { radius: 3, floorTolerance: 0.65, clearance: 0.06 },

@@ -4,7 +4,7 @@ const transitions: Record<ExperienceState, readonly ExperienceState[]> = {
   INTRO: ['ENTERING'],
   ENTERING: ['EXPLORING', 'PAUSED'],
   EXPLORING: ['CHATTING', 'INSPECTING', 'PAUSED'],
-  CHATTING: ['EXPLORING', 'PAUSED'],
+  CHATTING: ['EXPLORING', 'PAUSED', 'INSPECTING'],
   INSPECTING: ['EXPLORING', 'CHATTING', 'PAUSED'],
   PAUSED: ['EXPLORING', 'CHATTING', 'INSPECTING'],
 };

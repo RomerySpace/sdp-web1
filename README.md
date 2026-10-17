@@ -39,7 +39,8 @@ npm run preview
 | Esc | Close chat, or release the cursor using browser behavior |
 | Hold V | Authorize microphone access and transmit proximity voice while held |
 | E near the pedestal, looking at the sculpture | Inspect directly; the discreet JOIN SHOOTER TEST button loads the simulation |
-| Hold SHIFT in Limbo | Sprint smoothly at 1.5 times walking speed |
+| Hold SHIFT in Limbo | Sprint smoothly at the configured speed (currently 2.25x walking) |
+| H / eye icon in Limbo | Hide or restore the lobby HUD; the eye control remains accessible |
 | Drag / mouse wheel during inspection | Rotate the sculpture / zoom within fixed limits |
 | P | Open/close settings in Limbo, or the ranking/settings menu in Shooter |
 | F | Toggle fullscreen throughout the experience, except while typing |
@@ -51,6 +52,14 @@ Touch devices can explore both modes without pointer lock. The left analog joyst
 Touch controls use Pointer Events, safe-area insets and portrait/landscape layouts, with no extra animation loop. Analog values are validated in [-1, 1], diagonals are capped, and existing authoritative physics/speed limits still apply. `src/input/InputCapabilities.ts` holds joystick dead zone and look sensitivity; `src/styles/touch.css` holds HUD layout. `npm run test:unified -- --grep 'touch|mobile'` exercises native Chrome touch input via CDP, multiplayer and mic cleanup. Browser emulation does not guarantee performance or permissions on a physical phone.
 
 On desktop, inspection opens directly after approaching within 3m and facing the sculpture (E / INTERACT). It renders a centered copy of the sculpture using Three.js OrbitControls and a separate camera, sharing geometry without moving the visitor or changing their multiplayer position. Walking is stopped, but push-to-talk remains available; Enter opens chat. E, Esc, the close button or focus loss leave inspection. The camera can zoom in to 1.12 times the model's bounding-sphere radius, staying outside the mesh, and out to 1.5 times its fitted distance. Pan is disabled and portrait viewports are reframed. Both sculptures keep rotating: the exhibition completes a turn in 54 seconds and inspection in 80 seconds. Soft key, fill and rim lighting reveal the matte-black details.
+
+## Interaction And Atmosphere Refinements
+
+Chat freezes the current world framing, including ADS/FOV and sculpture inspection. The renderer ignores software-keyboard viewport reductions until chat closes and the viewport recovers. On phones this is covered by Chrome touch/viewport emulation, not physical-device certification.
+
+Shooter uses the same Rapier movement controller on client and server: ballistic gravity, a 120ms jump buffer, 100ms coyote time and airborne crouching that draws the feet up. Obstacles and ceiling clearance still apply. Recoil retains automatic climb, resets its burst pattern after 260ms, and recovers 85% of uncompensated kick after a 120ms delay. Mouse compensation cancels the corresponding pending recovery instead of dragging the aim down twice.
+
+`src/core/LobbyAmbience.ts` configures rain density/timing and speaking glow. Rain has deterministic UTC-based intermittent episodes, six-second fades and a single GPU-instanced draw (450 drops on touch devices, 1,100 on desktop). It stays hidden before entry and outside normal Limbo rendering. Voice opacity remains intact and now also drives emissive brightness and a soft silhouette halo from the existing received-microphone levels, without extra lights or audio contexts. `shared/GameplayConfig.ts` contains recoil recovery controls; `src/modes/shooter/config/gameConfig.ts` contains jump and air-control settings.
 
 ## Assets
 

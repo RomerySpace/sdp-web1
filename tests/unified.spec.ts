@@ -1,8 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
-import type { InstancedMesh, Mesh, MeshStandardMaterial, PlaneGeometry, ShaderMaterial } from 'three';
+import type { CapsuleGeometry, InstancedMesh, Mesh, MeshStandardMaterial, PlaneGeometry, ShaderMaterial } from 'three';
 import { enterExhibition } from './entry';
 import { touchDriver, walkToSculpture } from './touch-driver';
+import { rainIntensity } from '../src/scene/RainSchedule';
 import { sessionRanking } from '../src/modes/shooter/ui/SessionRanking';
 import { createMonolithGeometry, createUpperMonolithGeometry } from '../src/scene/MonolithGeometry';
 import type { NetworkPlayer } from '../shared/MultiplayerProtocol';
@@ -62,6 +63,139 @@ async function canvasContrast(page: Page): Promise<number> {
     return contrast;
   });
 }
+test('chat holds the Limbo framing and inspection scene without scrolling or resetting the exhibit', async ({ page }) => {
+  await enterLimbo(page);
+  await expect(page.locator('.controls-overlay')).toContainText('Ocultar HUD');
+  await expect(page.locator('.lobby-hud-toggle kbd')).toHaveText('H');
+  const before = await page.evaluate(() => {
+    const { scene, player } = window.sdpUnified;
+    player.camera.fov = 54; player.camera.updateProjectionMatrix();
+    const frame = { position: player.camera.position.toArray(), rotation: player.camera.quaternion.toArray(), fov: player.camera.fov,
+      width: scene.renderer.domElement.width, height: scene.renderer.domElement.height, scroll: [scrollX, scrollY] };
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Enter', bubbles: true })); return frame;
+  });
+  await expect(page.getByRole('textbox', { name: 'Chat message' })).toBeVisible();
+  await page.waitForTimeout(250);
+  const after = await page.evaluate(() => { const { scene, player } = window.sdpUnified; return {
+    position: player.camera.position.toArray(), rotation: player.camera.quaternion.toArray(), fov: player.camera.fov,
+    width: scene.renderer.domElement.width, height: scene.renderer.domElement.height, scroll: [scrollX, scrollY] }; });
+  expect(after).toEqual(before);
+  await page.keyboard.press('Escape'); await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
+  await openProtocol(page);
+  const exhibit = await page.evaluate(() => window.sdpUnified.scene.inspection.scene.getObjectByName('inspection-sculpture')!.uuid);
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('textbox', { name: 'Chat message' })).toBeVisible();
+  expect(await page.evaluate(() => window.sdpUnified.scene.inspection.active)).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.ui')).toHaveAttribute('data-state', 'INSPECTING');
+  expect(await page.evaluate(() => window.sdpUnified.scene.inspection.scene.getObjectByName('inspection-sculpture')!.uuid)).toBe(exhibit);
+});
+
+test('Shooter tap fire recovers the aim without undoing manual compensation or refilling ammunition', async ({ page }) => {
+  await enterLimbo(page); await openProtocol(page); await enterShooter(page);
+  await page.evaluate(() => { const s = window.sdpUnified.modes.shooter!; s.input.pitch = 0; s.shooting!.recoilRecovery.reset(); });
+  await page.mouse.down(); await page.mouse.up();
+  await expect.poll(() => page.evaluate(() => window.sdpUnified.modes.shooter!.shooting!.shotsFired)).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.sdpUnified.modes.shooter!.input.pitch)).toBeLessThan(.006);
+  expect(await page.evaluate(() => window.sdpUnified.modes.shooter!.input.pitch)).toBeGreaterThan(0);
+  await page.evaluate(() => { const s = window.sdpUnified.modes.shooter!; s.input.pitch = 0; s.shooting!.recoilRecovery.reset(); });
+  await page.mouse.down(); await page.mouse.up();
+  await expect.poll(() => page.evaluate(() => window.sdpUnified.modes.shooter!.shooting!.shotsFired)).toBe(2);
+  const compensated = await page.evaluate(() => { const s = window.sdpUnified.modes.shooter!, kick = s.shooting!.recoilRecovery.pitch;
+    s.input.pitch -= kick; s.input.lookY += kick; return s.input.pitch; });
+  await page.waitForTimeout(400);
+  expect(await page.evaluate(() => window.sdpUnified.modes.shooter!.input.pitch)).toBeCloseTo(compensated, 4);
+  expect(await page.evaluate(() => window.sdpUnified.modes.shooter!.weapon.ammo)).toBe(28);
+});
+
+test('mobile Shooter chat preserves the camera and canvas through keyboard viewport resizing', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  try {
+    await enterLimbo(page); await openProtocol(page); await enterShooter(page);
+    const before = await page.evaluate(() => {
+      const { modes, scene } = window.sdpUnified, s = modes.shooter!;
+      const frame = { position: s.camera.root.position.toArray(), quaternion: s.camera.camera.getWorldQuaternion(s.camera.camera.quaternion.clone()).toArray(),
+        fov: s.camera.camera.fov, aspect: s.camera.camera.aspect, width: scene.renderer.domElement.width, height: scene.renderer.domElement.height };
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Enter', bubbles: true })); return frame;
+    });
+    await expect(page.getByRole('textbox', { name: 'Chat message' })).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 510 }); await page.waitForTimeout(150);
+    const after = await page.evaluate(() => { const { modes, scene } = window.sdpUnified, s = modes.shooter!; return {
+      position: s.camera.root.position.toArray(), quaternion: s.camera.camera.getWorldQuaternion(s.camera.camera.quaternion.clone()).toArray(),
+      fov: s.camera.camera.fov, aspect: s.camera.camera.aspect, width: scene.renderer.domElement.width, height: scene.renderer.domElement.height }; });
+    expect(after).toEqual(before);
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('textbox', { name: 'Chat message' })).toBeHidden();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect.poll(() => page.evaluate(() => window.sdpUnified.modes.shooter!.paused)).toBe(false);
+    await expect.poll(() => page.evaluate(() => window.sdpUnified.modes.shooter!.camera.camera.aspect)).toBe(390 / 844);
+  } finally { await context.close(); }
+});
+
+test('lobby rain renders moving pixels on desktop and mobile and hides during inspection', async ({ browser }, info) => {
+  const peak = Array.from({ length: 160 }, (_, t) => t).find(t => rainIntensity(t) > .99)!;
+  for (const mobile of [false, true]) {
+    const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 }, isMobile: mobile, hasTouch: mobile });
+    const page = await context.newPage(); const errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message)); page.on('console', message => { if (message.type() === 'error' && /shader|VALIDATE_STATUS|THREE.WebGLProgram/.test(message.text())) errors.push(message.text()); });
+    try {
+      await enterLimbo(page);
+      const result = await page.evaluate(peak => {
+        const { scene } = window.sdpUnified, rain = scene.rain, renderer = scene.renderer;
+        const gl = renderer.getContext();
+        const capture = (time: number, enabled: boolean) => {
+          rain.update(10, time, 1, scene.camera, enabled, peak);
+          renderer.render(scene.scene, scene.camera);
+          const data = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
+          gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, data); return data;
+        };
+        const dry = capture(17, false), wet = capture(17, true), moving = capture(17.25, true);
+        const changed = (a: Uint8Array, b: Uint8Array) => { let n = 0; for (let i = 0; i < a.length; i += 4) if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 2) n++; return n; };
+        const original = rain.update.bind(rain); rain.update = (dt, time, reveal, camera, enabled) => original(dt, time, reveal, camera, enabled, peak);
+        return { visiblePixels: changed(dry, wet), movingPixels: changed(wet, moving), drops: rain.mesh.geometry.instanceCount };
+      }, peak);
+      expect(result.visiblePixels).toBeGreaterThan(60); expect(result.movingPixels).toBeGreaterThan(60);
+      expect(result.drops).toBe(mobile ? 450 : 1100);
+      await info.attach(mobile ? 'mobile-rain' : 'desktop-rain', { body: await page.screenshot({ path: `/private/tmp/sdp-${mobile ? 'mobile' : 'desktop'}-rain.png` }), contentType: 'image/png' });
+      await openProtocol(page);
+      await expect.poll(() => page.evaluate(() => window.sdpUnified.scene.rain.mesh.visible)).toBe(false);
+      expect(errors).toEqual([]);
+    } finally { await context.close(); }
+  }
+});
+
+test('lobby speaking glow changes rendered pixels, follows voice levels and releases with the avatar', async ({ page }, info) => {
+  await enterLimbo(page);
+  const result = await page.evaluate(() => {
+    const { scene } = window.sdpUnified, remotes = scene.remotePlayers;
+    const levels = new Map<string, number>(); remotes.setVoiceLevels(levels);
+    const fixture = { ...window.sdpUnified.network.snapshot!, localPlayerId: 'local', players: [{ playerId: 'voice-test', connected: true, x: 1.5, y: 1.7, z: 3, yaw: 0, pitch: 0 }] };
+    remotes.receive(fixture as unknown as Parameters<typeof remotes.receive>[0]);
+    const visitor = remotes.group.children[0], body = visitor.children[0] as Mesh<CapsuleGeometry, MeshStandardMaterial>;
+    const halo = visitor.getObjectByName('Voice glow') as Mesh<CapsuleGeometry, ShaderMaterial>;
+    const gl = scene.renderer.getContext(); let now = performance.now();
+    const sample = (level: number) => {
+      levels.set('voice-test', level);
+      for (let i = 0; i < 60; i++) remotes.update(now += 16, 1);
+      scene.renderer.render(scene.scene, scene.camera);
+      const data = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
+      gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, data); return data;
+    };
+    const quiet = sample(0), speaking = sample(1);
+    const intensity = body.material.emissiveIntensity, haloVisible = halo.visible;
+    let pixels = 0; for (let i = 0; i < quiet.length; i += 4) if (speaking[i] - quiet[i] > 3 || speaking[i + 1] - quiet[i + 1] > 3) pixels++;
+    sample(0); const released = body.material.emissiveIntensity < .01 && !halo.visible;
+    let disposed = false; halo.material.addEventListener('dispose', () => disposed = true);
+    remotes.receive({ ...fixture, players: [] } as unknown as Parameters<typeof remotes.receive>[0]);
+    remotes.setVoiceLevels(window.sdpUnified.voiceTransport.voiceLevels);
+    return { intensity, haloVisible, pixels, released, disposed, count: remotes.count };
+  });
+  expect(result.intensity).toBeGreaterThan(2); expect(result.haloVisible).toBe(true); expect(result.pixels).toBeGreaterThan(80);
+  expect(result.released).toBe(true); expect(result.disposed).toBe(true); expect(result.count).toBe(0);
+  await info.attach('voice-glow-check', { body: Buffer.from(JSON.stringify(result)), contentType: 'application/json' });
+});
+
 test('lobby HUD can be hidden and restored with its button or H without hiding chat input', async ({ page }) => {
   await enterLimbo(page);
   await page.evaluate(() => document.exitPointerLock());
@@ -83,6 +217,14 @@ test('lobby HUD can be hidden and restored with its button or H without hiding c
   await page.evaluate(() => document.exitPointerLock());
   await page.getByRole('button', { name: 'Show lobby HUD' }).click();
   await expect(page.locator('#app')).not.toHaveClass(/lobby-hud-hidden/);
+  await page.locator('.resume-button').click();
+  await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
+  await openProtocol(page);
+  await page.keyboard.press('KeyH');
+  await expect(page.locator('.inspection-actions')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Show lobby HUD' })).toBeVisible();
+  await page.keyboard.press('KeyH');
+  await expect(page.locator('.inspection-actions')).toBeVisible();
 });
 
 test('open chat scrolls older messages, does not jump on new messages and closes with empty Enter', async ({ page }, info) => {
@@ -1011,12 +1153,18 @@ test('Limbo text and real WebRTC media work; voice disconnects in Shooter and re
       const visitors = window.sdpUnified.scene.remotePlayers.group.children;
       return Math.max(0, ...visitors.map(visitor => ((visitor.children[0] as Mesh).material as MeshStandardMaterial).opacity));
     })).toBeGreaterThan(.70);
+    await expect.poll(() => second.evaluate(() => {
+      const visitors = window.sdpUnified.scene.remotePlayers.group.children;
+      return Math.max(0, ...visitors.map(visitor => ((visitor.children[0] as Mesh).material as MeshStandardMaterial).emissiveIntensity));
+    })).toBeGreaterThan(.15);
+    await expect.poll(() => second.evaluate(() => window.sdpUnified.scene.remotePlayers.group.children.some(visitor => visitor.getObjectByName('Voice glow')?.visible))).toBe(true);
     await first.keyboard.up('KeyV'); await expect.poll(() => first.evaluate(() => window.sdpUnified.voiceTransport.transmitting)).toBe(false);
     await expect.poll(() => second.evaluate(() => Math.max(0, ...window.sdpUnified.voiceTransport.voiceLevels.values()))).toBe(0);
     await expect.poll(() => second.evaluate(() => {
       const visitors = window.sdpUnified.scene.remotePlayers.group.children;
       return Math.max(0, ...visitors.map(visitor => ((visitor.children[0] as Mesh).material as MeshStandardMaterial).opacity));
     })).toBeLessThan(.685);
+    await expect.poll(() => second.evaluate(() => window.sdpUnified.scene.remotePlayers.group.children.some(visitor => visitor.getObjectByName('Voice glow')?.visible))).toBe(false);
     const musicStart = await first.evaluate(() => {
       const audio = window.sdpUnified.audio as unknown as { media: HTMLAudioElement; reverb: ConvolverNode; serverAnchor: { time: number; received: number } };
       if (audio.reverb.buffer?.duration !== 8.5) throw new Error('Music hall is not connected');

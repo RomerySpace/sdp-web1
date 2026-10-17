@@ -21,7 +21,10 @@ button { border: 0; background: none; }
 .scene-canvas { display: block; width: 100%; height: 100%; }
 .ui { position: fixed; inset: 0; pointer-events: none; user-select: none; }
 .ui button, .ui input { pointer-events: auto; }
-.lobby-hud-toggle { position: absolute; top: calc(var(--edge) - 7px); left: var(--edge); z-index: 45; }
+.lobby-hud-toggle { position: absolute; top: calc(var(--edge) - 7px); left: var(--edge); z-index: 45; width: 54px; display: flex; align-items: center; justify-content: center; gap: 7px; }
+.lobby-hud-toggle kbd { font-size: 10px; }
+.ui:is([data-state="EXPLORING"], [data-state="PAUSED"], [data-state="CHATTING"]) .lobby-hud-toggle { color: #d4dfe7; opacity: .85; }
+#app[data-mode="LIMBO"].lobby-hud-hidden .inspection-actions { visibility: hidden; pointer-events: none; }
 #app:not([data-mode="LIMBO"]) .lobby-hud-toggle,
 .ui:is([data-state="INTRO"], [data-state="ENTERING"]) .lobby-hud-toggle { display: none; }
 #app[data-mode="LIMBO"].lobby-hud-hidden .ui > :not(.lobby-hud-toggle):not(.intro) { visibility: hidden !important; pointer-events: none !important; }

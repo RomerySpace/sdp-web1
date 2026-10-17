@@ -10,6 +10,7 @@ import { Sculpture } from './Sculpture';
 import { SculptureInspection } from './SculptureInspection';
 import { DigitalFragmentManager } from './graphics/DigitalFragmentManager';
 import { RemotePlayerManager } from './RemotePlayerManager';
+import { LobbyRain } from './LobbyRain';
 
 export class SceneManager {
   readonly scene = new Scene();
@@ -23,6 +24,7 @@ export class SceneManager {
   readonly inspection: SculptureInspection;
   readonly graphics: DigitalFragmentManager;
   readonly remotePlayers: RemotePlayerManager;
+  readonly rain: LobbyRain;
 
   constructor(container: HTMLElement) {
     this.renderer = new WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
@@ -42,6 +44,7 @@ export class SceneManager {
     this.inspection = new SculptureInspection(this.renderer.domElement);
     this.graphics = new DigitalFragmentManager(this.scene, this.camera);
     this.remotePlayers = new RemotePlayerManager(this.scene, this.atmosphere);
+    this.rain = new LobbyRain(this.scene);
     if (import.meta.env.DEV && new URLSearchParams(location.search).has('graphicsDebug')) {
       Object.assign(window, { sdpGraphics: this.graphics });
     }
@@ -56,14 +59,15 @@ export class SceneManager {
     this.inspection?.resize();
   }
 
-  render(dt: number, time: number, reveal: number): void {
+  render(dt: number, time: number, reveal: number, limbo = true, chatting = false): void {
     this.garden.update(time, reveal, this.camera.position);
     this.sculpture.update(dt);
     this.atmosphere.update(time, reveal);
     this.environment.update(reveal);
     this.graphics.update(dt, time, reveal);
     this.remotePlayers.update(performance.now(), reveal);
-    if (this.inspection.active) this.inspection.render(this.renderer, this.scene, dt);
+    this.rain.update(dt, time, reveal, this.camera, limbo && !this.inspection.active);
+    if (this.inspection.active) this.inspection.render(this.renderer, this.scene, chatting ? 0 : dt);
     else this.renderer.render(this.scene, this.camera);
   }
 
@@ -71,6 +75,7 @@ export class SceneManager {
     this.garden.dispose();
     this.graphics.dispose();
     this.remotePlayers.dispose();
+    this.rain.dispose();
     this.inspection.dispose();
     this.lighting.dispose(); this.environment.dispose(); this.sculpture.dispose(); this.atmosphere.dispose();
     this.renderer.dispose(); this.renderer.domElement.remove();
