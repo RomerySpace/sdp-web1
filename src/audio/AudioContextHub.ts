@@ -2,7 +2,9 @@ let context: AudioContext | undefined;
 let gestures: AbortController | undefined;
 export function sharedAudioContext(): AudioContext {
   if (!context || context.state === 'closed') {
-    gestures?.abort(); context = new AudioContext(); gestures = new AbortController();
+    // Keep a duplex session instead of renegotiating the output route on each V press.
+    try { const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession; if (session) session.type = 'play-and-record'; } catch {}
+    gestures?.abort(); context = new AudioContext({ latencyHint: 'interactive' }); gestures = new AbortController();
     const resume = () => {
       if (context && context.state !== 'running' && !document.hidden) void context.resume().catch(() => {});
     };

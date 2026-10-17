@@ -14,7 +14,7 @@ export class ChatInterface {
     this.element.className = 'chat';
     this.element.setAttribute('aria-label', 'Room text chat');
     this.element.innerHTML = `
-      <div class="chat-history" role="log" aria-live="polite" aria-label="Chat messages"></div>
+      <div class="chat-history" role="log" aria-live="polite" aria-label="Chat messages" tabindex="0"></div>
       <form class="chat-form" hidden autocomplete="off">
         <label for="chat-input">YOU</label>
         <input id="chat-input" name="message" type="text" placeholder="Say something into the space…" maxlength="500" aria-label="Chat message" autocomplete="off" />
@@ -49,6 +49,7 @@ export class ChatInterface {
   }
 
   add(message: ChatMessage): void {
+    const follow = !this.element.classList.contains('is-open') || this.history.scrollHeight - this.history.clientHeight - this.history.scrollTop < 24;
     const row = document.createElement('p');
     row.className = 'chat-message';
     const name = document.createElement('span');
@@ -56,8 +57,8 @@ export class ChatInterface {
     name.textContent = `${message.senderName}:`;
     row.append(name, document.createTextNode(` ${message.message}`));
     this.history.append(row);
-    while (this.history.children.length > 5) this.history.firstElementChild?.remove();
-    this.history.scrollTop = this.history.scrollHeight;
+    while (this.history.children.length > 30) this.history.firstElementChild?.remove();
+    if (follow) this.history.scrollTop = this.history.scrollHeight;
     this.element.classList.add('show-history');
     this.scheduleFade();
   }
@@ -66,6 +67,7 @@ export class ChatInterface {
   reset(): void { this.clear(); this.history.replaceChildren(); this.element.classList.remove('show-history'); }
   private scheduleFade(): void {
     window.clearTimeout(this.fadeTimer);
+    if (this.element.classList.contains('is-open')) return;
     this.fadeTimer = window.setTimeout(() => this.element.classList.remove('show-history'), 14000);
   }
   dispose(): void { window.clearTimeout(this.fadeTimer); this.events.abort(); }

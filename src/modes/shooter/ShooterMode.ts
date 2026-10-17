@@ -111,7 +111,8 @@ export class ShooterMode {
       }), network.subscribeToWeapons(event => {
         this.remotes.action(event);
         if (event.playerId !== network.snapshot?.localPlayerId && event.action === 'fire' && event.origin && event.target) {
-          this.shooting?.trails.emit(new Vector3().fromArray(event.origin), new Vector3().fromArray(event.target));
+          const muzzle = this.remotes.muzzlePosition(event.playerId, new Vector3());
+          if (muzzle) this.shooting?.trails.emit(muzzle, new Vector3().fromArray(event.target));
         }
       }),
       network.subscribeToStrikes(result=>this.hud.notice(result.message)),

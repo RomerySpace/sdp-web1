@@ -41,13 +41,13 @@ export class Environment {
     (this.scene.fog as FogExp2).color.set(e.fogColor);
     const night = this.lighting === 'night';
     this.scene.userData.lighting = this.lighting;
-    (this.scene.background as Color).set(night ? '#010204' : '#8b98a3');
-    (this.scene.fog as FogExp2).color.set(night ? '#020407' : '#8b98a3');
-    this.scene.environmentIntensity = night ? .006 : .36;
+    (this.scene.background as Color).set(night ? '#06090e' : '#8b98a3');
+    (this.scene.fog as FogExp2).color.set(night ? '#080d14' : '#8b98a3');
+    this.scene.environmentIntensity = night ? .014 : .36;
     this.renderer.toneMappingExposure = night ? .8 : .82;
-    this.key.intensity = night ? .012 : 1.15; this.key.color.set(night ? '#a6c8ed' : '#fff9f0');
+    this.key.intensity = night ? .028 : 1.15; this.key.color.set(night ? '#a6c8ed' : '#fff9f0');
     this.key.shadow.intensity = e.shadowIntensity;
-    this.fill.intensity = night ? .008 : .48;
+    this.fill.intensity = night ? .02 : .48;
     this.key.shadow.needsUpdate = true; this.renderer.shadowMap.needsUpdate = true;
     const c = this.key.shadow.camera, r = e.shadowRadius;
     c.left = c.bottom = -r; c.right = c.top = r; c.updateProjectionMatrix();

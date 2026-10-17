@@ -106,6 +106,8 @@ kbd, .key-label { font: inherit; font-size: 9px; letter-spacing: 0.04em; }
 .chat { position: absolute; left: var(--edge); bottom: calc(var(--edge) + 165px); width: min(330px, calc(100vw - 2 * var(--edge))); opacity: 0; transition: opacity 500ms; }
 .chat-history { display: flex; flex-direction: column; gap: 9px; max-height: min(170px, 25vh); overflow-y: auto; overflow-wrap: anywhere; opacity: 0; transition: opacity 1.2s; padding: 9px 0; mask-image: linear-gradient(to bottom, transparent, black 10px); }
 .show-history .chat-history { opacity: 1; }
+.chat.is-open .chat-history { pointer-events: auto; touch-action: pan-y; overscroll-behavior: contain; user-select: text; max-height: min(320px, 40dvh); mask-image: none; }
+.chat-message { flex-shrink: 0; }
 .chat-message { margin: 0; font-size: 11px; line-height: 1.6; color: #6c7a84; }
 .chat-sender { font-size: 9px; letter-spacing: 0.06em; color: #8c99a2; margin-right: 5px; }
 .chat-form { display: flex; align-items: center; gap: 12px; padding: 13px 12px; background: rgb(255 255 255 / 67%); border-bottom: 1px solid #d4dde2; border-radius: 3px 3px 0 0; pointer-events: auto; }

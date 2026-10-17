@@ -48,7 +48,7 @@ Tambien puedes abrir una terminal dentro de `server/` y ejecutar `npm run dev`. 
 
 `Connecting` significa que se esta intentando entrar o recuperar una conexion. `Disconnected` significa que el servidor no esta disponible; la exposicion sigue funcionando de forma local y reintenta la conexion automaticamente. Una perdida breve de WebSocket puede recuperar la misma sesion durante cinco segundos. Si el servidor se reinicia o la reserva caduca, el cliente vuelve a entrar en una sala disponible y recibe un punto de aparicion nuevo.
 
-El chat ahora se comparte por Colyseus dentro de cada sala, sin limite de distancia. La tecla `V` transmite voz por LiveKit cuando se arranca `dev:lan`; al soltarla se detienen las pistas. Para certificados, microfono, proximidad y prueba en dos dispositivos consulta [LAN.md](LAN.md).
+El chat ahora se comparte por Colyseus dentro de cada sala, sin limite de distancia. La tecla `V` transmite voz por LiveKit cuando se arranca `dev:lan`; al soltarla se deshabilita y silencia la pista, manteniendola preparada para no interrumpir la musica al abrir de nuevo el microfono. Salir del lobby u ocultar la pagina detiene la captura. Para certificados, microfono, proximidad y prueba en dos dispositivos consulta [LAN.md](LAN.md).
 
 ## Si el puerto 2567 esta ocupado
 

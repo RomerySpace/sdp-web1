@@ -38,7 +38,7 @@ Cada ronda conserva su eleccion compartida de dia/noche. La noche reduce mucho l
 
 Los cargadores siguen siendo de 30, con reserva ilimitada y recarga R. El cliente no recupera balas al recibir snapshots antiguos; solamente una recarga confirmada por servidor puede rellenar el cargador. La cadencia admite 35 ms de jitter sin acumular credito de disparo ilimitado. Las trazadoras remotas terminan en la interseccion calculada por el servidor; los efectos son visuales, no proyectiles que decidan dano. Hay un destello breve en el canon POV. Los buffers de trazadoras se reutilizan.
 
-El salto usa gravedad -20 m/s2 y altura .95 m, con mayor respuesta al arrancar y cambiar direccion. Camara y arma amortiguan sus cambios; cliente y servidor usan el mismo controlador. La prueba de las cuatro rutas de escaleras sigue incluyendo marcha, carrera y agachado. No es una reproduccion exacta del motor Counter-Strike.
+El salto usa gravedad -20 m/s2 y altura 1.14 m (20 % mas que .95 m), con mayor respuesta al arrancar y cambiar direccion. Camara y arma amortiguan sus cambios; cliente y servidor usan el mismo controlador. La prueba de las cuatro rutas de escaleras sigue incluyendo marcha, carrera y agachado. No es una reproduccion exacta del motor Counter-Strike.
 
 Volver al Limbo muestra carga blanca con progreso indeterminado mientras se cierra Shooter y se cambia de sala; los callbacks de pausa no pueden reabrir el menu. La pantalla completa movil usa la API nativa cuando existe. En iPhone sin esa API, Safari requiere Share > Add to Home Screen > Open as Web App; el menu indica esta via y reconoce el modo instalado. No se simula una pantalla completa que deje ocultos controles del navegador.
 

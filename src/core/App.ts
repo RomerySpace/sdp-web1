@@ -67,7 +67,7 @@ export class App {
     container.dataset.input = this.touch ? 'touch' : 'mouse';
     this.player = new FirstPersonController(this.scene.camera, this.scene.renderer.domElement, this.touch);
     this.inputs = new InputSynchronizer(this.network, this.player);
-    this.voiceTransport = new LiveKitVoiceTransport(this.network, () => this.voice?.release());
+    this.voiceTransport = new LiveKitVoiceTransport(this.network, () => this.voice?.suspend());
     this.scene.remotePlayers.setVoiceLevels(this.voiceTransport.voiceLevels);
     this.voice = new VoiceChatManager(this.voiceTransport);
     this.chat = new ChatManager(this.network);
@@ -81,7 +81,7 @@ export class App {
     this.settingsMenu = new SettingsMenu(container, this.settings, () => this.closeSettings());
     this.modes = new GameModeManager(container, this.scene.renderer, this.network, {
       pauseLimbo: () => { this.pause(); this.player.setEnabled(false); },
-      suspendCommunication: () => { this.inputs.setEnabled(false); this.voice.release(); this.voiceTransport.setEnabled(false); },
+      suspendCommunication: () => { this.inputs.setEnabled(false); this.voice.suspend(); this.voiceTransport.setEnabled(false); },
       restoreCommunication: () => { this.inputs.setEnabled(true); this.voiceTransport.setEnabled(true); },
       restoreLimbo: () => { this.scene.resize(); this.state.set('PAUSED'); this.ui.setState(this.state.value); if (this.limited || this.touch) this.state.set('EXPLORING'); },
       resetChat: () => { this.chat.reset(); this.ui.chat.reset(); },
@@ -175,7 +175,7 @@ export class App {
     document.addEventListener('visibilitychange', () => {
       this.audio.setVisible(!document.hidden);
       this.modes.shooter?.audio.setVisible(!document.hidden);
-      if (document.hidden) { this.pause(); cancelAnimationFrame(this.frame); }
+      if (document.hidden) { this.voice.suspend(); this.pause(); cancelAnimationFrame(this.frame); }
       else { this.lastTime = 0; this.frame = requestAnimationFrame(this.tick); }
     }, { signal });
     document.addEventListener('pointerlockchange', () => {
@@ -323,6 +323,7 @@ export class App {
 
   private submitChat(text: string): void {
     if (this.state.value !== 'CHATTING') return;
+    if (!text.trim()) { this.ui.chat.clear(); this.closeChat(); return; }
     if (!this.chat.submit(text)) {
       if (text.trim()) this.ui.notify('Chat is unavailable. Check the multiplayer connection.');
       return;

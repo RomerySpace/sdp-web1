@@ -1,4 +1,4 @@
-import { BoxGeometry, Group, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, MathUtils, type Scene } from 'three';
+import { BoxGeometry, Group, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, MathUtils, type Scene, type Vector3 } from 'three';
 import { AvatarLayout } from '../../../../shared/AvatarLayout';
 import type { LobbySnapshot, NetworkPlayer } from '../../../../shared/MultiplayerProtocol';
 import type { WeaponEvent } from '../../../../shared/ShooterProtocol';
@@ -66,6 +66,12 @@ export class RemoteShooterPlayers {
   action(event: WeaponEvent): void {
     const remote = this.remotes.get(event.playerId);
     if (remote && !remote.state.dead && event.life === remote.state.life && event.action === 'fire') remote.flashUntil = performance.now() + 90;
+  }
+  muzzlePosition(playerId: string, target: Vector3): Vector3 | undefined {
+    const remote = this.remotes.get(playerId);
+    if (!remote || remote.state.dead) return;
+    remote.weapon.updateWorldMatrix(true, true);
+    return remote.flash.getWorldPosition(target);
   }
   update(now: number): void {
     const dt = this.lastTime ? Math.min(.05, (now - this.lastTime) / 1000) : .016; this.lastTime = now;

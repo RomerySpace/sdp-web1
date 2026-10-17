@@ -147,8 +147,8 @@ test('mobile music mixer really silences and restores a supplied stream without 
   await page.addInitScript(()=>{
     const connect=AudioNode.prototype.connect as (this:AudioNode,node:AudioNode|AudioParam,output?:number,input?:number)=>AudioNode|void;
     AudioNode.prototype.connect=function(this:AudioNode,node:AudioNode|AudioParam,output:number=0,input:number=0){
-      if(this instanceof MediaElementAudioSourceNode&&node instanceof GainNode){
-        const analyser=this.context.createAnalyser();connect.call(node,analyser);
+      if(this instanceof GainNode&&node instanceof AudioDestinationNode){
+        const analyser=this.context.createAnalyser();connect.call(this,analyser);
         Object.assign(window,{musicMeter:analyser});
       }
       if(node instanceof AudioNode)return connect.call(this,node,output,input);

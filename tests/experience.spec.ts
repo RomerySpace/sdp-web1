@@ -44,7 +44,8 @@ test('HDR, reveal, navigation, chat, pause, audio preference and fullscreen', as
   await page.getByRole('textbox', { name: 'Chat message' }).fill('   ');
   await page.keyboard.press('Enter');
   await expect(page.locator('.chat-message')).toHaveCount(0);
-  await expect(page.locator('.ui')).toHaveAttribute('data-state', 'CHATTING');
+  await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
+  await page.keyboard.press('Enter');
   await page.getByRole('textbox', { name: 'Chat message' }).fill('WASD and V stay in this message <script>');
   await page.keyboard.press('Enter');
   await expect(page.locator('.chat-message')).toHaveText('YOU: WASD and V stay in this message <script>');
@@ -84,7 +85,7 @@ test('push-to-talk stops on release and cannot activate while typing', async ({ 
   await expect(page.locator('.controls-overlay')).toHaveAttribute('data-voice', 'ready');
 });
 
-test('microphone permission completing after release never leaves live tracks', async ({ page }) => {
+test('microphone permission completing after release never leaves enabled tracks', async ({ page }) => {
   await page.addInitScript(() => {
     const original = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
     navigator.mediaDevices.getUserMedia = async (constraints) => {
@@ -99,7 +100,7 @@ test('microphone permission completing after release never leaves live tracks', 
   await expect(page.locator('.controls-overlay')).toHaveAttribute('data-voice', 'requesting');
   await page.keyboard.up('KeyV');
   await expect(page.locator('.controls-overlay')).toHaveAttribute('data-voice', 'ready');
-  expect(await page.evaluate(() => (window as unknown as { testMicStream: MediaStream }).testMicStream.getTracks().every((track) => track.readyState === 'ended'))).toBe(true);
+  expect(await page.evaluate(() => (window as unknown as { testMicStream: MediaStream }).testMicStream.getTracks().every((track) => !track.enabled || track.readyState === 'ended'))).toBe(true);
 });
 
 test('denied microphone and denied pointer lock remain recoverable', async ({ page }) => {

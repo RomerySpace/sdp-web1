@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
 import type { InstancedMesh, Mesh, MeshStandardMaterial, PlaneGeometry, ShaderMaterial } from 'three';
 import { enterExhibition } from './entry';
-import { walkToSculpture } from './touch-driver';
+import { touchDriver, walkToSculpture } from './touch-driver';
 import { sessionRanking } from '../src/modes/shooter/ui/SessionRanking';
 import { createMonolithGeometry, createUpperMonolithGeometry } from '../src/scene/MonolithGeometry';
 import type { NetworkPlayer } from '../shared/MultiplayerProtocol';
@@ -21,6 +21,9 @@ declare global { interface Window {
   ambientMeter?: AnalyserNode;
   avatarReconstructions?: { life: number; coherence: number }[];
   shooterMotionSamples: { time: number; x: number; y: number; z: number }[];
+  voiceCaptures: MediaStreamTrack[];
+  musicInterruptions: string[];
+  remoteTrailProbe?: { origin: number[]; muzzle: number[]; headDistance: number };
 } }
 const shooterRequest = (url: string): boolean => /\/shooter\/|\/modes\/shooter\/|ShooterMode-|shooter-physics-|rapier3d/.test(url);
 async function enterLimbo(page: Page): Promise<void> {
@@ -59,6 +62,68 @@ async function canvasContrast(page: Page): Promise<number> {
     return contrast;
   });
 }
+test('open chat scrolls older messages, does not jump on new messages and closes with empty Enter', async ({ page }, info) => {
+  await enterLimbo(page); await page.keyboard.press('Enter'); await page.keyboard.press('Enter');
+  await expect(page.getByRole('textbox', { name: 'Chat message' })).toBeHidden();
+  await page.keyboard.press('Enter'); await page.getByRole('textbox', { name: 'Chat message' }).fill('   '); await page.keyboard.press('Enter');
+  await expect(page.getByRole('textbox', { name: 'Chat message' })).toBeHidden();
+  await expect(page.locator('.chat-message')).toHaveCount(0);
+  await page.keyboard.press('Enter');
+  await page.evaluate(() => {
+    const chat = (window.sdpUnified as unknown as { chat: { append(message: unknown): void } }).chat;
+    for (let i = 0; i < 30; i++) chat.append({ messageId: `scroll-${i}`, senderName: 'Visitor', message: `Message ${i}: a longer message to test the room history while reading older conversations.` });
+  });
+  const history = page.getByRole('log', { name: 'Chat messages' });
+  await expect(page.locator('.chat-message')).toHaveCount(30);
+  const bottom = await history.evaluate(node => node.scrollTop); expect(bottom).toBeGreaterThan(200);
+  await history.hover(); await page.mouse.wheel(0, -1500);
+  await expect.poll(() => history.evaluate(node => node.scrollTop)).toBeLessThan(bottom - 150);
+  await page.evaluate(() => (window.sdpUnified as unknown as { chat: { append(message: unknown): void } }).chat.append({ messageId: 'scroll-new', senderName: 'Visitor', message: 'A new message must not force a reader to the bottom.' }));
+  expect(await history.evaluate(node => node.scrollHeight - node.clientHeight - node.scrollTop)).toBeGreaterThan(150);
+  await page.screenshot({ path: info.outputPath('scrollable-room-chat.png') });
+  await page.getByRole('textbox', { name: 'Chat message' }).press('Enter');
+  await expect(page.getByRole('textbox', { name: 'Chat message' })).toBeHidden();
+});
+
+test('touch chat history accepts native swipes and empty Enter closes it', async ({ browser }, info) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  try {
+    const page = await context.newPage(); await enterLimbo(page);
+    await page.getByRole('button', { name: 'Open chat' }).tap();
+    await page.evaluate(() => {
+      const chat = (window.sdpUnified as unknown as { chat: { append(message: unknown): void } }).chat;
+      for (let i = 0; i < 30; i++) chat.append({ messageId: `touch-scroll-${i}`, senderName: 'Visitor', message: `Message ${i}: a longer mobile room message for native scrolling.` });
+    });
+    const history = page.getByRole('log', { name: 'Chat messages' }), rect = (await history.boundingBox())!;
+    const before = await history.evaluate(node => node.scrollTop), driver = await touchDriver(page);
+    expect(rect.height).toBeGreaterThan(100);
+    await driver.down(1, rect.x + rect.width / 2, rect.y + 30);
+    for (let step = 1; step <= 6; step++) { await driver.move(1, rect.x + rect.width / 2, rect.y + 30 + step * 25); await page.waitForTimeout(25); }
+    await driver.up(1);
+    await expect.poll(() => history.evaluate(node => node.scrollTop)).toBeLessThan(before - 50);
+    await page.screenshot({ path: info.outputPath('touch-scrollable-chat.png') });
+    await page.getByRole('textbox', { name: 'Chat message' }).press('Enter');
+    await expect(page.getByRole('textbox', { name: 'Chat message' })).toBeHidden();
+  } finally { await context.close(); }
+});
+
+test('hall convolution has a long stereo tail rather than only a louder dry signal', async ({ page }) => {
+  await page.goto('/?debugMode=limbo');
+  const result = await page.evaluate(async () => {
+    const { hallImpulse } = await import(/* @vite-ignore */ '/src/audio/' + 'HallReverb.ts');
+    const context = new OfflineAudioContext(2, 16000 * 9, 16000), convolver = context.createConvolver();
+    convolver.buffer = hallImpulse(context, 8.5);
+    const source = context.createBufferSource(), impulse = context.createBuffer(1, 1, 16000); impulse.getChannelData(0)[0] = 1;
+    source.buffer = impulse; source.connect(convolver); convolver.connect(context.destination); source.start();
+    const rendered = await context.startRendering(), left = rendered.getChannelData(0), right = rendered.getChannelData(1);
+    const rms = (from: number, to: number) => { let energy = 0; for (let i = from * 16000; i < to * 16000; i++) energy += left[i] ** 2; return Math.sqrt(energy / ((to - from) * 16000)); };
+    let difference = 0; for (let i = 16000; i < 32000; i++) difference += Math.abs(left[i] - right[i]);
+    return { early: rms(1, 2), late: rms(6, 7), difference };
+  });
+  expect(result.early).toBeGreaterThan(.00001); expect(result.late).toBeGreaterThan(.000001);
+  expect(result.late).toBeLessThan(result.early); expect(result.difference).toBeGreaterThan(.1);
+});
+
 for (const mobile of [false, true]) {
   test(`white lobby ground and continuous grass fade into a dark horizon (${mobile ? 'mobile' : 'desktop'})`, async ({ browser }, info) => {
     const context = await browser.newContext({
@@ -475,8 +540,21 @@ test('two actual browsers: authoritative hits, crouch, digital death and server 
       game.input.yaw = Math.atan2(-dx, -dz); game.input.pitch = Math.atan2(other.y + 1.14 - (own.y + own.height! - .1), Math.hypot(dx, dz));
     });
     await first.waitForTimeout(300);
+    await second.evaluate(() => {
+      const game = window.sdpUnified.modes.shooter!, emit = game.shooting!.trails.emit.bind(game.shooting!.trails);
+      game.shooting!.trails.emit = (origin, target) => {
+        const remote = game.remotes.group.children[0], snapshot = window.sdpUnified.network.snapshot!;
+        const other = snapshot.players.find(p => p.playerId !== snapshot.localPlayerId)!;
+        const muzzle = game.remotes.muzzlePosition(other.playerId, origin.clone())!;
+        window.remoteTrailProbe = { origin: origin.toArray(), muzzle: muzzle.toArray(), headDistance: Math.hypot(origin.x - remote.position.x, origin.y - remote.position.y - (other.height! - .1), origin.z - remote.position.z) };
+        emit(origin, target);
+      };
+    });
     await first.mouse.down(); await first.mouse.up();
     await expect.poll(async () => (await targetState()).health).toBe(50);
+    await expect.poll(() => second.evaluate(() => !!window.remoteTrailProbe)).toBe(true);
+    const trace = await second.evaluate(() => window.remoteTrailProbe!);
+    expect(trace.origin).toEqual(trace.muzzle); expect(trace.headDistance).toBeGreaterThan(.3);
     await expect.poll(() => second.evaluate(() => window.sdpUnified.modes.shooter!.health)).toBe(50);
     await expect.poll(() => second.locator('.damage-vignette').evaluate(node => Number(getComputedStyle(node).opacity))).toBeGreaterThan(0);
     await second.screenshot({ path: info.outputPath('white-digital-damage.png') });
@@ -873,9 +951,18 @@ test('Limbo text and real WebRTC media work; voice disconnects in Shooter and re
   const a = await browser.newContext(), b = await browser.newContext();
   try {
     const first = await a.newPage(), second = await b.newPage();
+    const rate = 8000, wav = Buffer.alloc(44 + rate * 60);
+    wav.write('RIFF', 0); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVEfmt ', 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
+    wav.writeUInt32LE(rate, 24); wav.writeUInt32LE(rate, 28); wav.writeUInt16LE(1, 32); wav.writeUInt16LE(8, 34); wav.write('data', 36); wav.writeUInt32LE(rate * 60, 40);
+    for (let i = 44; i < wav.length; i++) wav[i] = 128 + Math.round(16 * Math.sin(i * .2));
+    await first.route('**/audio/playlist.json', route => route.fulfill({ json: [{ id: 'voice-music', title: 'Continuous test tone', artist: 'Fixture', url: '/audio/voice-music.wav', duration: 60 }] }));
+    await first.route('**/audio/voice-music.wav', route => route.fulfill({ contentType: 'audio/wav', body: wav }));
     await first.addInitScript(() => {
       window.audioContexts = 0;
       window.createdAudioContexts = [];
+      window.voiceCaptures = [];
+      const capture = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+      navigator.mediaDevices.getUserMedia = async constraints => { const stream = await capture(constraints); window.voiceCaptures.push(...stream.getAudioTracks()); return stream; };
       const original = window.AudioContext;
       window.AudioContext = new Proxy(original, { construct(target, args) {
         window.audioContexts++; const context = Reflect.construct(target, args) as AudioContext;
@@ -907,8 +994,26 @@ test('Limbo text and real WebRTC media work; voice disconnects in Shooter and re
       const visitors = window.sdpUnified.scene.remotePlayers.group.children;
       return Math.max(0, ...visitors.map(visitor => ((visitor.children[0] as Mesh).material as MeshStandardMaterial).opacity));
     })).toBeLessThan(.685);
+    const musicStart = await first.evaluate(() => {
+      const audio = window.sdpUnified.audio as unknown as { media: HTMLAudioElement; reverb: ConvolverNode; serverAnchor: { time: number; received: number } };
+      if (audio.reverb.buffer?.duration !== 8.5) throw new Error('Music hall is not connected');
+      window.musicInterruptions = [];
+      for (const type of ['pause', 'waiting', 'seeking']) audio.media.addEventListener(type, () => window.musicInterruptions.push(JSON.stringify({ type, time: audio.media.currentTime, duration: audio.media.duration, rate: audio.media.playbackRate, target: ((audio.serverAnchor.time + performance.now() - audio.serverAnchor.received - Date.UTC(2026, 0, 1)) / 1000) % 60 })));
+      return audio.media.currentTime;
+    });
+    for (let repeat = 0; repeat < 2; repeat++) {
+      await first.keyboard.down('KeyV'); await expect.poll(() => first.evaluate(() => window.sdpUnified.voiceTransport.transmitting)).toBe(true);
+      await first.waitForTimeout(400); await first.keyboard.up('KeyV');
+      await expect.poll(() => first.evaluate(() => window.sdpUnified.voiceTransport.transmitting)).toBe(false);
+      await first.waitForTimeout(250);
+    }
+    expect(await first.evaluate(() => window.voiceCaptures.length)).toBe(1);
+    expect(await first.evaluate(() => window.voiceCaptures.every(track => !track.enabled && track.readyState === 'live'))).toBe(true);
+    expect(await first.evaluate(() => window.musicInterruptions)).toEqual([]);
+    expect(await first.evaluate(() => (window.sdpUnified.audio as unknown as { media: HTMLAudioElement }).media.currentTime)).toBeGreaterThan(musicStart + 1);
     await openProtocol(first); await enterShooter(first);
     expect(await first.evaluate(() => window.sdpUnified.voiceTransport.state)).toBe('disconnected');
+    expect(await first.evaluate(() => window.voiceCaptures.every(track => track.readyState === 'ended'))).toBe(true);
     await expect.poll(() => first.evaluate(() => window.createdAudioContexts.filter(context => context.state !== 'closed').length)).toBe(1);
     await first.keyboard.press('Escape'); await first.getByRole('button', { name: 'RETURN TO LIMBO' }).click();
     await expect.poll(() => first.evaluate(() => window.sdpUnified.voiceTransport.state)).toBe('connected');

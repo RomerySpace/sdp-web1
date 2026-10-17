@@ -61,7 +61,7 @@ La inspeccion tactil sigue disponible. El FPS requiere escritorio, raton y point
 ## Probar dos navegadores
 
 Abrir dos ventanas en la misma URL. ONLINE muestra la poblacion real de la sala.
-En Limbo comprobar desplazamiento y ENTER para texto. Autorizar el microfono al mantener V; soltar V corta las pistas, no solo el indicador. La voz se atenua con la distancia.
+En Limbo comprobar desplazamiento y ENTER para texto. Autorizar el microfono al mantener V; soltar V deshabilita inmediatamente la pista y silencia LiveKit, no solo el indicador. La voz se atenua con la distancia.
 Entrar al Shooter en ambas ventanas. CTRL baja cabeza, torso y arma de los avatares; SHIFT corre. El servidor determina la region alcanzada: cabeza 100, torso 50, brazos/piernas 25 y pies 12 HP. Dos impactos al torso eliminan a un jugador con 100 HP; uno en la cabeza tambien. Los danos activan bordes digitales blancos y una reaccion discreta de camara.
 Tras 7 segundos sin dano, se recuperan 10 HP por segundo hasta 100. Cualquier nuevo impacto interrumpe la recuperacion y reinicia los 7 segundos. STRIKE cuenta bajas consecutivas y se reinicia al morir; K/D muestra el total de esta sesion de sala. El historial superior izquierdo muestra los nombres de atacante y victima durante 8 segundos, con un maximo de 6 entradas.
 TARGET DESYNCHRONIZED confirma la baja; el otro avatar pierde geometria, emite fragmentos blancos/azules y se disuelve en 1.35 segundos. El eliminado ve DESYNCHRONIZED y no puede moverse, apuntar, disparar ni recargar.
@@ -134,6 +134,12 @@ Las animaciones procedimentales no se transmiten fotograma a fotograma.
 No se han implementado Redis, seleccion regional, matchmaking competitivo ni limite global/cola de 300. No se ha validado capacidad para 300 ni latencia intercontinental de 40-60 ms.
 
 ## Voz solo en Limbo
+
+La captura y la publicacion se reutilizan mientras se permanece en el lobby. Soltar V deshabilita la pista y aplica mute; no hay audio de microfono transmitido. El navegador puede seguir mostrando su indicador de dispositivo preparado. Ocultar la pagina, cambiar de sala, perder conexion o cerrar la experiencia detiene la captura y elimina la publicacion. Esto evita renegociar continuamente la ruta de sonido del dispositivo y cortar la musica en cada pulsacion.
+
+La musica pasa por una sala estereo de 8.5 segundos con predelay de 65 ms; el control de volumen y mute se aplica despues de toda la mezcla, incluida la cola. Pequeños desfases del programa compartido se corrigen con velocidad limitada al 2.5 %, conservando el tono. Solo la entrada, el retorno de segundo plano, un cambio de tema o un desfase superior a 8 segundos provocan una busqueda directa. Algunos dispositivos pueden cambiar de ruta/calidad al autorizar el microfono por primera vez; comprobar tambien con auriculares y el telefono real.
+
+El chat conserva los ultimos 30 mensajes por sala. Abierto permite scroll de raton o gesto tactil y no baja forzosamente cuando se leen mensajes antiguos. ENTER con el campo vacio o solo espacios lo cierra sin enviar. Las trazadoras de otros visitantes nacen en el cañon de su avatar interpolado y terminan en el impacto autoritativo; el origen de validacion del servidor no cambia.
 
 Al salir se paran microfono, publicaciones, pistas remotas y conexion LiveKit. SDPShooterRoom no entrega tokens de voz.
 Al regresar, el token se vincula a la nueva sesion y sala Limbo. El chat del Shooter reutiliza Colyseus y queda aislado del de Limbo.

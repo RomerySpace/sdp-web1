@@ -4,6 +4,7 @@ import { Vector3, type Camera } from 'three';
 import { lobbyAmbience } from '../core/LobbyAmbience';
 import { musicPosition, validMusicTracks, type MusicTrack } from '../../shared/MusicTimeline';
 import type { LobbySnapshot } from '../../shared/MultiplayerProtocol';
+import { hallImpulse } from './HallReverb';
 const MUTE_KEY = 'sdp:muted';
 
 /** Stream only the current track. One player persists across room transitions. */
@@ -15,12 +16,15 @@ export class AudioManager {
   private source?: MediaElementAudioSourceNode;
   private panner?: PannerNode;
   private ambience?: GainNode;
+  private reverb?: ConvolverNode;
+  private readonly effects: AudioNode[] = [];
   private readonly forward = new Vector3();
   private readonly up = new Vector3();
   private environmentGain = 0;
   private tracks: MusicTrack[] = [];
   private current = '';
   private started = false;
+  private needsSeek = true;
   private volume = .5;
   private serverAnchor?: { time: number; received: number };
   private readonly label = document.createElement('aside');
@@ -30,7 +34,7 @@ export class AudioManager {
   muted = false;
   constructor() {
     try { this.muted = localStorage.getItem(MUTE_KEY) === 'true'; } catch {}
-    this.media.crossOrigin = 'anonymous'; this.media.preload = 'metadata';
+    this.media.crossOrigin = 'anonymous'; this.media.preload = 'metadata'; this.media.preservesPitch = true;
     this.label.className = 'now-playing'; this.label.hidden = true; this.label.setAttribute('aria-label', 'Now playing');
     this.title.className = 'music-title'; this.artist.className = 'music-artist'; this.label.append(this.title, this.artist);
     const signal = this.abort.signal;
@@ -55,8 +59,16 @@ export class AudioManager {
       this.panner.panningModel = 'HRTF'; this.panner.rolloffFactor = 0;
       this.panner.positionY.value = lobbyAmbience.music.height;
       this.ambience = this.context.createGain(); this.ambience.gain.value = this.environmentGain;
-      this.source.connect(this.gain); this.gain.connect(this.panner);
-      this.panner.connect(this.ambience); this.ambience.connect(this.context.destination); this.updateGain();
+      const settings = lobbyAmbience.music, dry = this.context.createGain(), wet = this.context.createGain();
+      dry.gain.value = settings.dry; wet.gain.value = settings.wet;
+      const delay = this.context.createDelay(.2); delay.delayTime.value = settings.preDelay;
+      this.reverb = this.context.createConvolver(); this.reverb.buffer = hallImpulse(this.context, settings.reverbSeconds);
+      const limiter = this.context.createDynamicsCompressor();
+      limiter.threshold.value = -5; limiter.knee.value = 6; limiter.ratio.value = 4; limiter.attack.value = .012; limiter.release.value = .35;
+      this.source.connect(dry); dry.connect(this.panner); this.panner.connect(this.ambience);
+      this.source.connect(delay); delay.connect(this.reverb); this.reverb.connect(wet); wet.connect(this.ambience);
+      this.ambience.connect(limiter); limiter.connect(this.gain); this.gain.connect(this.context.destination);
+      this.effects.push(dry, wet, delay, limiter); this.updateGain();
     }
     void this.context?.resume().catch(() => {}); this.sync();
   }
@@ -67,12 +79,20 @@ export class AudioManager {
     if (!position) return;
     const { track, offset } = position;
     if (this.current !== track.id) {
-      this.current = track.id; this.label.hidden = true;
+      this.current = track.id; this.needsSeek = true; this.label.hidden = true;
       this.title.textContent = track.title; this.artist.textContent = track.artist;
       this.media.src = track.url; this.media.load();
     }
-    if (this.media.readyState >= 1 && Number.isFinite(this.media.duration) && Math.abs(this.media.currentTime - offset) > .6) {
-      this.media.currentTime = Math.min(offset, Math.max(0, this.media.duration - .05));
+    if (this.media.readyState >= 1 && Number.isFinite(this.media.duration) && !this.media.seeking) {
+      const error = offset - this.media.currentTime, settings = lobbyAmbience.music;
+      if (this.needsSeek || Math.abs(error) > settings.hardSeekThreshold) {
+        this.media.currentTime = Math.min(offset, Math.max(0, this.media.duration - .05));
+        this.needsSeek = false; this.media.playbackRate = 1;
+      } else {
+        // Small clock/audio-route drift must not interrupt the stream with repeated seeks.
+        const correction = Math.abs(error) < settings.syncTolerance ? 0 : Math.max(-settings.maxRateCorrection, Math.min(settings.maxRateCorrection, error * .04));
+        this.media.playbackRate = 1 + correction;
+      }
     }
     if (this.media.paused && !this.media.error) void this.media.play().catch(() => { this.label.hidden = true; });
   }
@@ -104,6 +124,6 @@ export class AudioManager {
     }
   }
   private updateGain(): void { if (this.gain && this.context) rampGain(this.gain.gain, this.muted ? 0 : this.volume * .6, this.context.currentTime, .1); }
-  setVisible(visible: boolean): void { if (!visible) this.media.pause(); else { void this.context?.resume().catch(() => {}); this.sync(); } }
-  dispose(): void { this.abort.abort(); window.clearInterval(this.timer); this.media.pause(); this.media.removeAttribute('src'); this.media.load(); this.source?.disconnect(); this.panner?.disconnect(); this.ambience?.disconnect(); this.gain?.disconnect(); this.label.remove(); }
+  setVisible(visible: boolean): void { if (!visible) { this.needsSeek = true; this.media.pause(); } else { void this.context?.resume().catch(() => {}); this.sync(); } }
+  dispose(): void { this.abort.abort(); window.clearInterval(this.timer); this.media.pause(); this.media.removeAttribute('src'); this.media.load(); this.source?.disconnect(); this.panner?.disconnect(); this.ambience?.disconnect(); this.gain?.disconnect(); this.effects.forEach(node => node.disconnect()); this.reverb?.disconnect(); if (this.reverb) this.reverb.buffer = null; this.label.remove(); }
 }

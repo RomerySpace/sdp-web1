@@ -10,6 +10,7 @@ export class VoiceChatManager {
   private stream: MediaStream | null = null;
   private held = false;
   private requesting = false;
+  private captureGeneration = 0;
   private disposed = false;
   private granted = false;
   private state: VoiceState = 'idle';
@@ -22,7 +23,7 @@ export class VoiceChatManager {
       this.permission = permission;
       const update = () => {
         this.granted = permission.state === 'granted';
-        if (permission.state === 'denied') { this.release(); this.setState('denied'); }
+        if (permission.state === 'denied') { this.suspend(); this.setState('denied'); }
         else if (!this.requesting && !this.stream && ['idle', 'ready', 'denied'].includes(this.state)) this.setState(this.granted ? 'ready' : 'idle');
       };
       permission.onchange = update; update();
@@ -32,36 +33,40 @@ export class VoiceChatManager {
   async press(): Promise<void> {
     if (this.disposed) return;
     this.held = true;
-    if (this.requesting || this.stream) return;
+    if (this.requesting) return;
+    if (this.stream) {
+      this.transport?.setSpeaking(true); this.setState('speaking'); return;
+    }
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) { this.held = false; this.setState('unavailable'); return; }
     this.requesting = true;
+    const generation = ++this.captureGeneration;
     this.setState('requesting');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false,
       });
       this.granted = true;
-      if (this.disposed || !this.held) {
+      if (this.disposed || generation !== this.captureGeneration) {
         stream.getTracks().forEach((track) => track.stop());
-        if (!this.disposed) this.setState('ready');
         return;
       }
       this.stream = stream;
+      stream.getAudioTracks().forEach(track => { track.enabled = false; });
       for (const track of stream.getTracks()) {
         track.addEventListener('ended', () => {
-          if (this.stream === stream) { this.release(); this.setState('unavailable'); }
+          if (this.stream === stream) { this.suspend(); this.setState('unavailable'); }
         }, { once: true });
       }
       await this.transport?.setLocalStream(stream);
-      if (this.disposed || !this.held || this.stream !== stream) {
+      if (this.disposed || generation !== this.captureGeneration || this.stream !== stream) {
         stream.getTracks().forEach((track) => track.stop());
         if (!this.disposed) this.setState(this.granted ? 'ready' : 'idle');
         return;
       }
-      this.transport?.setSpeaking(true);
-      this.setState('speaking');
+      this.transport?.setSpeaking(this.held);
+      this.setState(this.held ? 'speaking' : 'ready');
     } catch (error) {
-      if (this.disposed) return;
+      if (this.disposed || generation !== this.captureGeneration) return;
       this.held = false;
       this.transport?.setSpeaking(false);
       void this.transport?.setLocalStream(null).catch(() => {});
@@ -73,14 +78,18 @@ export class VoiceChatManager {
 
   release(): void {
     this.held = false;
+    this.stream?.getAudioTracks().forEach(track => { track.enabled = false; });
     this.transport?.setSpeaking(false);
-    void this.transport?.setLocalStream(null).catch(() => {});
-    const stream = this.stream;
-    this.stream = null;
-    stream?.getTracks().forEach((track) => track.stop());
-    // Keep a pending permission request visible until its stream has actually
-    // arrived and been discarded; permission alone is not a completed capture.
+    // Keep pending permission visible until capture is ready, with its track disabled.
     if (this.state === 'speaking' || (this.state === 'requesting' && !this.requesting)) this.setState(this.granted ? 'ready' : 'idle');
+  }
+
+  suspend(): void {
+    ++this.captureGeneration; this.release();
+    const stream = this.stream; this.stream = null;
+    stream?.getTracks().forEach(track => track.stop());
+    void this.transport?.setLocalStream(null).catch(() => {});
+    if (!this.disposed) this.setState(this.granted ? 'ready' : 'idle');
   }
 
   subscribe(listener: (state: VoiceState) => void): () => void {
@@ -94,7 +103,7 @@ export class VoiceChatManager {
   }
 
   dispose(): void {
-    this.disposed = true; this.release(); this.listeners.clear();
+    this.disposed = true; this.suspend(); this.listeners.clear();
     if (this.permission) this.permission.onchange = null;
     this.transport?.dispose();
   }

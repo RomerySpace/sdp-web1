@@ -27,7 +27,7 @@ test('shooter jump has a short grounded flight and preserves the configured clea
     const baseline = player.current.y; let height = 0, frames = 0; jump = true; step();
     assert.equal(player.tookOff, true);
     while (!player.grounded && frames < 120) { step(); frames++; height = Math.max(height, player.current.y - baseline); }
-    assert.ok(height > .8 && height < 1.05, `Apex: ${height}`);
+    assert.ok(height > 1 && height < 1.25, `Apex: ${height}`);
     assert.ok(frames / 60 > .5 && frames / 60 < .8, `Flight: ${frames / 60}`);
     assert.equal(player.grounded, true);
   } finally { player.dispose(); physics.dispose(); }

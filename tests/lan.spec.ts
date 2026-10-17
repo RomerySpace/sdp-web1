@@ -50,8 +50,9 @@ test.describe('secure local voice and shared chat', () => {
       await first.keyboard.press('Enter');
       await first.getByRole('textbox', { name: 'Chat message' }).fill('   ');
       await first.keyboard.press('Enter');
-      await expect(first.locator('.ui')).toHaveAttribute('data-state', 'CHATTING');
+      await expect(first.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
       await expect(second.locator('.chat-message')).toHaveCount(0);
+      await first.keyboard.press('Enter');
       await first.getByRole('textbox', { name: 'Chat message' }).fill('Hola desde SDP <script>');
       await first.keyboard.press('Enter');
       await expect(first.locator('.chat-message')).toHaveText('YOU: Hola desde SDP <script>');
@@ -143,9 +144,9 @@ test.describe('secure local voice and shared chat', () => {
       await first.screenshot({ path: testInfo.outputPath('lan-voice-desktop.png') });
       await first.keyboard.up('KeyV');
       await expect.poll(() => first.evaluate(() => window.sdpMultiplayer.voiceTransport.transmitting)).toBe(false);
-      expect(await first.evaluate(() => (window as unknown as { testPTTStream: MediaStream }).testPTTStream.getTracks().every((track) => track.readyState === 'ended'))).toBe(true);
-      await expect.poll(() => first.evaluate(async () => (await window.sdpMultiplayer.voiceTransport.diagnostics()).localPublications)).toBe(0);
-      await expect.poll(() => second.evaluate(() => window.sdpMultiplayer.voiceTransport.remoteCount)).toBe(0);
+      expect(await first.evaluate(() => (window as unknown as { testPTTStream: MediaStream }).testPTTStream.getTracks().every((track) => !track.enabled))).toBe(true);
+      await expect.poll(() => first.evaluate(async () => (await window.sdpMultiplayer.voiceTransport.diagnostics()).localPublications)).toBe(1);
+      await expect.poll(() => second.evaluate(() => Math.max(0, ...window.sdpMultiplayer.voiceTransport.voiceLevels.values()))).toBe(0);
       await first.keyboard.press('Enter'); await first.keyboard.type('V en el texto');
       expect(await first.evaluate(() => window.sdpMultiplayer.voiceTransport.transmitting)).toBe(false);
       await first.keyboard.press('Escape');
@@ -156,7 +157,7 @@ test.describe('secure local voice and shared chat', () => {
       await expect.poll(() => first.evaluate(() => window.sdpMultiplayer.voiceTransport.transmitting)).toBe(true);
       await first.evaluate(() => window.dispatchEvent(new Event('blur')));
       await expect.poll(() => first.evaluate(() => window.sdpMultiplayer.voiceTransport.transmitting)).toBe(false);
-      await expect.poll(() => second.evaluate(() => window.sdpMultiplayer.voiceTransport.remoteCount)).toBe(0);
+      await expect.poll(() => second.evaluate(() => Math.max(0, ...window.sdpMultiplayer.voiceTransport.voiceLevels.values()))).toBe(0);
       await first.close();
       await expect.poll(() => second.evaluate(() => window.sdpMultiplayer.remotes.count)).toBe(0);
     } finally { await Promise.all(contexts.map((context) => context.close())); await primary?.leave(); await isolated?.leave(); }

@@ -35,6 +35,7 @@
 #app[data-input="touch"] .chat { left: 18px; bottom: max(262px, calc(env(safe-area-inset-bottom) + 242px)); width: min(260px, calc(100% - 36px)); z-index: 50; }
 #app[data-input="touch"] .chat:not(.is-open) { pointer-events: none; }
 #app[data-input="touch"] .chat-history { max-height: 84px; }
+#app[data-input="touch"] .chat.is-open .chat-history { max-height: min(240px, 35dvh); }
 #app[data-input="touch"] .chat.is-open { position: fixed; width: calc(100% - 36px); bottom: var(--chat-bottom, 18px); }
 #app[data-input="touch"] .chat-form input, #app[data-input="touch"] .intro-name-row input { font-size: 16px; }
 #app[data-input="touch"] .chat-form { padding: 5px 10px; min-height: 52px; gap: 8px; }
