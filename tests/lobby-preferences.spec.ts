@@ -40,6 +40,9 @@ test('E seats a visitor smoothly, keeps chat available and shows the seated pose
     await expect.poll(() => first.evaluate(() => window.sdpUnified.player.seated)).toBe(true);
     await expect.poll(() => first.evaluate(() => Math.abs(window.sdpUnified.scene.camera.position.y - 1.18))).toBeLessThan(.03);
     await expect(first.getByRole('button', { name: 'Stand up', exact: true })).toBeVisible();
+    await expect(first.getByRole('button', { name: 'Stand up', exact: true })).toHaveClass(/is-seated/);
+    const standHint = await first.getByRole('button', { name: 'Stand up', exact: true }).boundingBox();
+    expect(standHint!.y).toBeGreaterThan(first.viewportSize()!.height * .65);
     await first.keyboard.press('Enter'); await first.getByRole('textbox', { name: 'Chat message' }).fill('Listening under the tree'); await first.keyboard.press('Enter');
     await expect(second.locator('.chat-message')).toContainText('Listening under the tree');
     expect(await first.evaluate(() => window.sdpUnified.player.seated)).toBe(true);
@@ -67,6 +70,8 @@ test('mobile visitors can tap to sit and stand or jump out of the bench', async 
     await enter(page, 'Touch Seating'); await approachBench(page);
     await page.getByRole('button', { name: 'Sit on bench', exact: true }).tap();
     await expect.poll(() => page.evaluate(() => window.sdpUnified.player.seated)).toBe(true);
+    const standHint = await page.getByRole('button', { name: 'Stand up', exact: true }).boundingBox();
+    expect(standHint!.y).toBeGreaterThan(844 * .65);
     await page.screenshot({ path: '/private/tmp/sdp-seated-mobile.png' });
     await page.getByRole('button', { name: 'Stand up', exact: true }).tap(); await expect.poll(() => page.evaluate(() => window.sdpUnified.player.seated)).toBe(false);
     await aimAtBench(page); await page.getByRole('button', { name: 'Sit on bench', exact: true }).tap(); await expect.poll(() => page.evaluate(() => window.sdpUnified.player.seated)).toBe(true);

@@ -33,6 +33,13 @@ button { border: 0; background: none; }
 .bench-interaction:disabled { cursor: default; opacity: .65; }
 .bench-interaction kbd { font: inherit; padding: 2px 5px; border: 1px solid #edf4f766; border-radius: 2px; }
 #app[data-input="touch"] .bench-interaction kbd { display: none; }
+.bench-interaction.is-seated { top: auto; bottom: max(28px, env(safe-area-inset-bottom)); min-width: 116px; background: transparent; border-color: transparent; font-size: 9px; opacity: .65; transition: opacity 180ms; }
+.bench-interaction.is-seated svg { display: none; }
+.bench-interaction.is-seated:is(:hover, :focus-visible) { opacity: 1; }
+#app[data-input="touch"] .bench-interaction.is-seated { bottom: max(210px, calc(env(safe-area-inset-bottom) + 190px)); }
+@media (max-height: 540px) and (orientation: landscape) {
+  #app[data-input="touch"] .bench-interaction.is-seated { bottom: max(24px, env(safe-area-inset-bottom)); }
+}
 #app[data-mode="LIMBO"].lobby-hud-hidden .inspection-actions { visibility: hidden; pointer-events: none; }
 #app[data-mode="LIMBO"].lobby-hud-hidden .now-playing { display: none; }
 #app[data-mode="LIMBO"].lobby-hud-hidden .ui > :not(.intro) { visibility: hidden !important; pointer-events: none !important; }

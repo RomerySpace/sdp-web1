@@ -85,6 +85,7 @@ export class UIManager {
   }
   seating(available: boolean, seated: boolean, occupied = false): void {
     this.bench.hidden = !available; this.bench.disabled = occupied;
+    this.bench.classList.toggle('is-seated', seated);
     this.bench.querySelector('span')!.textContent = occupied ? 'OCCUPIED' : seated ? 'STAND UP' : 'SIT';
     this.bench.setAttribute('aria-label', occupied ? 'Bench occupied' : seated ? 'Stand up' : 'Sit on bench'); this.bench.title = occupied ? 'Bench occupied' : seated ? 'Stand up (E)' : 'Sit on bench (E)';
   }
