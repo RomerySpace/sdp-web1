@@ -42,7 +42,7 @@ test('SDPv1 loads in the shared product finish, rotates, and inspection preserve
     return { vertices, materials, rotation: root.rotation.y };
   });
   expect(model.vertices).toBe(429040);
-  expect(model.materials).toEqual([{ color: SCULPTURE_COLOR, metalness: 0.72, roughness: SCULPTURE_ROUGHNESS, map: false }]);
+  expect(model.materials).toEqual([{ color: SCULPTURE_COLOR, metalness: 0.25, roughness: SCULPTURE_ROUGHNESS, map: false }]);
   const worldSize = await page.evaluate(async (moduleURL) => {
     const { Box3, Vector3 } = await import(moduleURL);
     return new Box3().setFromObject(window.sdpInspection.sculpture.root).getSize(new Vector3()).toArray();
