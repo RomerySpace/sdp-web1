@@ -42,7 +42,7 @@ export class AudioManager {
     this.media.addEventListener('loadedmetadata', () => this.sync(), { signal });
     this.media.addEventListener('playing', () => { this.label.hidden = false; }, { signal });
     this.media.addEventListener('ended', () => { this.needsSeek = true; this.sync(); }, { signal });
-    for (const event of ['error', 'waiting', 'pause']) this.media.addEventListener(event, () => { this.label.hidden = true; }, { signal });
+    for (const event of ['error', 'pause']) this.media.addEventListener(event, () => { this.label.hidden = true; }, { signal });
     document.addEventListener('pointerdown', () => { if (this.started && this.media.paused) { void this.context?.resume(); this.sync(); } }, { signal });
     void fetch('/audio/playlist.json', { signal }).then(r => r.ok ? r.json() : []).then(raw => {
       this.tracks = validMusicTracks(raw); this.sync();
@@ -97,7 +97,8 @@ export class AudioManager {
   setMuted(muted: boolean): void { this.muted = muted; this.updateGain(); }
   setVolume(volume: number): void { this.volume = Math.max(0, Math.min(1, volume)); this.updateGain(); }
   updateEnvironment(camera: Camera, active: boolean, reveal: number): void {
-    this.label.hidden = !active || this.media.paused || this.media.readyState < HTMLMediaElement.HAVE_FUTURE_DATA;
+    // Keep the current credit during buffering; HUD visibility is handled independently by CSS.
+    this.label.hidden = !active || this.media.paused || !!this.media.error || this.media.readyState < HTMLMediaElement.HAVE_METADATA;
     const settings = lobbyAmbience.music;
     const distance = Math.hypot(camera.position.x, camera.position.z);
     const t = Math.max(0, Math.min(1, (distance - settings.fullRadius) / (settings.fadeRadius - settings.fullRadius)));

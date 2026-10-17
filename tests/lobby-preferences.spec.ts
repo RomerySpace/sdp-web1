@@ -113,6 +113,19 @@ test('music stays at original speed and does not seek when broadcast clock estim
   await page.route('**/audio/stable.wav', route => route.fulfill({ body: wav, contentType: 'audio/wav' }));
   await enter(page);
   await page.waitForFunction(() => { const audio = window.sdpUnified.audio as unknown as { media: HTMLAudioElement }; return !audio.media.paused && !audio.media.seeking && audio.media.readyState >= 3; });
+  const credit = page.getByLabel('Now playing');
+  await expect(credit).toBeVisible();
+  await page.evaluate(() => {
+    const audio = window.sdpUnified.audio as unknown as { media: HTMLAudioElement };
+    audio.media.dispatchEvent(new Event('waiting'));
+  });
+  await expect(credit).toBeVisible();
+  for (let i = 0; i < 3; i++) {
+    await page.keyboard.press('KeyH'); await expect(credit).toBeHidden();
+    await page.waitForTimeout(1700);
+    await page.keyboard.press('KeyH'); await expect(credit).toBeVisible();
+    await expect(credit.locator('.music-title')).toBeVisible();
+  }
   const result = await page.evaluate(() => {
     const audio = window.sdpUnified.audio as unknown as { media: HTMLAudioElement; sync(): void; receive(snapshot: LobbySnapshot): void };
     const before = audio.media.currentTime, rates: number[] = [], positions: number[] = [];
