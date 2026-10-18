@@ -61,7 +61,8 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
       this.seatingRequests.set(client.sessionId, now);
       if (player.seatIndex >= 0) return;
       const seat = lobbySeatSlots[raw.seat];
-      if (Math.hypot(player.x - seat.x, player.z - seat.z) > lobbyRetreat.interactionDistance || player.y - lobbyGroundHeight(player.x, player.z) > PLAYER_HEIGHT + .1) {
+      const relativeEye = player.y - seat.groundY;
+      if (Math.hypot(player.x - seat.x, player.z - seat.z) > lobbyRetreat.interactionDistance || relativeEye > PLAYER_HEIGHT + .1 || relativeEye < PLAYER_HEIGHT - .25) {
         client.send('lobby:notice', 'Move closer to sit.'); return;
       }
       if ([...this.state.players.values()].some(other => other.connected && other.seatIndex === raw.seat)) {
@@ -177,7 +178,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
       const position = this.simulation.step(id, entry.value)!;
       player.x = position.x;
       player.z = position.z;
-      player.y = lobbyGroundHeight(position.x, position.z) + PLAYER_HEIGHT + (position.elevation ?? 0);
+      player.y = (position.groundY ?? lobbyGroundHeight(position.x, position.z)) + PLAYER_HEIGHT + (position.elevation ?? 0);
       player.crouching = Boolean(entry.value.active && entry.value.c);
       player.yaw = entry.value.y;
       player.pitch = entry.value.p;
@@ -192,10 +193,12 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
     const player = this.state.players.get(id);
     if (!player || player.seatIndex < 0) return false;
     const exits = seatExits(player.seatIndex);
-    const position = exits.find(exit => this.seatingWorld.canOccupy(exit.x, exit.z) && [...this.state.players].every(([otherId, other]) => otherId === id || !other.connected || Math.hypot(other.x - exit.x, other.z - exit.z) >= .6)) ?? (force ? exits[0] : undefined);
+    const base = lobbySeatSlots[player.seatIndex].groundY;
+    const position = exits.find(exit => this.seatingWorld.canOccupy(exit.x, exit.z, base) && [...this.state.players].every(([otherId, other]) => otherId === id || !other.connected || Math.abs(other.y - player.y) > 2 || Math.hypot(other.x - exit.x, other.z - exit.z) >= .6)) ?? (force ? exits[0] : undefined);
     if (!position) return false;
-    player.seatIndex = -1; player.x = position.x; player.z = position.z; player.y = lobbyGroundHeight(position.x, position.z) + PLAYER_HEIGHT;
-    this.simulation.add(id, position); return true;
+    const groundY = this.seatingWorld.groundHeight(position.x, position.z, base);
+    player.seatIndex = -1; player.x = position.x; player.z = position.z; player.y = groundY + PLAYER_HEIGHT;
+    this.simulation.add(id, { ...position, groundY }); return true;
   }
 
   async onDispose(): Promise<void> {

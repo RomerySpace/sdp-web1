@@ -1,5 +1,7 @@
 # SDP — Unified Limbo / Shooter
 
+Local lower-gallery trial: [spatial layout, film and preview instructions](docs/LOWER-GALLERY.md).
+
 This working copy integrates both existing experiences on the `feature/unified-sdp` branch. Start it with `npm run dev:unified` at **http://localhost:5373**. For the architecture, imported modules, actual limitations and Spanish setup/testing instructions, see [UNIFIED-SDP.md](./UNIFIED-SDP.md). Production uses Vercel for the frontend and Render for Colyseus; publish matching versions together.
 
 A local, first-person sculpture exhibition in a luminous white environment. Vite, TypeScript, Three.js/WebGL 2, native pointer lock and Web Audio, with Colyseus multiplayer rooms of up to 25 people, shared room text chat and LiveKit proximity voice. For the HTTPS two-computer Wi-Fi test, run `npm run dev:lan` and follow [LAN.md](LAN.md), including certificate trust on both devices.

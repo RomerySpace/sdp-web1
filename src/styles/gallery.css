@@ -1,0 +1,8 @@
+.gallery-film-audio { position: absolute; right: max(22px, env(safe-area-inset-right)); bottom: max(22px, env(safe-area-inset-bottom)); width: 44px; height: 44px; display: grid; place-items: center; padding: 11px; border: 1px solid #b4bec7; border-radius: 50%; background: #f7fafbe6; color: #485860; pointer-events: auto; }
+.gallery-film-audio svg { width: 21px; height: 21px; stroke-width: 1.5; }
+.gallery-film-audio[hidden] { display: none; }
+.gallery-film-audio:hover { background: #fff; }
+.gallery-film-audio:focus-visible { outline: 2px solid #647d89; outline-offset: 3px; }
+.ui.in-gallery[data-state] :is(.controls-overlay, .control-row > span:nth-child(2), .voice-status, .connection-indicator, .visitor-focus, .bench-interaction) { color: #53636b; text-shadow: none; }
+.ui.in-gallery[data-state] .chat-message { color: #354750; }
+.ui.in-gallery[data-state] .chat-sender { color: #5b727d; }

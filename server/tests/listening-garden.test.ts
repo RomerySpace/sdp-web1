@@ -4,7 +4,7 @@ import { Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three';
 import { listeningGarden as garden, listeningGardenBenches, lobbyGroundHeight, listeningBenchDistance } from '../../shared/ListeningGarden';
 import { PLAYER_HEIGHT } from '../../shared/MultiplayerProtocol';
 import { createListeningBench } from '../../src/scene/ListeningBench';
-import { lobbySeatSlots, seatExits } from '../../shared/LobbyRetreat';
+import { lobbySeatSlots, seatExits, gardenSeatEnd } from '../../shared/LobbyRetreat';
 import { simulateMovement, type MotionState } from '../../shared/Movement';
 import { CollisionManager } from '../../src/player/CollisionManager';
 import { createLobbyGround } from '../../src/scene/LobbyGround';
@@ -30,7 +30,7 @@ test('the hollow is broad, smooth, continuous and its rendered surface matches t
 
 test('all sunken seats and exits remain on the flat lower floor, with space in the centre and a wide open approach', () => {
   const world = new CollisionManager();
-  for (const slot of lobbySeatSlots.slice(18)) {
+  for (const slot of lobbySeatSlots.slice(18, gardenSeatEnd)) {
     assert.equal(slot.groundY, -garden.depth);
     assert.equal(lobbyGroundHeight(slot.x, slot.z), slot.groundY);
     assert.ok(seatExits(lobbySeatSlots.indexOf(slot)).some(p => world.canOccupy(p.x, p.z)));

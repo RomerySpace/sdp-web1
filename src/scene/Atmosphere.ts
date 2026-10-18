@@ -3,6 +3,7 @@ import {
   type PerspectiveCamera,
   type MeshStandardMaterial,
 } from 'three';
+import { galleryImmersion } from '../../shared/LowerGallery';
 
 /** One backdrop draw and a few operations in the existing material shaders.
  * No postprocessing buffers, particles, transparent fog stacks or sky photograph. */
@@ -11,6 +12,7 @@ export class Atmosphere {
   private readonly uniforms = {
     atmosphereTime: { value: 0 }, atmosphereReveal: { value: 0 },
     atmosphereHorizon: this.horizon,
+    atmosphereInterior: { value: 0 },
   };
   private readonly backdrop: Mesh<PlaneGeometry, ShaderMaterial>;
 
@@ -69,18 +71,21 @@ export class Atmosphere {
           uniform float atmosphereTime;
           uniform float atmosphereReveal;
           uniform vec3 atmosphereHorizon;
+          uniform float atmosphereInterior;
         `)
         .replace('#include <fog_fragment>', `
           float opticalDistance = length(vAtmospherePosition - cameraPosition);
           float flow = sin(vAtmospherePosition.x * 0.055 + atmosphereTime * 0.025)
                      * sin(vAtmospherePosition.z * 0.045 - atmosphereTime * 0.018);
           float density = mix(0.148, 0.025, atmosphereReveal);
+          density *= mix(1.0, .20, atmosphereInterior);
           float heightFalloff = 0.94 + 0.12 * exp(-max(vAtmospherePosition.y, 0.0) * 0.2);
           float haze = 1.0 - exp(-pow(opticalDistance * density, 2.0) * heightFalloff * (1.0 + flow * 0.12));
           vec3 hazeColor = mix(vec3(0.72, 0.74, 0.76), atmosphereHorizon,
                                smoothstep(18.0, 90.0, opticalDistance));
           haze = mix(1.0, haze, smoothstep(0.0, 0.3, atmosphereReveal));
           hazeColor = mix(vec3(1.0), hazeColor, atmosphereReveal);
+          hazeColor = mix(hazeColor, vec3(.94, .96, .97), atmosphereInterior);
           gl_FragColor.rgb = mix(gl_FragColor.rgb, hazeColor, clamp(haze, 0.0, 1.0));
         `);
     };
@@ -91,6 +96,7 @@ export class Atmosphere {
     this.uniforms.atmosphereTime.value = time;
     this.uniforms.atmosphereReveal.value = reveal;
     if (camera) {
+      this.uniforms.atmosphereInterior.value = galleryImmersion(camera.position.x, camera.position.y, camera.position.z);
       camera.updateMatrixWorld();
       this.backdrop.material.uniforms.skyInverseProjection.value.copy(camera.projectionMatrixInverse);
       this.backdrop.material.uniforms.skyCameraWorld.value.copy(camera.matrixWorld);

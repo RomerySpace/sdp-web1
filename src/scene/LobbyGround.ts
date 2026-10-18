@@ -1,6 +1,7 @@
 import { BufferGeometry, Float32BufferAttribute, Path, Shape, ShapeGeometry } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { listeningGarden, lobbyGroundHeight } from '../../shared/ListeningGarden';
+import { lowerGallery } from '../../shared/LowerGallery';
 
 /** A real depression, not a surface placed above an intact flat floor. */
 export function createLobbyGround(): BufferGeometry {
@@ -9,6 +10,10 @@ export function createLobbyGround(): BufferGeometry {
   outline.moveTo(-1000, -1000); outline.lineTo(1000, -1000);
   outline.lineTo(1000, 1000); outline.lineTo(-1000, 1000); outline.closePath();
   const hole = new Path(); hole.absarc(x, -z, outerRadius, 0, Math.PI * 2, true); outline.holes.push(hole);
+  const stairwell = new Path(), g = lowerGallery;
+  stairwell.moveTo(g.openStairStart, -g.stairZ - g.stairHalfWidth); stairwell.lineTo(g.openStairStart, -g.stairZ + g.stairHalfWidth);
+  stairwell.lineTo(g.stairTop, -g.stairZ + g.stairHalfWidth); stairwell.lineTo(g.stairTop, -g.stairZ - g.stairHalfWidth); stairwell.closePath();
+  outline.holes.push(stairwell);
   const plain = new ShapeGeometry(outline, segments / 2); plain.rotateX(-Math.PI / 2);
   const positions = [x, lobbyGroundHeight(x, z), z], uvs = [x / 2000, z / 2000], indices: number[] = [];
   for (let ring = 1; ring <= rings; ring++) {

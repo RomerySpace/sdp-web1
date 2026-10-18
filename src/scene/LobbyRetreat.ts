@@ -1,11 +1,12 @@
 import { Box3, Group, Mesh, MeshStandardMaterial, Raycaster, Vector2, Vector3, type Camera, type Material, type Object3D, type Scene, type Texture } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { lobbyRetreat, lobbyBenches, lobbySeatSlots, gardenSeatStart } from '../../shared/LobbyRetreat';
+import { lobbyRetreat, lobbyBenches, lobbySeatSlots, gardenSeatStart, gardenSeatEnd, benchGroundHeight } from '../../shared/LobbyRetreat';
 import { PLAYER_HEIGHT } from '../../shared/MultiplayerProtocol';
 import { listeningGarden, listeningGardenBenches, lobbyGroundHeight } from '../../shared/ListeningGarden';
 import type { Atmosphere } from './Atmosphere';
 import { assetBuffer } from '../assets/AssetCache';
 import { createListeningBench } from './ListeningBench';
+import { lowerGallery, galleryFloor } from '../../shared/LowerGallery';
 
 export class LobbyRetreat {
   readonly group = new Group();
@@ -20,22 +21,24 @@ export class LobbyRetreat {
     this.raycaster.setFromCamera(this.center, camera); this.raycaster.far = lobbyRetreat.interactionDistance;
     const hit = this.raycaster.intersectObjects(this.seats, true)[0];
     if (!hit || this.raycaster.intersectObjects(occluders, true).some(other => other.object !== hit.object && other.distance < hit.distance - .03)) return;
-    if (camera.position.y - lobbyGroundHeight(camera.position.x, camera.position.z) > PLAYER_HEIGHT + .15) return;
+    const floor = galleryFloor(camera.position.x, camera.position.z, camera.position.y - PLAYER_HEIGHT) ?? lobbyGroundHeight(camera.position.x, camera.position.z);
+    if (camera.position.y - floor > PLAYER_HEIGHT + .15) return;
     if (hit.object === this.gardenBench) {
       let closest = -1, distance = Infinity;
-      for (let i = gardenSeatStart; i < lobbySeatSlots.length; i++) {
+      for (let i = gardenSeatStart; i < gardenSeatEnd; i++) {
         const slot = lobbySeatSlots[i], d = Math.hypot(hit.point.x - slot.x, hit.point.z - slot.z);
         if (d < distance && Math.hypot(camera.position.x - slot.x, camera.position.z - slot.z) <= lobbyRetreat.interactionDistance) { closest = i; distance = d; }
       }
       return closest >= 0 ? closest : undefined;
     }
-    const index = this.seats.findIndex(seat => seat === hit.object || seat === hit.object.parent), seat = lobbyBenches[index];
+    const object = hit.object as Mesh, index = Number(object.userData.benchIndex ?? object.parent?.userData.benchIndex), seat = lobbyBenches[index];
     if (!seat) return;
     if (Math.hypot(camera.position.x - seat.x, camera.position.z - seat.z) > lobbyRetreat.interactionDistance) return;
-    const local = this.seats[index].worldToLocal(hit.point.clone());
+    const local = object.worldToLocal(hit.point.clone());
     return index * 2 + (local.x >= 0 ? 1 : 0);
   }
   private readonly finish = new MeshStandardMaterial({ color: 0xf5f7f8, roughness: .91, metalness: 0 });
+  private readonly galleryFinish = new MeshStandardMaterial({ color: 0xf0f3f4, roughness: .84, emissive: 0xffffff, emissiveIntensity: .12, fog: false });
   private readonly seatGeometry = new RoundedBoxGeometry(lobbyRetreat.seatWidth, lobbyRetreat.seatHeight, lobbyRetreat.seatDepth, 5, .2);
   private readonly gardenGeometry = createListeningBench();
   private readonly gardenBench = new Mesh(this.gardenGeometry, this.finish);
@@ -43,11 +46,12 @@ export class LobbyRetreat {
     this.group.name = 'Limbo / listening tree';
     atmosphere.apply(this.finish);
     this.tree.name = 'Listening tree / Lloque'; this.tree.position.set(lobbyRetreat.x, 0, lobbyRetreat.z); this.group.add(this.tree);
-    for (const seat of lobbyBenches) {
+    for (const [index, seat] of lobbyBenches.entries()) {
       if (listeningGardenBenches.includes(seat)) continue;
-      const mesh = new Mesh(this.seatGeometry, this.finish); mesh.name = 'Listening seat';
-      mesh.position.set(seat.x, lobbyGroundHeight(seat.x, seat.z) + lobbyRetreat.seatHeight / 2, seat.z); mesh.rotation.y = seat.yaw;
-      mesh.castShadow = mesh.receiveShadow = true; this.seats.push(mesh); this.group.add(mesh);
+      const gallery = lowerGallery.benches.includes(seat);
+      const mesh = new Mesh(this.seatGeometry, gallery ? this.galleryFinish : this.finish); mesh.name = gallery ? 'Gallery / listening bench' : 'Listening seat'; mesh.userData.benchIndex = index;
+      mesh.position.set(seat.x, benchGroundHeight(seat) + lobbyRetreat.seatHeight / 2, seat.z); mesh.rotation.y = seat.yaw;
+      mesh.castShadow = !gallery; mesh.receiveShadow = true; this.seats.push(mesh); this.group.add(mesh);
     }
     this.gardenBench.name = 'Listening garden / continuous curved bench';
     this.gardenBench.position.set(listeningGarden.x, -listeningGarden.depth, listeningGarden.z);
@@ -87,6 +91,6 @@ export class LobbyRetreat {
     for (const texture of textures) { texture.dispose(); if (typeof texture.image?.close === 'function') texture.image.close(); }
   }
   dispose(): void {
-    this.disposed = true; this.group.removeFromParent(); this.disposeModel(this.tree); this.tree.clear(); this.seatGeometry.dispose(); this.gardenGeometry.dispose(); this.finish.dispose();
+    this.disposed = true; this.group.removeFromParent(); this.disposeModel(this.tree); this.tree.clear(); this.seatGeometry.dispose(); this.gardenGeometry.dispose(); this.finish.dispose(); this.galleryFinish.dispose();
   }
 }

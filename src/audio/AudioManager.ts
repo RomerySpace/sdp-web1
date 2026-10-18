@@ -5,6 +5,7 @@ import { lobbyAmbience } from '../core/LobbyAmbience';
 import { musicPosition, validMusicTracks, type MusicTrack } from '../../shared/MusicTimeline';
 import type { LobbySnapshot } from '../../shared/MultiplayerProtocol';
 import { hallImpulse } from './HallReverb';
+import { galleryImmersion } from '../../shared/LowerGallery';
 const MUTE_KEY = 'sdp:muted';
 
 /** Stream only the current track. One player persists across room transitions. */
@@ -103,6 +104,9 @@ export class AudioManager {
     const distance = Math.hypot(camera.position.x, camera.position.z);
     const t = Math.max(0, Math.min(1, (distance - settings.fullRadius) / (settings.fadeRadius - settings.fullRadius)));
     this.environmentGain = active ? reveal * (1 - (1 - settings.distantGain) * t * t * (3 - 2 * t)) : 0;
+    const interior = galleryImmersion(camera.position.x, camera.position.y, camera.position.z);
+    this.environmentGain *= 1 - .97 * interior;
+    if (interior > .8) this.label.hidden = true;
     const context = this.context;
     if (!context || !this.ambience) return;
     this.ambience.gain.setTargetAtTime(this.environmentGain, context.currentTime, settings.smoothing);

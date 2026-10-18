@@ -283,7 +283,7 @@ test('listening tree renders on grass without a platform and preserves shared co
     const app = window.sdpUnified; app.player.setEnabled(false);
     app.scene.camera.position.set(config.x + 12, 4.5, config.z + 17); app.scene.camera.lookAt(config.x, 3.8, config.z);
   }, lobbyRetreat);
-  await expect.poll(() => page.evaluate(() => window.sdpUnified.scene.environment.retreat.seats.length)).toBe(10);
+  await expect.poll(() => page.evaluate(() => window.sdpUnified.scene.environment.retreat.seats.length)).toBe(13);
   await expect.poll(() => page.evaluate(() => window.sdpUnified.scene.environment.retreat.treeLoaded)).toBe(true);
   const details = await page.evaluate(() => {
     const retreat = window.sdpUnified.scene.environment.retreat;

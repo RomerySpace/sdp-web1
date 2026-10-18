@@ -13,6 +13,7 @@ import { GameModeManager } from '../modes/GameModeManager';
 import { disposeAudioContext } from '../audio/AudioContextHub';
 import { assetCount } from '../assets/AssetCache';
 import { LOBBY_NAME } from '../../shared/MultiplayerProtocol';
+import { galleryImmersion } from '../../shared/LowerGallery';
 import { Vector3 } from 'three';
 import { modeConfig } from '../modes/ModeConfig';
 import '../styles/modes.css';
@@ -92,6 +93,7 @@ export class App {
       seat: () => this.interactSeat(),
     }, this.limited, this.network.displayName);
     this.audio.attach(this.ui.element);
+    this.scene.environment.gallery.film.attach(this.ui.element);
     this.settingsMenu = new SettingsMenu(container, this.settings, () => this.closeSettings(), () => this.openVisitorOptions());
     this.visitorOptions = new VisitorOptions(container, this.visitorPreferences, () => {
       this.voiceTransport.setMutedVisitors(id => this.visitorPreferences.muted(id));
@@ -143,6 +145,7 @@ export class App {
       this.network.subscribeToSpawn((player) => { if (this.network.roomType === LOBBY_NAME) this.player.setSpawn(player); }),
       this.network.subscribeToState((snapshot) => {
         this.audio.receive(snapshot);
+        if (this.network.roomType === LOBBY_NAME) this.scene.environment.gallery.film.receive(snapshot.wallTime, snapshot.receivedAt);
         if (this.network.roomType === LOBBY_NAME || !snapshot.players.length) this.scene.remotePlayers.receive(snapshot);
         if (this.network.roomType === LOBBY_NAME) {
           const local = snapshot.players.find(player => player.playerId === snapshot.localPlayerId);
@@ -523,6 +526,8 @@ export class App {
       const instrumentFocus = this.modes.value === 'LIMBO' && this.state.value === 'EXPLORING' && !this.settingsMenu.visible && !this.visitorOptions.visible && !this.player.seated
         && this.scene.environment.instrument.focus(this.scene.camera, [this.scene.sculpture.root, ...this.scene.environment.occluders]);
       const audioSettings = this.settings.value;
+      this.ui.element.classList.toggle('in-gallery', this.modes.value === 'LIMBO' && galleryImmersion(this.scene.camera.position.x, this.scene.camera.position.y, this.scene.camera.position.z) > .4);
+      this.scene.environment.gallery.update(this.scene.camera, this.modes.value === 'LIMBO' && this.reveal > .95 && !this.scene.inspection.active, audioSettings.muted ? 0 : audioSettings.volume);
       this.instrument.update(this.scene.camera, this.modes.value === 'LIMBO', this.reveal, instrumentFocus, audioSettings.muted ? 0 : audioSettings.volume);
       this.scene.environment.instrument.update(!!this.instrument.snapshot?.ownerId, this.elapsed);
       if (this.modes.value !== 'SHOOTER' && this.modes.value !== 'RETURNING_TO_LIMBO') {

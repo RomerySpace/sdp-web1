@@ -1,5 +1,6 @@
 import { ambientStation } from './AmbientStation';
 import { listeningGarden, listeningGardenBenches, lobbyGroundHeight } from './ListeningGarden';
+import { lowerGallery } from './LowerGallery';
 /** Shared footprint for the tree, benches and client/server collisions. */
 export const lobbyRetreat = {
   x: 36, z: -24, treeHeight: 9.5, trunkRadius: .55,
@@ -14,13 +15,17 @@ export const lobbyRetreat = {
 
 /** Two independently reserved places on each physical bench. */
 // Append new places so existing network seat identities remain stable.
-export const lobbyBenches = [...lobbyRetreat.seats, ...ambientStation.benches, ...listeningGardenBenches];
+export const lobbyBenches = [...lobbyRetreat.seats, ...ambientStation.benches, ...listeningGardenBenches, ...lowerGallery.benches];
 export const gardenSeatStart = (lobbyRetreat.seats.length + ambientStation.benches.length) * 2;
+export const gardenSeatEnd = gardenSeatStart + listeningGardenBenches.length * 2;
+export function benchGroundHeight(bench: { x: number; z: number }): number {
+  return lowerGallery.benches.includes(bench as typeof lowerGallery.benches[number]) ? lowerGallery.floorY : lobbyGroundHeight(bench.x, bench.z);
+}
 export const lobbySeatSlots = lobbyBenches.flatMap((bench, benchIndex) =>
   [-.52, .52].map(offset => {
     const garden = listeningGardenBenches.includes(bench), yaw = bench.yaw + (garden ? offset / listeningGarden.radius : 0);
     return {
-      benchIndex, yaw, groundY: lobbyGroundHeight(bench.x, bench.z),
+      benchIndex, yaw, groundY: benchGroundHeight(bench),
       x: garden ? listeningGarden.x + Math.sin(yaw) * listeningGarden.radius : bench.x + offset * Math.cos(bench.yaw),
       z: garden ? listeningGarden.z + Math.cos(yaw) * listeningGarden.radius : bench.z - offset * Math.sin(bench.yaw),
     };

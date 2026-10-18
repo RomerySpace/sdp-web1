@@ -1,3 +1,5 @@
+@import './gallery.css';
+
 :root {
   font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Segoe UI', sans-serif;
   color: #626c74;

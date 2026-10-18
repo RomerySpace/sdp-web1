@@ -7,6 +7,7 @@ import { InputManager } from './InputManager';
 import { gameplayConfig } from '../../shared/GameplayConfig';
 import { touchConfig } from '../input/InputCapabilities';
 import { lobbyRetreat, lobbySeatSlots } from '../../shared/LobbyRetreat';
+import { onGalleryStairs } from '../../shared/LowerGallery';
 
 export class FirstPersonController {
   readonly input = new InputManager();
@@ -29,6 +30,7 @@ export class FirstPersonController {
     this.motion.elevation = this.motion.verticalSpeed = 0; this.motion.jumpHeld = false;
     if (next >= 0) { this.yaw = lobbySeatSlots[next].yaw; this.pitch = 0; }
     else if (wasSeated) { this.camera.position.x = player.x; this.camera.position.z = player.z; }
+    this.motion.groundY = next >= 0 ? lobbySeatSlots[next].groundY : this.collision.groundHeight(player.x, player.z, player.y - PLAYER_HEIGHT);
   }
   private yaw = 0;
   private pitch = 0;
@@ -65,6 +67,7 @@ export class FirstPersonController {
     this.input.clear();
     this.motion.elevation = this.motion.verticalSpeed = 0; this.motion.jumpHeld = false;
     this.eye = PLAYER_HEIGHT;
+    this.motion.groundY = this.collision.groundHeight(player.x, player.z, player.y - PLAYER_HEIGHT);
     this.motion.velocityX = this.motion.velocityZ = 0;
     this.yaw = player.yaw;
     this.pitch = player.pitch;
@@ -116,7 +119,9 @@ export class FirstPersonController {
     this.phase += speed * dt * 2.8;
     this.eye = MathUtils.damp(this.eye, this.input.crouching ? gameplayConfig.limbo.crouchHeight : PLAYER_HEIGHT, 14, dt);
     const bob = (this.motion.elevation ? 0 : .012) * Math.min(speed / 3, 1.5);
-    this.camera.position.set(this.motion.x, this.collision.groundHeight(this.motion.x, this.motion.z) + this.eye + (this.motion.elevation ?? 0) + Math.sin(this.phase * 2) * bob, this.motion.z);
+    const targetY = (this.motion.groundY ?? 0) + this.eye + (this.motion.elevation ?? 0) + Math.sin(this.phase * 2) * bob;
+    const y = onGalleryStairs(this.motion.x, this.motion.z) && !this.motion.elevation ? MathUtils.damp(this.camera.position.y, targetY, 18, dt) : targetY;
+    this.camera.position.set(this.motion.x, y, this.motion.z);
     const roll = MathUtils.damp(this.camera.rotation.z, -this.input.sideways * .018 + Math.sin(this.phase) * bob * .35, 10, dt);
     this.camera.rotation.set(this.pitch, this.yaw, roll, 'YXZ');
   }
