@@ -1,8 +1,19 @@
 import { Box3, Group, Mesh, MeshStandardMaterial, Raycaster, Vector2, Vector3, type Camera, type Material, type Object3D, type Scene, type Texture } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { lobbyRetreat, lobbyBenches } from '../../shared/LobbyRetreat';
+import { listeningGarden, listeningGardenBenches } from '../../shared/ListeningGarden';
 import type { Atmosphere } from './Atmosphere';
 import { assetBuffer } from '../assets/AssetCache';
+
+function gardenCurve(geometry: RoundedBoxGeometry): RoundedBoxGeometry {
+  const positions = geometry.getAttribute('position'), radius = listeningGarden.radius;
+  for (let i = 0; i < positions.count; i++) {
+    const x = positions.getX(i);
+    positions.setZ(i, positions.getZ(i) + Math.sqrt(radius * radius - x * x) - radius + .08);
+  }
+  positions.needsUpdate = true; geometry.computeVertexNormals();
+  return geometry;
+}
 
 export class LobbyRetreat {
   readonly group = new Group();
@@ -15,15 +26,18 @@ export class LobbyRetreat {
   private readonly center = new Vector2();
   focusSeat(camera: Camera, occluders: Object3D[]): number | undefined {
     this.raycaster.setFromCamera(this.center, camera); this.raycaster.far = lobbyRetreat.interactionDistance;
-    const hit = this.raycaster.intersectObjects(this.seats, false)[0];
+    const hit = this.raycaster.intersectObjects(this.seats, true)[0];
     if (!hit || this.raycaster.intersectObjects(occluders, true).some(other => other.object !== hit.object && other.distance < hit.distance - .03)) return;
-    const index = this.seats.indexOf(hit.object as Mesh), seat = lobbyBenches[index];
+    const index = this.seats.findIndex(seat => seat === hit.object || seat === hit.object.parent), seat = lobbyBenches[index];
+    if (!seat) return;
     if (camera.position.y > 1.85 || Math.hypot(camera.position.x - seat.x, camera.position.z - seat.z) > lobbyRetreat.interactionDistance) return;
-    const local = hit.object.worldToLocal(hit.point.clone());
+    const local = this.seats[index].worldToLocal(hit.point.clone());
     return index * 2 + (local.x >= 0 ? 1 : 0);
   }
   private readonly finish = new MeshStandardMaterial({ color: 0xf5f7f8, roughness: .91, metalness: 0 });
   private readonly seatGeometry = new RoundedBoxGeometry(lobbyRetreat.seatWidth, lobbyRetreat.seatHeight, lobbyRetreat.seatDepth, 5, .2);
+  private readonly gardenSeatGeometry = gardenCurve(new RoundedBoxGeometry(lobbyRetreat.seatWidth, lobbyRetreat.seatHeight, .55, 5, .19));
+  private readonly gardenBackGeometry = gardenCurve(new RoundedBoxGeometry(lobbyRetreat.seatWidth, listeningGarden.backHeight, .2, 5, .09));
   constructor(scene: Scene, atmosphere: Atmosphere) {
     this.group.name = 'Limbo / listening tree';
     atmosphere.apply(this.finish);
@@ -32,6 +46,15 @@ export class LobbyRetreat {
       const mesh = new Mesh(this.seatGeometry, this.finish); mesh.name = 'Listening seat';
       mesh.position.set(seat.x, lobbyRetreat.seatHeight / 2, seat.z); mesh.rotation.y = seat.yaw;
       mesh.castShadow = mesh.receiveShadow = true; this.seats.push(mesh); this.group.add(mesh);
+      if (listeningGardenBenches.includes(seat)) {
+        mesh.name = 'Listening garden / inward-facing seat';
+        mesh.geometry = this.gardenSeatGeometry;
+        const back = new Mesh(this.gardenBackGeometry, this.finish);
+        back.name = 'Listening garden / soft enclosing edge';
+        // Entire back stays inside the shared bench footprint used by both simulations.
+        back.position.set(0, (listeningGarden.backHeight - lobbyRetreat.seatHeight) / 2, .15);
+        back.castShadow = back.receiveShadow = true; mesh.add(back);
+      }
     }
     scene.add(this.group);
     this.ready = this.loadTree(atmosphere).catch(error => { this.tree.userData.error = String(error); console.warn('[SDP] Listening tree unavailable.', error); });
@@ -67,6 +90,6 @@ export class LobbyRetreat {
     for (const texture of textures) { texture.dispose(); if (typeof texture.image?.close === 'function') texture.image.close(); }
   }
   dispose(): void {
-    this.disposed = true; this.group.removeFromParent(); this.disposeModel(this.tree); this.tree.clear(); this.seatGeometry.dispose(); this.finish.dispose();
+    this.disposed = true; this.group.removeFromParent(); this.disposeModel(this.tree); this.tree.clear(); this.seatGeometry.dispose(); this.gardenSeatGeometry.dispose(); this.gardenBackGeometry.dispose(); this.finish.dispose();
   }
 }

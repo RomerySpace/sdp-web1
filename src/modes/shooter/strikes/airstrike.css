@@ -23,6 +23,7 @@
 .streak-meter button:disabled { opacity: .38; cursor: default; }
 .streak-meter button[data-ready="true"] { color: #fff; border-color: #e1f5ff; }
 .streak-meter button kbd { font: inherit; border: 1px solid currentColor; padding: 2px 4px; }
+.streak-meter button svg { display: none; }
 .shooter-hud .streak-meter { width: 180px; }
 .shooter-hud .shooter-kill-feed { top: 194px; }
 .strike-status { position: absolute; left: 30px; top: 164px; font-size: 10px; color: #e4f5fc; text-shadow: 0 1px 6px #243c4c; }

@@ -7,7 +7,12 @@ export async function touchDriver(page: Page) {
   return {
     async down(id: number, x: number, y: number) { points.set(id, { id, x, y, radiusX: 2, radiusY: 2, force: 1 }); await send('touchStart'); },
     async move(id: number, x: number, y: number) { const point = points.get(id)!; point.x = x; point.y = y; await send('touchMove'); },
-    async up(id: number) { points.delete(id); await send('touchEnd'); },
+    async up(id: number) {
+      const point = points.get(id); if (!point) return;
+      points.delete(id);
+      // A partial CDP touchEnd identifies the released contact, not those still held.
+      await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: points.size ? [point] : [] });
+    },
     async cancel() { points.clear(); await send('touchCancel'); },
   };
 }

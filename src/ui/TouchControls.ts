@@ -16,6 +16,7 @@ export class TouchControls {
   private readonly contacts = new Map<number, Contact>();
   private readonly buttons = new Map<TouchAction, HTMLButtonElement>();
   private readonly thumb: HTMLElement;
+  private readonly stick: HTMLElement;
   private readonly voiceNote: HTMLElement;
   private readonly toggled = new Set<TouchAction>();
   private signature = '';
@@ -27,6 +28,7 @@ export class TouchControls {
       <div class="touch-stick" role="group" aria-label="Movement joystick"><span class="touch-stick-thumb"></span></div>
       <div class="touch-tools"></div><span class="touch-voice-note" role="status"></span>`;
     this.thumb = this.element.querySelector('.touch-stick-thumb')!; this.voiceNote = this.element.querySelector('.touch-voice-note')!;
+    this.stick = this.element.querySelector('.touch-stick')!;
     const signal = this.events.signal;
     this.element.querySelector<HTMLElement>('.touch-stick')!.addEventListener('pointerdown', e => this.start(e, 'move'), { signal });
     this.element.querySelector<HTMLElement>('.touch-look')!.addEventListener('pointerdown', e => this.start(e, 'look'), { signal });
@@ -81,7 +83,7 @@ export class TouchControls {
     const element = event.currentTarget as HTMLElement;
     this.contacts.set(event.pointerId, { kind, element, action, x: event.clientX, y: event.clientY });
     element.setPointerCapture(event.pointerId);
-    if (kind === 'move') this.joystick(event, element);
+    if (kind === 'move') { this.stick.classList.add('is-active'); this.joystick(event, element); }
     if (action) { element.setAttribute('aria-pressed', 'true'); this.actions.action(action, true); }
   }
   private move(event: PointerEvent): void {
@@ -103,7 +105,7 @@ export class TouchControls {
   private end(id: number): void {
     const contact = this.contacts.get(id); if (!contact) return;
     this.contacts.delete(id);
-    if (contact.kind === 'move') { this.actions.move(0, 0); this.thumb.style.transform = 'translate(0px, 0px)'; }
+    if (contact.kind === 'move') { this.actions.move(0, 0); this.thumb.style.transform = 'translate(0px, 0px)'; this.stick.classList.remove('is-active'); }
     if (contact.action) {
       this.actions.action(contact.action, false);
       contact.element.setAttribute('aria-pressed', String(contact.action === 'voice' && this.element.dataset.voice === 'speaking'));
@@ -114,6 +116,7 @@ export class TouchControls {
     for (const id of [...this.contacts.keys()]) this.end(id);
     for (const action of this.toggled) { this.buttons.get(action)!.setAttribute('aria-pressed', 'false'); this.actions.action(action, false); }
     this.toggled.clear(); this.actions.reset();
+    this.stick.classList.remove('is-active'); this.thumb.style.transform = 'translate(0px, 0px)';
   }
   update(context: Context, epoch: string, automatic = false, flashlight = false): void {
     const signature = `${context}:${epoch}`;

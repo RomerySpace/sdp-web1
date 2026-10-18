@@ -4,6 +4,67 @@ import type { LobbySnapshot } from '../shared/MultiplayerProtocol';
 import type { VoiceChatManager } from '../src/audio/VoiceChatManager';
 import { CollisionManager } from '../src/player/CollisionManager';
 import { lobbyRetreat, lobbySeatSlots } from '../shared/LobbyRetreat';
+import { listeningGarden } from '../shared/ListeningGarden';
+import { ambientStation } from '../shared/AmbientStation';
+
+test('listening garden stays separate, renders its open enclosure and synchronizes two seated visitors', async ({ browser }) => {
+  const a = await browser.newContext(), b = await browser.newContext();
+  const first = await a.newPage(), second = await b.newPage(), errors: string[] = [], requests: string[] = [];
+  first.on('pageerror', e => errors.push(e.message));
+  first.on('request', request => requests.push(request.url()));
+  try {
+    for (const point of [{ x: 0, z: 0 }, lobbyRetreat, ambientStation]) {
+      expect(Math.hypot(listeningGarden.x - point.x, listeningGarden.z - point.z)).toBeGreaterThan(40);
+    }
+    await enter(first, 'Garden Visitor'); await enter(second, 'Garden Companion');
+    for (const [page, slot] of [[first, 18], [second, 22]] as const) {
+      const bench = lobbySeatSlots[slot];
+      await page.bringToFront();
+      if (await page.locator('.resume-button').isVisible()) await page.locator('.resume-button').click();
+      await page.evaluate(seat => {
+        const app = window.sdpUnified, snapshot = app.network.snapshot!, local = snapshot.players.find(p => p.playerId === snapshot.localPlayerId)!;
+        app.player.setSpawn({ ...local, yaw: Math.atan2(-(seat.x - local.x), -(seat.z - local.z)), pitch: 0 });
+      }, bench);
+      await page.keyboard.down('ShiftLeft'); await page.keyboard.down('KeyW');
+      try {
+        await expect.poll(() => page.evaluate(seat => {
+          const app = window.sdpUnified, snapshot = app.network.snapshot!, local = snapshot.players.find(p => p.playerId === snapshot.localPlayerId)!;
+          return Math.hypot(local.x - seat.x, local.z - seat.z);
+        }, bench), { timeout: 25000 }).toBeLessThan(2.2);
+      } finally { await page.keyboard.up('KeyW'); await page.keyboard.up('ShiftLeft'); }
+      await page.waitForTimeout(400);
+      await page.evaluate(seat => {
+        const app = window.sdpUnified, snapshot = app.network.snapshot!, local = snapshot.players.find(p => p.playerId === snapshot.localPlayerId)!;
+        const dx = seat.x - local.x, dz = seat.z - local.z;
+        app.player.setSpawn({ ...local, yaw: Math.atan2(-dx, -dz), pitch: Math.atan2(.46 - local.y, Math.hypot(dx, dz)) });
+      }, lobbySeatSlots[slot]);
+      await expect(page.getByRole('button', { name: 'Sit on bench', exact: true })).toBeVisible();
+      await page.keyboard.press('KeyE');
+      await expect.poll(() => page.evaluate(() => window.sdpUnified.player.seated)).toBe(true);
+    }
+    await expect.poll(() => second.evaluate(() => window.sdpUnified.network.snapshot!.players.filter(p => (p.seatIndex ?? -1) >= 18).length)).toBe(2);
+    await second.keyboard.press('Enter'); await second.getByRole('textbox', { name: 'Chat message' }).fill('Garden conversation'); await second.keyboard.press('Enter');
+    await expect(first.locator('.chat-message')).toContainText('Garden conversation');
+    await second.bringToFront();
+    if (await second.locator('.resume-button').isVisible()) await second.locator('.resume-button').click();
+    await expect(second.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
+    await second.locator('.scene-canvas').click({ position: { x: 700, y: 400 }, force: true });
+    await second.keyboard.press('KeyE'); await expect.poll(() => second.evaluate(() => window.sdpUnified.player.seated)).toBe(false);
+    await second.evaluate(config => {
+      const app = window.sdpUnified; app.player.setEnabled(false);
+      app.scene.camera.position.set(config.x + 8, 4.2, config.z - 9); app.scene.camera.lookAt(config.x, .35, config.z);
+    }, listeningGarden);
+    await second.waitForTimeout(500);
+    expect(await second.evaluate(() => {
+      let count = 0; window.sdpUnified.scene.scene.traverse(object => { if (object.name === 'Listening garden / soft enclosing edge') count++; }); return count;
+    })).toBe(6);
+    await second.screenshot({ path: '/private/tmp/sdp-listening-garden-desktop.png' });
+    await second.setViewportSize({ width: 390, height: 844 }); await second.waitForTimeout(250);
+    await second.screenshot({ path: '/private/tmp/sdp-listening-garden-mobile.png' });
+    expect(requests.some(url => url.includes('/shooter/') || url.includes('AmbientSynth'))).toBe(false);
+    expect(errors).toEqual([]);
+  } finally { await a.close(); await b.close(); }
+});
 
 async function approachBench(page: Page): Promise<void> {
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');

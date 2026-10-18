@@ -15,10 +15,10 @@ async function waitFor(predicate: () => boolean) {
   while (!predicate()) { if (Date.now() > until) throw new Error('Seating synchronization timed out.'); await sleep(20); }
 }
 test('seat requests cannot provide positions, identities or invalid bench indices; exits avoid scene colliders', () => {
-  for (const raw of [null, {}, [], { seat: 0, x: 1 }, { seat: 0, playerId: 'other' }, { seat: 18 }, { seat: -2 }, { seat: .5 }, { seat: '0' }]) assert.equal(validSeatRequest(raw), false);
+  for (const raw of [null, {}, [], { seat: 0, x: 1 }, { seat: 0, playerId: 'other' }, { seat: lobbySeatSlots.length }, { seat: -2 }, { seat: .5 }, { seat: '0' }]) assert.equal(validSeatRequest(raw), false);
   assert.equal(validSeatRequest({ seat: -1 }), true); assert.equal(validSeatRequest({ seat: 0 }), true);
   const world = new CollisionManager();
-  assert.equal(lobbySeatSlots.length, 18);
+  assert.equal(lobbySeatSlots.length, 30);
   for (let i = 0; i < lobbySeatSlots.length; i++) {
     assert.equal(validSeatRequest({ seat: i }), true);
     assert.ok(seatExits(i).some(exit => world.canOccupy(exit.x, exit.z)));

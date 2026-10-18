@@ -2,7 +2,7 @@ import { ELIMINATION_POINTS, STREAK_TIERS, streakProgress } from '../../../../sh
 import type { CharacterController } from '../physics/CharacterController';
 import type { Weapon } from '../weapon/Weapon';
 import type { LobbySnapshot } from '../../../../shared/MultiplayerProtocol';
-import { createElement, ListOrdered } from 'lucide';
+import { createElement, ListOrdered, Plane } from 'lucide';
 import { airstrikeConfig, strikeBit, type StrikeSlot } from '../../../../shared/AirstrikeProtocol';
 import { gameplayConfig } from '../../../../shared/GameplayConfig';
 export class ShooterHUD {
@@ -36,6 +36,7 @@ export class ShooterHUD {
     this.banner.className = 'kill-announcement'; this.banner.hidden = true; this.banner.setAttribute('role', 'status');
     this.streakMeter.className = 'streak-meter';
     airstrikeConfig.tiers.forEach((tier,i)=>{const button=document.createElement('button');button.type='button';button.disabled=true;button.setAttribute('aria-label',`Deploy airstrike ${i+1}`);button.title=`${i+1}: airstrike / ${tier} kill streak`;button.innerHTML=`<kbd>${i+1}</kbd><span>${tier}</span>`;button.addEventListener('click',()=>onStrike((i+1) as StrikeSlot));this.strikeButtons.push(button);this.streakMeter.append(button);});
+    this.strikeButtons.forEach(button => button.prepend(createElement(Plane)));
     this.strikeStatus.className='strike-status';this.strikeStatus.hidden=true;this.strikeStatus.setAttribute('role','status');
     this.element.append(this.banner, this.streakMeter,this.strikeStatus);
     container.append(this.element);
@@ -55,6 +56,7 @@ export class ShooterHUD {
     this.score.textContent = `${local?.kills ?? 0} K / ${local?.deaths ?? 0} D · ${(local?.kills ?? 0) * ELIMINATION_POINTS} PTS`;
     const streak = local?.streak ?? 0, progress = streakProgress(streak);
     this.strikeButtons.forEach((button,i)=>{const ready=!!((local?.strikes??0)&strikeBit((i+1) as StrikeSlot))&&!local?.dead&&snapshot.match?.phase==='playing';button.disabled=!ready;button.dataset.ready=String(ready);button.querySelector('span')!.dataset.reached=String(streak>=airstrikeConfig.tiers[i]);});
+    this.streakMeter.dataset.ready = String(this.strikeButtons.some(button => !button.disabled));
     this.streakMeter.style.setProperty('--progress', String(progress.progress));
     this.streakMeter.setAttribute('aria-label', `Racha ${streak}. ${progress.next ? `Siguiente hito: ${progress.next}` : 'Todos los hitos alcanzados'}.`);
     const fresh = (snapshot.killFeed ?? []).filter(entry => !this.seen.has(entry.id));

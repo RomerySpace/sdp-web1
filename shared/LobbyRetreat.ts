@@ -1,4 +1,5 @@
 import { ambientStation } from './AmbientStation';
+import { listeningGardenBenches } from './ListeningGarden';
 /** Shared footprint for the tree, benches and client/server collisions. */
 export const lobbyRetreat = {
   x: 36, z: -24, treeHeight: 9.5, trunkRadius: .55,
@@ -12,7 +13,8 @@ export const lobbyRetreat = {
 } as const;
 
 /** Two independently reserved places on each physical bench. */
-export const lobbyBenches = [...lobbyRetreat.seats, ...ambientStation.benches];
+// Append new places so existing network seat identities remain stable.
+export const lobbyBenches = [...lobbyRetreat.seats, ...ambientStation.benches, ...listeningGardenBenches];
 export const lobbySeatSlots = lobbyBenches.flatMap((bench, benchIndex) =>
   [-.52, .52].map(offset => ({
     benchIndex, yaw: bench.yaw,

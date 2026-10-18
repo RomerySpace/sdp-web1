@@ -10,6 +10,7 @@ import type { LobbyState } from '../src/state/LobbyState';
 import type { MovementSimulation } from '../src/simulation/MovementSimulation';
 import { CollisionManager } from '../../src/player/CollisionManager';
 import { lobbyBenches, lobbySeatSlots, seatExits } from '../../shared/LobbyRetreat';
+import { listeningGarden, listeningGardenBenches } from '../../shared/ListeningGarden';
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 async function until(fn: () => boolean) { const end = Date.now() + 5000; while (!fn()) { if (Date.now() > end) throw Error('Instrument synchronization timed out'); await sleep(20); } }
@@ -23,8 +24,14 @@ test('instrument commands are bounded and cannot inject patterns, identities or 
   assert.deepEqual(Object.values(stationKeyboard), Array.from({ length: 15 }, (_, i) => i));
   const world = new CollisionManager(); assert.equal(world.canOccupy(ambientStation.x, ambientStation.z), false);
   assert.equal(ambientStation.benches.length, 6);
-  assert.equal(lobbyBenches.length, 9); assert.equal(lobbySeatSlots.length, 18);
-  for (let i = 6; i < 18; i++) assert.ok(seatExits(i).some(p => world.canOccupy(p.x, p.z)));
+  assert.equal(lobbyBenches.length, 15); assert.equal(lobbySeatSlots.length, 30);
+  for (let i = 0; i < lobbySeatSlots.length; i++) assert.ok(seatExits(i).some(p => world.canOccupy(p.x, p.z)));
+  assert.ok(world.canOccupy(listeningGarden.x, listeningGarden.z));
+  for (const bench of listeningGardenBenches) {
+    assert.equal(world.canOccupy(bench.x, bench.z), false);
+    const dx = listeningGarden.x - bench.x, dz = listeningGarden.z - bench.z;
+    assert.ok((-Math.sin(bench.yaw) * dx - Math.cos(bench.yaw) * dz) / Math.hypot(dx, dz) > .99);
+  }
   for (const bench of ambientStation.benches) {
     const dx = ambientStation.x - bench.x, dz = ambientStation.z - bench.z;
     assert.ok(Math.hypot(dx, dz) >= 6);

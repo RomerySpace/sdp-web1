@@ -311,7 +311,8 @@ export class App {
     if (event.repeat) return;
     if (event.code === 'KeyE' && ['EXPLORING', 'PAUSED'].includes(this.state.value)) {
       event.preventDefault();
-      if (this.focusedVisitor && !this.ui.isHudHidden) this.openVisitorOptions(this.focusedVisitor.id);
+      if (this.player.seated) this.interactSeat();
+      else if (this.focusedVisitor && !this.ui.isHudHidden) this.openVisitorOptions(this.focusedVisitor.id);
       else if (!this.instrument.prompt.hidden) this.instrument.interact();
       else if (this.player.seated || this.focusedSeat !== undefined) this.interactSeat();
       else this.interact();
