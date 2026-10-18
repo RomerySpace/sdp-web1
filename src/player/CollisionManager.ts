@@ -1,4 +1,5 @@
-import { lobbyRetreat } from '../../shared/LobbyRetreat';
+import { lobbyRetreat, lobbyBenches } from '../../shared/LobbyRetreat';
+import { ambientStation } from '../../shared/AmbientStation';
 
 /** Circle vs. pedestal and seating, with axis-separated sliding and swept substeps.
  * The large radius is a soft, invisible drift limit, far inside the fog. */
@@ -11,7 +12,10 @@ export class CollisionManager {
     const closestZ = Math.max(-this.halfExtent, Math.min(this.halfExtent, z));
     if ((x - closestX) ** 2 + (z - closestZ) ** 2 < this.radius ** 2) return true;
     if (Math.hypot(x - lobbyRetreat.x, z - lobbyRetreat.z) < lobbyRetreat.trunkRadius + this.radius) return true;
-    return lobbyRetreat.seats.some(seat => {
+    const tableX = Math.max(-ambientStation.width / 2, Math.min(ambientStation.width / 2, x - ambientStation.x));
+    const tableZ = Math.max(-ambientStation.depth / 2, Math.min(ambientStation.depth / 2, z - ambientStation.z));
+    if ((x - ambientStation.x - tableX) ** 2 + (z - ambientStation.z - tableZ) ** 2 < this.radius ** 2) return true;
+    return lobbyBenches.some(seat => {
       const dx = x - seat.x, dz = z - seat.z, c = Math.cos(seat.yaw), s = Math.sin(seat.yaw);
       const localX = c * dx - s * dz, localZ = s * dx + c * dz;
       const qx = Math.max(-lobbyRetreat.seatWidth / 2, Math.min(lobbyRetreat.seatWidth / 2, localX));

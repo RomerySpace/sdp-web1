@@ -1,6 +1,6 @@
 import { Box3, Group, Mesh, MeshStandardMaterial, Raycaster, Vector2, Vector3, type Camera, type Material, type Object3D, type Scene, type Texture } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { lobbyRetreat } from '../../shared/LobbyRetreat';
+import { lobbyRetreat, lobbyBenches } from '../../shared/LobbyRetreat';
 import type { Atmosphere } from './Atmosphere';
 import { assetBuffer } from '../assets/AssetCache';
 
@@ -17,7 +17,7 @@ export class LobbyRetreat {
     this.raycaster.setFromCamera(this.center, camera); this.raycaster.far = lobbyRetreat.interactionDistance;
     const hit = this.raycaster.intersectObjects(this.seats, false)[0];
     if (!hit || this.raycaster.intersectObjects(occluders, true).some(other => other.object !== hit.object && other.distance < hit.distance - .03)) return;
-    const index = this.seats.indexOf(hit.object as Mesh), seat = lobbyRetreat.seats[index];
+    const index = this.seats.indexOf(hit.object as Mesh), seat = lobbyBenches[index];
     if (camera.position.y > 1.85 || Math.hypot(camera.position.x - seat.x, camera.position.z - seat.z) > lobbyRetreat.interactionDistance) return;
     const local = hit.object.worldToLocal(hit.point.clone());
     return index * 2 + (local.x >= 0 ? 1 : 0);
@@ -28,7 +28,7 @@ export class LobbyRetreat {
     this.group.name = 'Limbo / listening tree';
     atmosphere.apply(this.finish);
     this.tree.name = 'Listening tree / Lloque'; this.tree.position.set(lobbyRetreat.x, 0, lobbyRetreat.z); this.group.add(this.tree);
-    for (const seat of lobbyRetreat.seats) {
+    for (const seat of lobbyBenches) {
       const mesh = new Mesh(this.seatGeometry, this.finish); mesh.name = 'Listening seat';
       mesh.position.set(seat.x, lobbyRetreat.seatHeight / 2, seat.z); mesh.rotation.y = seat.yaw;
       mesh.castShadow = mesh.receiveShadow = true; this.seats.push(mesh); this.group.add(mesh);

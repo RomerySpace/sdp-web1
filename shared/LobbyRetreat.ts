@@ -1,3 +1,4 @@
+import { ambientStation } from './AmbientStation';
 /** Shared footprint for the tree, benches and client/server collisions. */
 export const lobbyRetreat = {
   x: 36, z: -24, treeHeight: 9.5, trunkRadius: .55,
@@ -11,7 +12,8 @@ export const lobbyRetreat = {
 } as const;
 
 /** Two independently reserved places on each physical bench. */
-export const lobbySeatSlots = lobbyRetreat.seats.flatMap((bench, benchIndex) =>
+export const lobbyBenches = [...lobbyRetreat.seats, ...ambientStation.benches];
+export const lobbySeatSlots = lobbyBenches.flatMap((bench, benchIndex) =>
   [-.52, .52].map(offset => ({
     benchIndex, yaw: bench.yaw,
     x: bench.x + offset * Math.cos(bench.yaw),

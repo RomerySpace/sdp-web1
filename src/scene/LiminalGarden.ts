@@ -2,7 +2,8 @@ import { BufferGeometry, DoubleSide, Float32BufferAttribute, InstancedMesh, Mesh
 import { createUpperMonolithGeometry, monolithFinish } from './MonolithGeometry';
 import type { Atmosphere } from './Atmosphere';
 import { lobbyAmbience } from '../core/LobbyAmbience';
-import { lobbyRetreat } from '../../shared/LobbyRetreat';
+import { lobbyRetreat, lobbyBenches } from '../../shared/LobbyRetreat';
+import { ambientStation } from '../../shared/AmbientStation';
 
 /** Instanced tapered blades and a satin column; no external assets. */
 export class LiminalGarden {
@@ -52,8 +53,10 @@ export class LiminalGarden {
           float distanceFromViewer = length(wrapped - gardenCenter);
           float edge = max(abs(wrapped.x), abs(wrapped.y));
           float root = smoothstep(.94, 1.28, edge + .035 * sin(wrapped.x * 13. + wrapped.y * 9.));
+          vec2 instrumentEdge = abs(wrapped - vec2(${ambientStation.x.toFixed(2)}, ${ambientStation.z.toFixed(2)})) - vec2(${(ambientStation.width / 2).toFixed(2)}, ${(ambientStation.depth / 2).toFixed(2)});
+          root *= smoothstep(-.04, .10, max(instrumentEdge.x, instrumentEdge.y));
           float fieldFade = ${distant ? 'smoothstep(21., 30., distanceFromViewer)' : '1. - smoothstep(26., 32., distanceFromViewer)'};
-          ${lobbyRetreat.seats.map((seat, i) => `
+          ${lobbyBenches.map((seat, i) => `
           vec2 seatOffset${i} = wrapped - vec2(${seat.x.toFixed(2)}, ${seat.z.toFixed(2)});
           vec2 seatLocal${i} = vec2(${Math.cos(seat.yaw).toFixed(5)} * seatOffset${i}.x - ${Math.sin(seat.yaw).toFixed(5)} * seatOffset${i}.y,
             ${Math.sin(seat.yaw).toFixed(5)} * seatOffset${i}.x + ${Math.cos(seat.yaw).toFixed(5)} * seatOffset${i}.y);

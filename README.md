@@ -1,12 +1,14 @@
 # SDP — Unified Limbo / Shooter
 
-This working copy integrates both existing experiences on the local `feature/unified-sdp` branch. Start it with `npm run dev:unified` at **http://localhost:5373**. For the architecture, imported modules, actual limitations and Spanish setup/testing instructions, see [UNIFIED-SDP.md](./UNIFIED-SDP.md). Nothing has been pushed or deployed.
+This working copy integrates both existing experiences on the `feature/unified-sdp` branch. Start it with `npm run dev:unified` at **http://localhost:5373**. For the architecture, imported modules, actual limitations and Spanish setup/testing instructions, see [UNIFIED-SDP.md](./UNIFIED-SDP.md). Production uses Vercel for the frontend and Render for Colyseus; publish matching versions together.
 
 A local, first-person sculpture exhibition in a luminous white environment. Vite, TypeScript, Three.js/WebGL 2, native pointer lock and Web Audio, with Colyseus multiplayer rooms of up to 25 people, shared room text chat and LiveKit proximity voice. For the HTTPS two-computer Wi-Fi test, run `npm run dev:lan` and follow [LAN.md](LAN.md), including certificate trust on both devices.
 
 For beginner-friendly setup and two-window testing in Spanish, see [MULTIJUGADOR.md](./MULTIJUGADOR.md).
 
 For an online two-computer test using Vercel, Render and LiveKit Cloud, see [ONLINE.md](./ONLINE.md). Deployment configuration is included in `vercel.json` and `render.yaml`; cloud credentials stay exclusively on the backend.
+
+The ambient music station adds four shared loop tracks, a chromatic computer/touch piano, six surrounding two-seat benches and an exclusive performer lease. Controls, audio limits and testing: [AMBIENT-INSTRUMENT.md](./docs/AMBIENT-INSTRUMENT.md).
 
 ## Run locally
 

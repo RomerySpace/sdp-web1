@@ -6,9 +6,11 @@ import type { Atmosphere } from './Atmosphere';
 import { createMonolithGeometry, monolithFinish } from './MonolithGeometry';
 import { lobbyAmbience } from '../core/LobbyAmbience';
 import { LobbyRetreat } from './LobbyRetreat';
+import { AmbientStation } from './AmbientStation';
 
 export class Environment {
   readonly retreat: LobbyRetreat;
+  readonly instrument: AmbientStation;
   readonly occluders: Mesh[] = [];
   private readonly meshes: Mesh[] = [];
   private readonly shadowTexture: CanvasTexture;
@@ -59,6 +61,7 @@ export class Environment {
     this.meshes.push(shadow);
     scene.add(...this.meshes);
     this.retreat = new LobbyRetreat(scene, atmosphere);
+    this.instrument = new AmbientStation(scene, atmosphere); this.occluders.push(...this.instrument.solids);
     this.occluders.push(...this.retreat.seats);
     this.retreat.ready.then(() => {
       this.retreat.tree.traverse(object => { if (object instanceof Mesh && object.name.toLowerCase().includes('tronco')) this.occluders.push(object); });
@@ -71,6 +74,7 @@ export class Environment {
 
   dispose(): void {
     this.retreat.dispose();
+    this.instrument.dispose();
     this.shadowTexture.dispose();
     for (const mesh of this.meshes) {
       mesh.geometry.dispose();

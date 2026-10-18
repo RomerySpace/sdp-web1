@@ -1,5 +1,6 @@
 import { AudioManager } from '../audio/AudioManager';
 import { VoiceChatManager } from '../audio/VoiceChatManager';
+import { AmbientStationController } from '../audio/AmbientStationController';
 import { LiveKitVoiceTransport } from '../audio/LiveKitVoiceTransport';
 import { ChatManager } from '../chat/ChatManager';
 import { ColyseusNetworkAdapter } from '../network/ColyseusNetworkAdapter';
@@ -39,6 +40,7 @@ export class App {
   private readonly chat: ChatManager;
   private readonly ui: UIManager;
   private readonly settingsMenu: SettingsMenu;
+  private readonly instrument: AmbientStationController;
   private readonly visitorPreferences = new VisitorPreferences();
   private readonly visitorOptions: VisitorOptions;
   private focusedVisitor?: { id: string; name: string };
@@ -116,6 +118,9 @@ export class App {
       reset: () => { this.player.input.clear(); this.modes.shooter?.input.clear(); this.voice.deactivate(); },
     });
     container.dataset.mode = 'LIMBO';
+    this.instrument = new AmbientStationController(container, this.network, this.ui.element, () => {
+      this.pause(); this.ui.element.inert = true;
+    }, () => { this.ui.element.inert = false; this.player.input.clear(); if (!document.hidden && !this.disposed && this.network.status.state === 'connected') this.resume(); }, message => this.ui.notify(message));
     this.unsubscribers.push(
       this.settings.subscribe(state => {
         this.player.sensitivity = state.sensitivity; this.audio.setVolume(state.musicVolume); this.audio.setMuted(state.muted);
@@ -160,7 +165,7 @@ export class App {
     if (import.meta.env.DEV && new URLSearchParams(location.search).has('debugMode')) {
       this.diagnostics = document.createElement('pre'); this.diagnostics.className = 'mode-diagnostics'; container.append(this.diagnostics);
       Object.assign(window, { sdpUnified: { modes: this.modes, network: this.network, scene: this.scene, player: this.player,
-        state: this.state, voice: this.voice, voiceTransport: this.voiceTransport, chat: this.chat, audio: this.audio } });
+        state: this.state, voice: this.voice, voiceTransport: this.voiceTransport, chat: this.chat, audio: this.audio, instrument: this.instrument } });
     }
     this.frame = requestAnimationFrame(this.tick);
   }
@@ -245,6 +250,12 @@ export class App {
   }
 
   private readonly keydown = (event: KeyboardEvent): void => {
+    if (this.instrument.visible) {
+      if (event.code === 'KeyV' && !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey && !(event.target instanceof HTMLElement && event.target.closest('input,select,textarea'))) {
+        event.preventDefault(); this.voiceTransport.unlock(); void this.voice.activate();
+      }
+      return;
+    }
     if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
     const voiceTyping = event.target instanceof HTMLElement && (event.target.isContentEditable || event.target.closest('input:not([type="range"]):not([type="checkbox"]),textarea'));
     if (event.code === 'KeyV' && !event.repeat && !voiceTyping && this.modes.value === 'LIMBO' && (this.settingsMenu.visible || this.visitorOptions.visible || this.state.value === 'PAUSED')) {
@@ -301,6 +312,7 @@ export class App {
     if (event.code === 'KeyE' && ['EXPLORING', 'PAUSED'].includes(this.state.value)) {
       event.preventDefault();
       if (this.focusedVisitor && !this.ui.isHudHidden) this.openVisitorOptions(this.focusedVisitor.id);
+      else if (!this.instrument.prompt.hidden) this.instrument.interact();
       else if (this.player.seated || this.focusedSeat !== undefined) this.interactSeat();
       else this.interact();
     } else if (event.code === 'Enter' && ['EXPLORING', 'PAUSED'].includes(this.state.value) && !this.limited) {
@@ -330,7 +342,7 @@ export class App {
   }
 
   private resume(): void {
-    if (this.contextLost || this.settingsMenu.visible || this.visitorOptions.visible || this.state.value !== 'PAUSED') return;
+    if (this.contextLost || this.settingsMenu.visible || this.visitorOptions.visible || this.instrument.visible || this.state.value !== 'PAUSED') return;
     this.audio.setVisible(true);
     this.voiceTransport.unlock();
     if (this.limited || this.touch) this.state.set('EXPLORING');
@@ -462,6 +474,7 @@ export class App {
   }
 
   private openSettings(): void {
+    if (this.instrument.visible) return;
     if (this.modes.value !== 'LIMBO' || this.state.value === 'ENTERING' || this.settingsMenu.visible) return;
     if (this.state.value === 'EXPLORING' || this.state.value === 'CHATTING') this.pause();
     this.touchControls?.reset();
@@ -506,6 +519,11 @@ export class App {
       // Shooter catches up bounded fixed steps after a slow render frame.
       this.modes.update(this.modes.value === 'SHOOTER' ? Math.min(frameDt, .125) : dt);
       this.audio.updateEnvironment(this.scene.camera, this.modes.value === 'LIMBO', this.reveal);
+      const instrumentFocus = this.modes.value === 'LIMBO' && this.state.value === 'EXPLORING' && !this.settingsMenu.visible && !this.visitorOptions.visible && !this.player.seated
+        && this.scene.environment.instrument.focus(this.scene.camera, [this.scene.sculpture.root, ...this.scene.environment.occluders]);
+      const audioSettings = this.settings.value;
+      this.instrument.update(this.scene.camera, this.modes.value === 'LIMBO', this.reveal, instrumentFocus, audioSettings.muted ? 0 : audioSettings.volume);
+      this.scene.environment.instrument.update(!!this.instrument.snapshot?.ownerId, this.elapsed);
       if (this.modes.value !== 'SHOOTER' && this.modes.value !== 'RETURNING_TO_LIMBO') {
         if (this.modes.value === 'LIMBO') this.player.update(dt);
         this.ui.inspection.update(
@@ -518,7 +536,7 @@ export class App {
         this.focusedVisitor = this.modes.value === 'LIMBO' && this.state.value === 'EXPLORING' && !this.settingsMenu.visible && !this.visitorOptions.visible
           ? this.scene.remotePlayers.focus(this.scene.camera, [this.scene.sculpture.root, ...this.scene.environment.occluders]) : undefined;
         this.ui.focusVisitor(this.focusedVisitor?.name);
-        const seatAvailable = this.modes.value === 'LIMBO' && this.state.value === 'EXPLORING' && !this.settingsMenu.visible && !this.visitorOptions.visible && !this.focusedVisitor;
+        const seatAvailable = this.modes.value === 'LIMBO' && this.state.value === 'EXPLORING' && !this.settingsMenu.visible && !this.visitorOptions.visible && !this.focusedVisitor && !instrumentFocus;
         this.focusedSeat = seatAvailable && !this.player.seated ? this.scene.environment.retreat.focusSeat(this.scene.camera, [this.scene.sculpture.root, ...this.scene.environment.occluders]) : undefined;
         // Offer the other half rather than marking a partly occupied bench unavailable.
         if (this.focusedSeat !== undefined) {
@@ -547,6 +565,7 @@ export class App {
     this.disposed = true;
     cancelAnimationFrame(this.frame); this.events.abort();
     this.unsubscribers.forEach((unsubscribe) => unsubscribe());
+    this.instrument.dispose();
     this.modes.dispose(); this.diagnostics?.remove();
     this.inputs.dispose();
     this.voice.dispose(); this.audio.dispose(); this.chat.dispose(); this.network.disconnect();

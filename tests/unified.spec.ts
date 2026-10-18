@@ -15,7 +15,7 @@ import type { LiveKitVoiceTransport } from '../src/audio/LiveKitVoiceTransport';
 import type { ShooterMode } from '../src/modes/shooter/ShooterMode';
 import type { AudioManager } from '../src/audio/AudioManager';
 declare global { interface Window {
-  sdpUnified: { modes: GameModeManager; network: ColyseusNetworkAdapter; scene: SceneManager; player: FirstPersonController; voiceTransport: LiveKitVoiceTransport; audio: AudioManager };
+  sdpUnified: { modes: GameModeManager; network: ColyseusNetworkAdapter; scene: SceneManager; player: FirstPersonController; voiceTransport: LiveKitVoiceTransport; audio: AudioManager; instrument: import('../src/audio/AmbientStationController').AmbientStationController };
   retiredShooter?: ShooterMode;
   audioContexts: number;
   createdAudioContexts: AudioContext[];

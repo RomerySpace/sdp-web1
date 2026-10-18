@@ -163,13 +163,13 @@ test('listening tree renders on grass without a platform and preserves shared co
     const app = window.sdpUnified; app.player.setEnabled(false);
     app.scene.camera.position.set(config.x + 12, 4.5, config.z + 17); app.scene.camera.lookAt(config.x, 3.8, config.z);
   }, lobbyRetreat);
-  await expect.poll(() => page.evaluate(() => window.sdpUnified.scene.environment.retreat.seats.length)).toBe(3);
+  await expect.poll(() => page.evaluate(() => window.sdpUnified.scene.environment.retreat.seats.length)).toBe(9);
   await expect.poll(() => page.evaluate(() => window.sdpUnified.scene.environment.retreat.treeLoaded)).toBe(true);
   const details = await page.evaluate(() => {
     const retreat = window.sdpUnified.scene.environment.retreat;
     return { children: retreat.group.children.length, treeMeshes: retreat.tree.getObjectsByProperty('type', 'Mesh').length, error: retreat.tree.userData.error };
   });
-  expect(details.children).toBe(4); expect(details.treeMeshes).toBeGreaterThan(0); expect(details.error).toBeUndefined();
+  expect(details.children).toBe(10); expect(details.treeMeshes).toBeGreaterThan(0); expect(details.error).toBeUndefined();
   await page.waitForTimeout(500); await page.screenshot({ path: '/private/tmp/sdp-listening-clearing.png' });
   const pixels = await page.evaluate(() => {
     const { renderer, scene, camera } = window.sdpUnified.scene; renderer.render(scene, camera);
@@ -207,7 +207,7 @@ test('touch visitor name opens reversible options and the listening clearing fit
     await first.waitForTimeout(300); await first.screenshot({ path: '/private/tmp/sdp-listening-clearing-mobile.png' });
     const result = await first.evaluate(() => {
       const { renderer, scene, camera, environment } = window.sdpUnified.scene; renderer.render(scene, camera);
-      const visible = environment.retreat.seats.map(seat => seat.position.clone().project(camera)).every(p => Math.abs(p.x) < 1 && Math.abs(p.y) < 1);
+      const visible = environment.retreat.seats.slice(0, 3).map(seat => seat.position.clone().project(camera)).every(p => Math.abs(p.x) < 1 && Math.abs(p.y) < 1);
       const gl = renderer.getContext(), pixel = new Uint8Array(4); gl.readPixels(Math.floor(gl.drawingBufferWidth / 2), Math.floor(gl.drawingBufferHeight / 2), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
       return { visible, pixel: [...pixel], width: document.documentElement.scrollWidth };
     });

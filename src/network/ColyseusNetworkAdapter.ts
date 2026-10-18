@@ -9,6 +9,7 @@ import { validateChatText, type RoomChatMessage, type VoiceAccess } from '../../
 import { validateDisplayName } from '../../shared/PlayerIdentity';
 import type { KillRecord, RoundScore, ShooterMatchSnapshot } from '../../shared/ShooterProtocol';
 import type { AirstrikeFlight, AirstrikeRequest, AirstrikeResult } from '../../shared/AirstrikeProtocol';
+import type { StationCommand, StationSnapshot, StationSound } from '../../shared/AmbientStation';
 
 function serverEndpoint(): string {
   const configured = import.meta.env.VITE_SDP_SERVER_URL;
@@ -54,6 +55,9 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
   private readonly weapons = new Set<(event: WeaponEvent) => void>();
   private readonly combatEvents = new Set<(event: CombatEvent) => void>();
   private readonly strikeResults = new Set<(result: AirstrikeResult) => void>();
+  private readonly stationStates = new Set<(state: StationSnapshot | null) => void>();
+  private readonly stationSounds = new Set<(sound: StationSound) => void>();
+  private stationSnapshot: StationSnapshot | null = null;
   private needsSpawn = true;
   private retryTimer = 0;
   private retries = 0;
@@ -108,6 +112,14 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
       });
       room.onMessage<string>('chat:error', (message) => { if (this.room === room) for (const callback of this.notices) callback(message); });
       room.onMessage<string>('lobby:notice', message => { if (this.room === room) for (const callback of this.notices) callback(message); });
+      room.onMessage<StationSnapshot>('station:state', state => {
+        if (this.room !== room || state.roomId !== room.roomId) return;
+        this.stationSnapshot = state; for (const callback of this.stationStates) callback(state);
+      });
+      room.onMessage<StationSound>('station:sound', sound => {
+        if (this.room === room && sound.roomId === room.roomId) for (const callback of this.stationSounds) callback(sound);
+      });
+      if (this.roomType === LOBBY_NAME) room.send('station:command', { type: 'sync' });
       room.onMessage<WeaponEvent>('weapon:event', event => {
         if (this.room !== room || event.roomId !== room.roomId) return;
         for (const callback of this.weapons) callback(event);
@@ -137,7 +149,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
         this.clearRemoteState();
       });
       room.onReconnect(() => {
-        if (this.room === room && !this.disposed) this.receive(room, room.state);
+        if (this.room === room && !this.disposed) { this.receive(room, room.state); if (this.roomType === LOBBY_NAME) room.send('station:command', { type: 'sync' }); }
       });
       room.onError(() => {
         if (this.room === room && !this.disposed) this.setStatus('disconnected');
@@ -201,6 +213,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
   }
 
   private clearRemoteState(): void {
+    this.stationSnapshot = null; for (const callback of this.stationStates) callback(null);
     this.latestSnapshot = {
       roomId: '', localPlayerId: '', tick: 0, receivedAt: performance.now(), players: [],
     };
@@ -225,6 +238,11 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
   sendShooterInput(input: ShooterInput): void {
     if (this.currentStatus.state === 'connected' && this.room?.connection.isOpen) this.room.send('shooter:input', input);
   }
+  sendStation(command: StationCommand): void {
+    if (this.roomType === LOBBY_NAME && this.currentStatus.state === 'connected' && this.room?.connection.isOpen) this.room.send('station:command', command);
+  }
+  subscribeToStation(callback: (state: StationSnapshot | null) => void): () => void { this.stationStates.add(callback); callback(this.stationSnapshot); return () => this.stationStates.delete(callback); }
+  subscribeToStationSound(callback: (sound: StationSound) => void): () => void { this.stationSounds.add(callback); return () => this.stationSounds.delete(callback); }
   sendWeaponAction(action: WeaponAction): void {
     if (this.currentStatus.state === 'connected' && this.room?.connection.isOpen) this.room.send('weapon:action', action);
   }

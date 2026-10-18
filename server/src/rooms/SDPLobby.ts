@@ -10,6 +10,8 @@ import { spawnPosition } from '../simulation/SpawnPositions';
 import { LobbyState, VisitorState } from '../state/LobbyState';
 import { lobbyRetreat, lobbySeatSlots, seatExits, validSeatRequest } from '../../../shared/LobbyRetreat';
 import { CollisionManager } from '../../../src/player/CollisionManager';
+import { AmbientStationSession } from '../communication/AmbientStationSession';
+import { validStationCommand } from '../../../shared/AmbientStation';
 
 interface VisitorInput { value: MovementInput; receivedAt: number; slot: number }
 const INPUT_TIMEOUT_MS = 250;
@@ -30,8 +32,22 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
   private readonly chat = new ChatPolicy();
   private voice!: VoiceSessions;
   private readonly voiceRequests = new Map<string, number>();
+  private station!: AmbientStationSession;
+  private readonly stationSyncs = new Map<string, number>();
 
   onCreate(): void {
+    this.station = new AmbientStationSession(this.roomId, state => this.broadcast('station:state', state), sound => this.broadcast('station:sound', sound));
+    this.onMessage('station:command', (client, raw: unknown) => {
+      const player = this.state.players.get(client.sessionId), now = Date.now();
+      if (!player?.connected || !validStationCommand(raw)) return;
+      if (raw.type === 'sync') {
+        if (now - (this.stationSyncs.get(client.sessionId) ?? 0) < 2000) return;
+        this.stationSyncs.set(client.sessionId, now);
+        client.send('station:state', { ...this.station.state, serverNow: now }); return;
+      }
+      const notice = this.station.handle(client.sessionId, player, raw, now);
+      if (notice) client.send('lobby:notice', notice);
+    });
     this.voice = new VoiceSessions(this.roomId);
     this.onMessage('lobby:seat', (client, raw: unknown) => {
       const player = this.state.players.get(client.sessionId), now = this.clock.elapsedTime;
@@ -117,6 +133,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
   }
 
   onDrop(client: Client): void {
+    this.station.remove(client.sessionId, Date.now()); this.stationSyncs.delete(client.sessionId);
     this.stand(client.sessionId, true);
     void this.voice.remove(client.sessionId);
     const player = this.state.players.get(client.sessionId);
@@ -133,6 +150,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
   }
 
   onLeave(client: Client): void {
+    this.station.remove(client.sessionId, Date.now()); this.stationSyncs.delete(client.sessionId);
     this.seatingRequests.delete(client.sessionId);
     void this.voice.remove(client.sessionId);
     this.voiceRequests.delete(client.sessionId);
@@ -146,6 +164,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
 
   private updatePlayers(): void {
     this.state.wallTime = Date.now();
+    this.station.tick(this.state.wallTime, this.state.players.get(this.station.state.ownerId));
     for (const [id, entry] of this.inputs) {
       const player = this.state.players.get(id);
       if (!player?.connected) continue;
