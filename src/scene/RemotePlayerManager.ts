@@ -1,5 +1,6 @@
 import { AdditiveBlending, BackSide, BoxGeometry, CapsuleGeometry, Group, MathUtils, Mesh, MeshStandardMaterial, Raycaster, ShaderMaterial, Sphere, Vector2, Vector3, type Camera, type Object3D, type Scene } from 'three';
 import type { LobbySnapshot } from '../../shared/MultiplayerProtocol';
+import { PLAYER_HEIGHT } from '../../shared/MultiplayerProtocol';
 import type { Atmosphere } from './Atmosphere';
 import { lobbyAmbience } from '../core/LobbyAmbience';
 import { lobbyRetreat, lobbySeatSlots } from '../../shared/LobbyRetreat';
@@ -67,7 +68,7 @@ export class RemotePlayerManager {
           const shin = new Mesh(this.legGeometry, material); shin.position.set(x, .22, -.38); legs.add(thigh, shin);
         }
         group.add(body, marker, halo, legs);
-        group.position.set(player.x, player.y - 1.7, player.z);
+        group.position.set(player.x, player.y - PLAYER_HEIGHT, player.z);
         group.rotation.y = player.yaw;
         visitor = { group, body, legs, posture: 0, name: '', marker, material, halo, level: 0, samples: [] };
         this.visitors.set(player.playerId, visitor);
@@ -121,7 +122,7 @@ export class RemotePlayerManager {
       const t = after.time > before.time ? Math.max(0, Math.min(1, (renderTime - before.time) / (after.time - before.time))) : 1;
       visitor.group.position.set(
         before.x + (after.x - before.x) * t,
-        (before.y - (before.seat >= 0 ? lobbyRetreat.seatedEye : 1.7)) * (1 - t) + (after.y - (after.seat >= 0 ? lobbyRetreat.seatedEye : 1.7)) * t,
+        (before.y - (before.seat >= 0 ? lobbyRetreat.seatedEye : PLAYER_HEIGHT)) * (1 - t) + (after.y - (after.seat >= 0 ? lobbyRetreat.seatedEye : PLAYER_HEIGHT)) * t,
         before.z + (after.z - before.z) * t,
       );
       const angle = Math.atan2(Math.sin(after.yaw - before.yaw), Math.cos(after.yaw - before.yaw));

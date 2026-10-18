@@ -68,7 +68,7 @@ test('all 25 server-owned spawns are separated, face the centre and avoid the pe
   assert.equal(points[0].z, 9);
   for (let i = 0; i < points.length; i++) {
     assert.ok(Math.hypot(points[i].x, points[i].z) > 6);
-    assert.equal(points[i].y, 1.7);
+    assert.equal(points[i].y, 1.8);
     for (let j = i + 1; j < points.length; j++) {
       assert.ok(Math.hypot(points[i].x - points[j].x, points[i].z - points[j].z) > 1);
     }

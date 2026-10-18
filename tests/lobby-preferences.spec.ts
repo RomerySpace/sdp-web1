@@ -4,7 +4,7 @@ import type { LobbySnapshot } from '../shared/MultiplayerProtocol';
 import type { VoiceChatManager } from '../src/audio/VoiceChatManager';
 import { CollisionManager } from '../src/player/CollisionManager';
 import { lobbyRetreat, lobbySeatSlots } from '../shared/LobbyRetreat';
-import { listeningGarden, listeningGardenBenches } from '../shared/ListeningGarden';
+import { listeningGarden } from '../shared/ListeningGarden';
 import { ambientStation } from '../shared/AmbientStation';
 import { touchDriver } from './touch-driver';
 
@@ -26,12 +26,13 @@ test('mobile sunken garden: native touch descends, sits below the rim and walks 
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
   try {
     await enter(page, 'Sunken Touch');
+    await expect.poll(() => page.evaluate(() => window.sdpUnified.scene.camera.position.y)).toBeCloseTo(1.8, 2);
     const aim = async (point: { x: number; z: number; groundY?: number }, down = false) => page.evaluate(({ point, down }) => {
       const app = window.sdpUnified, snapshot = app.network.snapshot!, local = snapshot.players.find(p => p.playerId === snapshot.localPlayerId)!;
       const dx = point.x - local.x, dz = point.z - local.z;
       app.player.setSpawn({ ...local, yaw: Math.atan2(-dx, -dz), pitch: down ? Math.atan2((point.groundY ?? 0) + .46 - local.y, Math.hypot(dx, dz)) : 0 });
     }, { point, down });
-    await aim(lobbySeatSlots[22]); await page.getByRole('button', { name: 'Sprint', exact: true }).tap();
+    await aim(lobbySeatSlots[28]); await page.getByRole('button', { name: 'Sprint', exact: true }).tap();
     const box = (await page.locator('.touch-stick').boundingBox())!, driver = await touchDriver(page);
     const move = async (id: number) => { await driver.down(id, box.x + box.width / 2, box.y + box.height / 2); await driver.move(id, box.x + box.width / 2, box.y + box.height * .05); };
     await move(1);
@@ -39,10 +40,10 @@ test('mobile sunken garden: native touch descends, sits below the rim and walks 
       await expect.poll(() => page.evaluate(seat => {
         const snapshot = window.sdpUnified.network.snapshot!, local = snapshot.players.find(p => p.playerId === snapshot.localPlayerId)!;
         return Math.hypot(local.x - seat.x, local.z - seat.z);
-      }, lobbySeatSlots[22]), { timeout: 25000 }).toBeLessThan(2.1);
+      }, lobbySeatSlots[28]), { timeout: 25000 }).toBeLessThan(2.1);
     } finally { await driver.up(1); }
     await page.getByRole('button', { name: 'Sprint', exact: true }).tap(); await page.waitForTimeout(400);
-    await aim(lobbySeatSlots[22], true);
+    await aim(lobbySeatSlots[28], true);
     await page.getByRole('button', { name: 'Sit on bench', exact: true }).tap();
     await expect.poll(() => page.evaluate(() => window.sdpUnified.player.seated)).toBe(true);
     await expect.poll(() => page.evaluate(() => window.sdpUnified.scene.camera.position.y)).toBeLessThan(-.4);
@@ -76,7 +77,7 @@ test('listening garden stays separate, renders its open enclosure and synchroniz
       expect(Math.hypot(listeningGarden.x - point.x, listeningGarden.z - point.z)).toBeGreaterThan(40);
     }
     await enter(first, 'Garden Visitor'); await enter(second, 'Garden Companion');
-    for (const [page, slot] of [[first, 18], [second, 22]] as const) {
+    for (const [page, slot] of [[first, 18], [second, 30]] as const) {
       const bench = lobbySeatSlots[slot];
       await resumeExploration(page);
       await page.evaluate(seat => {
@@ -113,8 +114,8 @@ test('listening garden stays separate, renders its open enclosure and synchroniz
     }, listeningGarden);
     await second.waitForTimeout(500);
     expect(await second.evaluate(() => {
-      let count = 0; window.sdpUnified.scene.scene.traverse(object => { if (object.name === 'Listening garden / soft enclosing edge') count++; }); return count;
-    })).toBe(listeningGardenBenches.length);
+      let count = 0; window.sdpUnified.scene.scene.traverse(object => { if (object.name === 'Listening garden / continuous curved bench') count++; }); return count;
+    })).toBe(1);
     await second.screenshot({ path: '/private/tmp/sdp-listening-garden-desktop.png' });
     await second.setViewportSize({ width: 390, height: 844 }); await second.waitForTimeout(250);
     await second.screenshot({ path: '/private/tmp/sdp-listening-garden-mobile.png' });
@@ -282,7 +283,7 @@ test('listening tree renders on grass without a platform and preserves shared co
     const app = window.sdpUnified; app.player.setEnabled(false);
     app.scene.camera.position.set(config.x + 12, 4.5, config.z + 17); app.scene.camera.lookAt(config.x, 3.8, config.z);
   }, lobbyRetreat);
-  await expect.poll(() => page.evaluate(() => window.sdpUnified.scene.environment.retreat.seats.length)).toBe(9);
+  await expect.poll(() => page.evaluate(() => window.sdpUnified.scene.environment.retreat.seats.length)).toBe(10);
   await expect.poll(() => page.evaluate(() => window.sdpUnified.scene.environment.retreat.treeLoaded)).toBe(true);
   const details = await page.evaluate(() => {
     const retreat = window.sdpUnified.scene.environment.retreat;

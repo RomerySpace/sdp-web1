@@ -1,7 +1,7 @@
 export const LOBBY_NAME = 'SDPLimboRoom';
 export const MAX_PLAYERS = 25;
 export const SIMULATION_HZ = 20;
-export const PLAYER_HEIGHT = 1.7;
+export const PLAYER_HEIGHT = 1.8;
 
 export interface MovementInput {
   seq: number;

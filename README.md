@@ -158,9 +158,10 @@ API references: [Three.js EXRLoader](https://threejs.org/docs/pages/EXRLoader.ht
 ## Listening garden trial
 
 An open, grass-filled conversation enclosure sits at `(3, 46)`, over 40 metres
-from the sculpture, tree and field instrument. A 25m-wide depression descends
-1.65m through a smooth grassy slope into a broad flat centre. Eight curved,
-inward-facing seats form an interrupted arc; each has two server-reserved places.
+from the sculpture, tree and field instrument. A 34m-wide depression descends
+2.8m through a smooth grassy slope into a broad flat centre. A single continuous
+240-degree bench has an integrated back, an open entrance and 24 reserved places.
+The normal lobby camera height is 1.80m above the ground; sitting remains 1.18m.
 Use the existing E interaction to sit or stand. No platform, extra soundtrack or
 private chat room is added: voice still uses normal proximity and text remains
 room-wide. Its layout lives in `shared/ListeningGarden.ts`; existing seat IDs

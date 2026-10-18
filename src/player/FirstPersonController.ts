@@ -1,6 +1,7 @@
 import { MathUtils, PerspectiveCamera } from 'three';
 import { simulateMovement, type MotionState } from '../../shared/Movement';
 import type { MovementInput, NetworkPlayer } from '../../shared/MultiplayerProtocol';
+import { PLAYER_HEIGHT } from '../../shared/MultiplayerProtocol';
 import { CollisionManager } from './CollisionManager';
 import { InputManager } from './InputManager';
 import { gameplayConfig } from '../../shared/GameplayConfig';
@@ -14,7 +15,7 @@ export class FirstPersonController {
   private readonly movementInput: MovementInput = { seq: 0, f: 0, r: 0, y: 0, p: 0, active: true };
   private readonly events = new AbortController();
   private phase = 0;
-  private eye = 1.7;
+  private eye = PLAYER_HEIGHT;
   private seatIndex = -1;
   get seated(): boolean { return this.seatIndex >= 0; }
   get seat(): number { return this.seatIndex; }
@@ -38,8 +39,8 @@ export class FirstPersonController {
   constructor(readonly camera: PerspectiveCamera, private readonly canvas: HTMLCanvasElement, readonly touch = false) {
     this.baseFov = camera.fov;
     camera.rotation.order = 'YXZ';
-    camera.position.set(0, 1.7, 9);
-    camera.lookAt(0, 1.78, 0);
+    camera.position.set(0, PLAYER_HEIGHT, 9);
+    camera.lookAt(0, PLAYER_HEIGHT + .08, 0);
     this.pitch = camera.rotation.x;
     window.addEventListener('mousemove', (event) => {
       if (!this.active || !this.locked) return;
@@ -63,7 +64,7 @@ export class FirstPersonController {
     this.seatIndex = -1;
     this.input.clear();
     this.motion.elevation = this.motion.verticalSpeed = 0; this.motion.jumpHeld = false;
-    this.eye = 1.7;
+    this.eye = PLAYER_HEIGHT;
     this.motion.velocityX = this.motion.velocityZ = 0;
     this.yaw = player.yaw;
     this.pitch = player.pitch;
@@ -113,7 +114,7 @@ export class FirstPersonController {
     simulateMovement(this.motion, this.movementInput, dt, this.collision);
     const speed = Math.hypot(this.motion.velocityX, this.motion.velocityZ);
     this.phase += speed * dt * 2.8;
-    this.eye = MathUtils.damp(this.eye, this.input.crouching ? gameplayConfig.limbo.crouchHeight : 1.7, 14, dt);
+    this.eye = MathUtils.damp(this.eye, this.input.crouching ? gameplayConfig.limbo.crouchHeight : PLAYER_HEIGHT, 14, dt);
     const bob = (this.motion.elevation ? 0 : .012) * Math.min(speed / 3, 1.5);
     this.camera.position.set(this.motion.x, this.collision.groundHeight(this.motion.x, this.motion.z) + this.eye + (this.motion.elevation ?? 0) + Math.sin(this.phase * 2) * bob, this.motion.z);
     const roll = MathUtils.damp(this.camera.rotation.z, -this.input.sideways * .018 + Math.sin(this.phase) * bob * .35, 10, dt);

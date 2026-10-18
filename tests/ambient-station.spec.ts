@@ -150,9 +150,9 @@ test('ambient instrument: separate listening area frames its six surrounding ben
   await page.waitForTimeout(500);
   const result = await page.evaluate(() => {
     const { renderer, scene, camera, environment } = window.sdpUnified.scene; renderer.render(scene, camera);
-    const visible = environment.retreat.seats.slice(3).every(seat => { const p = seat.position.clone().project(camera); return Math.abs(p.x) < 1 && Math.abs(p.y) < 1 && p.z < 1; });
+    const visible = environment.retreat.seats.slice(3, 9).every(seat => { const p = seat.position.clone().project(camera); return Math.abs(p.x) < 1 && Math.abs(p.y) < 1 && p.z < 1; });
     const gl = renderer.getContext(), pixel = new Uint8Array(4); gl.readPixels(Math.floor(gl.drawingBufferWidth / 2), Math.floor(gl.drawingBufferHeight / 2), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
-    return { visible, benches: environment.retreat.seats.slice(3).length, pixel: [...pixel], meshes: environment.instrument.group.children.length };
+    return { visible, benches: environment.retreat.seats.slice(3, 9).length, pixel: [...pixel], meshes: environment.instrument.group.children.length };
   });
   expect(result.visible).toBe(true); expect(result.benches).toBe(6); expect(result.meshes).toBeGreaterThan(20); expect(result.pixel[3]).toBe(255); expect(result.pixel[0]).toBeGreaterThan(10);
   await page.screenshot({ path: '/private/tmp/sdp-ambient-zone-desktop.png' });

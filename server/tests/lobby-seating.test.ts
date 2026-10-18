@@ -18,7 +18,7 @@ test('seat requests cannot provide positions, identities or invalid bench indice
   for (const raw of [null, {}, [], { seat: 0, x: 1 }, { seat: 0, playerId: 'other' }, { seat: lobbySeatSlots.length }, { seat: -2 }, { seat: .5 }, { seat: '0' }]) assert.equal(validSeatRequest(raw), false);
   assert.equal(validSeatRequest({ seat: -1 }), true); assert.equal(validSeatRequest({ seat: 0 }), true);
   const world = new CollisionManager();
-  assert.equal(lobbySeatSlots.length, 34);
+  assert.equal(lobbySeatSlots.length, 42);
   for (let i = 0; i < lobbySeatSlots.length; i++) {
     assert.equal(validSeatRequest({ seat: i }), true);
     assert.ok(seatExits(i).some(exit => world.canOccupy(exit.x, exit.z)));

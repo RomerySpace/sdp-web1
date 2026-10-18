@@ -1,20 +1,11 @@
 import { Box3, Group, Mesh, MeshStandardMaterial, Raycaster, Vector2, Vector3, type Camera, type Material, type Object3D, type Scene, type Texture } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { lobbyRetreat, lobbyBenches } from '../../shared/LobbyRetreat';
+import { lobbyRetreat, lobbyBenches, lobbySeatSlots, gardenSeatStart } from '../../shared/LobbyRetreat';
+import { PLAYER_HEIGHT } from '../../shared/MultiplayerProtocol';
 import { listeningGarden, listeningGardenBenches, lobbyGroundHeight } from '../../shared/ListeningGarden';
 import type { Atmosphere } from './Atmosphere';
 import { assetBuffer } from '../assets/AssetCache';
-
-function gardenCurve(geometry: RoundedBoxGeometry): RoundedBoxGeometry {
-  const positions = geometry.getAttribute('position'), radius = listeningGarden.radius;
-  for (let i = 0; i < positions.count; i++) {
-    const x = positions.getX(i);
-    const halfWidth = lobbyRetreat.seatWidth / 2, bias = (radius - Math.sqrt(radius * radius - halfWidth * halfWidth)) / 2;
-    positions.setZ(i, positions.getZ(i) + Math.sqrt(radius * radius - x * x) - radius + bias);
-  }
-  positions.needsUpdate = true; geometry.computeVertexNormals();
-  return geometry;
-}
+import { createListeningBench } from './ListeningBench';
 
 export class LobbyRetreat {
   readonly group = new Group();
@@ -29,35 +20,39 @@ export class LobbyRetreat {
     this.raycaster.setFromCamera(this.center, camera); this.raycaster.far = lobbyRetreat.interactionDistance;
     const hit = this.raycaster.intersectObjects(this.seats, true)[0];
     if (!hit || this.raycaster.intersectObjects(occluders, true).some(other => other.object !== hit.object && other.distance < hit.distance - .03)) return;
+    if (camera.position.y - lobbyGroundHeight(camera.position.x, camera.position.z) > PLAYER_HEIGHT + .15) return;
+    if (hit.object === this.gardenBench) {
+      let closest = -1, distance = Infinity;
+      for (let i = gardenSeatStart; i < lobbySeatSlots.length; i++) {
+        const slot = lobbySeatSlots[i], d = Math.hypot(hit.point.x - slot.x, hit.point.z - slot.z);
+        if (d < distance && Math.hypot(camera.position.x - slot.x, camera.position.z - slot.z) <= lobbyRetreat.interactionDistance) { closest = i; distance = d; }
+      }
+      return closest >= 0 ? closest : undefined;
+    }
     const index = this.seats.findIndex(seat => seat === hit.object || seat === hit.object.parent), seat = lobbyBenches[index];
     if (!seat) return;
-    if (camera.position.y - lobbyGroundHeight(camera.position.x, camera.position.z) > 1.85 || Math.hypot(camera.position.x - seat.x, camera.position.z - seat.z) > lobbyRetreat.interactionDistance) return;
+    if (Math.hypot(camera.position.x - seat.x, camera.position.z - seat.z) > lobbyRetreat.interactionDistance) return;
     const local = this.seats[index].worldToLocal(hit.point.clone());
     return index * 2 + (local.x >= 0 ? 1 : 0);
   }
   private readonly finish = new MeshStandardMaterial({ color: 0xf5f7f8, roughness: .91, metalness: 0 });
   private readonly seatGeometry = new RoundedBoxGeometry(lobbyRetreat.seatWidth, lobbyRetreat.seatHeight, lobbyRetreat.seatDepth, 5, .2);
-  private readonly gardenSeatGeometry = gardenCurve(new RoundedBoxGeometry(lobbyRetreat.seatWidth, lobbyRetreat.seatHeight, .6, 7, .18));
-  private readonly gardenBackGeometry = gardenCurve(new RoundedBoxGeometry(lobbyRetreat.seatWidth, listeningGarden.backHeight, .2, 5, .09));
+  private readonly gardenGeometry = createListeningBench();
+  private readonly gardenBench = new Mesh(this.gardenGeometry, this.finish);
   constructor(scene: Scene, atmosphere: Atmosphere) {
     this.group.name = 'Limbo / listening tree';
     atmosphere.apply(this.finish);
     this.tree.name = 'Listening tree / Lloque'; this.tree.position.set(lobbyRetreat.x, 0, lobbyRetreat.z); this.group.add(this.tree);
     for (const seat of lobbyBenches) {
+      if (listeningGardenBenches.includes(seat)) continue;
       const mesh = new Mesh(this.seatGeometry, this.finish); mesh.name = 'Listening seat';
       mesh.position.set(seat.x, lobbyGroundHeight(seat.x, seat.z) + lobbyRetreat.seatHeight / 2, seat.z); mesh.rotation.y = seat.yaw;
       mesh.castShadow = mesh.receiveShadow = true; this.seats.push(mesh); this.group.add(mesh);
-      if (listeningGardenBenches.includes(seat)) {
-        mesh.name = 'Listening garden / inward-facing seat';
-        mesh.geometry = this.gardenSeatGeometry;
-        const back = new Mesh(this.gardenBackGeometry, this.finish);
-        back.name = 'Listening garden / soft enclosing edge';
-        // Entire back stays inside the shared bench footprint used by both simulations.
-        back.position.set(0, lobbyRetreat.seatHeight / 2 + listeningGarden.backHeight / 2 - .08, .12);
-        back.rotation.x = .06;
-        back.castShadow = back.receiveShadow = true; mesh.add(back);
-      }
     }
+    this.gardenBench.name = 'Listening garden / continuous curved bench';
+    this.gardenBench.position.set(listeningGarden.x, -listeningGarden.depth, listeningGarden.z);
+    this.gardenBench.castShadow = this.gardenBench.receiveShadow = true;
+    this.group.add(this.gardenBench); this.seats.push(this.gardenBench);
     scene.add(this.group);
     this.ready = this.loadTree(atmosphere).catch(error => { this.tree.userData.error = String(error); console.warn('[SDP] Listening tree unavailable.', error); });
   }
@@ -92,6 +87,6 @@ export class LobbyRetreat {
     for (const texture of textures) { texture.dispose(); if (typeof texture.image?.close === 'function') texture.image.close(); }
   }
   dispose(): void {
-    this.disposed = true; this.group.removeFromParent(); this.disposeModel(this.tree); this.tree.clear(); this.seatGeometry.dispose(); this.gardenSeatGeometry.dispose(); this.gardenBackGeometry.dispose(); this.finish.dispose();
+    this.disposed = true; this.group.removeFromParent(); this.disposeModel(this.tree); this.tree.clear(); this.seatGeometry.dispose(); this.gardenGeometry.dispose(); this.finish.dispose();
   }
 }

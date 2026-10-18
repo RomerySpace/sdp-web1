@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { validVoiceRequest, type RoomChatMessage } from '../../../shared/CommunicationProtocol';
 import { ChatPolicy } from '../communication/ChatPolicy';
 import { VoiceSessions } from '../communication/VoiceSessions';
-import { MAX_PLAYERS, SIMULATION_HZ, validateMovementInput, type MovementInput } from '../../../shared/MultiplayerProtocol';
+import { MAX_PLAYERS, PLAYER_HEIGHT, SIMULATION_HZ, validateMovementInput, type MovementInput } from '../../../shared/MultiplayerProtocol';
 import { MovementSimulation } from '../simulation/MovementSimulation';
 import { spawnPosition } from '../simulation/SpawnPositions';
 import { LobbyState, VisitorState } from '../state/LobbyState';
@@ -61,7 +61,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
       this.seatingRequests.set(client.sessionId, now);
       if (player.seatIndex >= 0) return;
       const seat = lobbySeatSlots[raw.seat];
-      if (Math.hypot(player.x - seat.x, player.z - seat.z) > lobbyRetreat.interactionDistance || player.y - lobbyGroundHeight(player.x, player.z) > 1.8) {
+      if (Math.hypot(player.x - seat.x, player.z - seat.z) > lobbyRetreat.interactionDistance || player.y - lobbyGroundHeight(player.x, player.z) > PLAYER_HEIGHT + .1) {
         client.send('lobby:notice', 'Move closer to sit.'); return;
       }
       if ([...this.state.players.values()].some(other => other.connected && other.seatIndex === raw.seat)) {
@@ -177,7 +177,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
       const position = this.simulation.step(id, entry.value)!;
       player.x = position.x;
       player.z = position.z;
-      player.y = lobbyGroundHeight(position.x, position.z) + 1.7 + (position.elevation ?? 0);
+      player.y = lobbyGroundHeight(position.x, position.z) + PLAYER_HEIGHT + (position.elevation ?? 0);
       player.crouching = Boolean(entry.value.active && entry.value.c);
       player.yaw = entry.value.y;
       player.pitch = entry.value.p;
@@ -194,7 +194,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
     const exits = seatExits(player.seatIndex);
     const position = exits.find(exit => this.seatingWorld.canOccupy(exit.x, exit.z) && [...this.state.players].every(([otherId, other]) => otherId === id || !other.connected || Math.hypot(other.x - exit.x, other.z - exit.z) >= .6)) ?? (force ? exits[0] : undefined);
     if (!position) return false;
-    player.seatIndex = -1; player.x = position.x; player.z = position.z; player.y = lobbyGroundHeight(position.x, position.z) + 1.7;
+    player.seatIndex = -1; player.x = position.x; player.z = position.z; player.y = lobbyGroundHeight(position.x, position.z) + PLAYER_HEIGHT;
     this.simulation.add(id, position); return true;
   }
 
