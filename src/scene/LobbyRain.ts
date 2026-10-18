@@ -1,6 +1,7 @@
 import { InstancedBufferAttribute, InstancedBufferGeometry, Mesh, PlaneGeometry, ShaderMaterial, Vector3, type PerspectiveCamera, type Scene } from 'three';
 import { lobbyAmbience } from '../core/LobbyAmbience';
 import { rainIntensity } from './RainSchedule';
+import { lobbyGroundGLSL } from '../../shared/ListeningGarden';
 
 export class LobbyRain {
   readonly material: ShaderMaterial;
@@ -30,6 +31,7 @@ export class LobbyRain {
         uniform vec3 right;
         varying vec2 vUv;
         varying float vFade;
+        ${lobbyGroundGLSL}
         void main() {
           float span = ${(c.radius * 2).toFixed(1)};
           float speed = ${c.fallSpeed.toFixed(2)} * (.8 + dropSeed.w * .4);
@@ -39,6 +41,7 @@ export class LobbyRain {
           world.y = mod(dropSeed.y * ${c.height.toFixed(2)} - time * speed, ${c.height.toFixed(2)});
           float distanceFade = 1.0 - smoothstep(${(c.radius * .6).toFixed(2)}, ${c.radius.toFixed(2)}, length(world.xz - anchor.xz));
           vFade = distanceFade * smoothstep(.08, .65, world.y);
+          world.y += lobbyGroundHeight(world.xz);
           world += right * position.x * ${c.width.toFixed(3)};
           world.y += position.y * ${c.streakLength.toFixed(2)};
           world.x -= position.y * ${(.34 * c.wind / c.fallSpeed).toFixed(4)};

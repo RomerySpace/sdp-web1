@@ -1,10 +1,12 @@
 import { lobbyRetreat, lobbyBenches } from '../../shared/LobbyRetreat';
 import { ambientStation } from '../../shared/AmbientStation';
+import { lobbyGroundHeight } from '../../shared/ListeningGarden';
 
 /** Circle vs. pedestal and seating, with axis-separated sliding and swept substeps.
  * The large radius is a soft, invisible drift limit, far inside the fog. */
 export class CollisionManager {
   constructor(readonly radius = 0.28, readonly halfExtent = 1.2, readonly worldRadius = 160) {}
+  groundHeight(x: number, z: number): number { return lobbyGroundHeight(x, z); }
   canOccupy(x: number, z: number): boolean { return Math.hypot(x, z) <= this.worldRadius && !this.blocked(x, z); }
 
   private blocked(x: number, z: number): boolean {

@@ -4,8 +4,67 @@ import type { LobbySnapshot } from '../shared/MultiplayerProtocol';
 import type { VoiceChatManager } from '../src/audio/VoiceChatManager';
 import { CollisionManager } from '../src/player/CollisionManager';
 import { lobbyRetreat, lobbySeatSlots } from '../shared/LobbyRetreat';
-import { listeningGarden } from '../shared/ListeningGarden';
+import { listeningGarden, listeningGardenBenches } from '../shared/ListeningGarden';
 import { ambientStation } from '../shared/AmbientStation';
+import { touchDriver } from './touch-driver';
+
+async function resumeExploration(page: Page): Promise<void> {
+  await page.bringToFront();
+  const resume = page.locator('.resume-button');
+  if (await resume.isVisible()) {
+    try { await resume.click({ timeout: 1500 }); }
+    catch (error) {
+      // Chat may reacquire pointer lock while Playwright is preparing the click.
+      if (await page.locator('.ui').getAttribute('data-state') !== 'EXPLORING') throw error;
+    }
+  }
+  await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
+}
+
+test('mobile sunken garden: native touch descends, sits below the rim and walks back out without floating', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }), page = await context.newPage();
+  const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
+  try {
+    await enter(page, 'Sunken Touch');
+    const aim = async (point: { x: number; z: number; groundY?: number }, down = false) => page.evaluate(({ point, down }) => {
+      const app = window.sdpUnified, snapshot = app.network.snapshot!, local = snapshot.players.find(p => p.playerId === snapshot.localPlayerId)!;
+      const dx = point.x - local.x, dz = point.z - local.z;
+      app.player.setSpawn({ ...local, yaw: Math.atan2(-dx, -dz), pitch: down ? Math.atan2((point.groundY ?? 0) + .46 - local.y, Math.hypot(dx, dz)) : 0 });
+    }, { point, down });
+    await aim(lobbySeatSlots[22]); await page.getByRole('button', { name: 'Sprint', exact: true }).tap();
+    const box = (await page.locator('.touch-stick').boundingBox())!, driver = await touchDriver(page);
+    const move = async (id: number) => { await driver.down(id, box.x + box.width / 2, box.y + box.height / 2); await driver.move(id, box.x + box.width / 2, box.y + box.height * .05); };
+    await move(1);
+    try {
+      await expect.poll(() => page.evaluate(seat => {
+        const snapshot = window.sdpUnified.network.snapshot!, local = snapshot.players.find(p => p.playerId === snapshot.localPlayerId)!;
+        return Math.hypot(local.x - seat.x, local.z - seat.z);
+      }, lobbySeatSlots[22]), { timeout: 25000 }).toBeLessThan(2.1);
+    } finally { await driver.up(1); }
+    await page.getByRole('button', { name: 'Sprint', exact: true }).tap(); await page.waitForTimeout(400);
+    await aim(lobbySeatSlots[22], true);
+    await page.getByRole('button', { name: 'Sit on bench', exact: true }).tap();
+    await expect.poll(() => page.evaluate(() => window.sdpUnified.player.seated)).toBe(true);
+    await expect.poll(() => page.evaluate(() => window.sdpUnified.scene.camera.position.y)).toBeLessThan(-.4);
+    await page.screenshot({ path: '/private/tmp/sdp-sunken-garden-touch-inside.png' });
+    await page.getByRole('button', { name: 'Stand up', exact: true }).tap();
+    await expect.poll(() => page.evaluate(() => window.sdpUnified.player.seated)).toBe(false);
+    await aim({ x: listeningGarden.x, z: listeningGarden.z - 15 });
+    await page.getByRole('button', { name: 'Sprint', exact: true }).tap(); await move(2);
+    try {
+      await expect.poll(() => page.evaluate(() => window.sdpUnified.scene.camera.position.z), { timeout: 15000 }).toBeLessThan(listeningGarden.z - listeningGarden.outerRadius);
+    } finally { await driver.up(2); }
+    await page.getByRole('button', { name: 'Sprint', exact: true }).tap();
+    await expect.poll(() => page.evaluate(() => window.sdpUnified.scene.camera.position.y)).toBeGreaterThan(1.6);
+    await expect.poll(() => page.evaluate(() => {
+      const app = window.sdpUnified, snapshot = app.network.snapshot!, local = snapshot.players.find(p => p.playerId === snapshot.localPlayerId)!;
+      return Math.abs(local.y - app.scene.camera.position.y);
+    })).toBeLessThan(.1);
+    await aim(listeningGarden); await page.setViewportSize({ width: 667, height: 375 }); await page.waitForTimeout(300);
+    await page.screenshot({ path: '/private/tmp/sdp-sunken-garden-touch-landscape.png' });
+    expect(errors).toEqual([]);
+  } finally { await context.close(); }
+});
 
 test('listening garden stays separate, renders its open enclosure and synchronizes two seated visitors', async ({ browser }) => {
   const a = await browser.newContext(), b = await browser.newContext();
@@ -19,8 +78,7 @@ test('listening garden stays separate, renders its open enclosure and synchroniz
     await enter(first, 'Garden Visitor'); await enter(second, 'Garden Companion');
     for (const [page, slot] of [[first, 18], [second, 22]] as const) {
       const bench = lobbySeatSlots[slot];
-      await page.bringToFront();
-      if (await page.locator('.resume-button').isVisible()) await page.locator('.resume-button').click();
+      await resumeExploration(page);
       await page.evaluate(seat => {
         const app = window.sdpUnified, snapshot = app.network.snapshot!, local = snapshot.players.find(p => p.playerId === snapshot.localPlayerId)!;
         app.player.setSpawn({ ...local, yaw: Math.atan2(-(seat.x - local.x), -(seat.z - local.z)), pitch: 0 });
@@ -36,28 +94,27 @@ test('listening garden stays separate, renders its open enclosure and synchroniz
       await page.evaluate(seat => {
         const app = window.sdpUnified, snapshot = app.network.snapshot!, local = snapshot.players.find(p => p.playerId === snapshot.localPlayerId)!;
         const dx = seat.x - local.x, dz = seat.z - local.z;
-        app.player.setSpawn({ ...local, yaw: Math.atan2(-dx, -dz), pitch: Math.atan2(.46 - local.y, Math.hypot(dx, dz)) });
+        app.player.setSpawn({ ...local, yaw: Math.atan2(-dx, -dz), pitch: Math.atan2(seat.groundY + .46 - local.y, Math.hypot(dx, dz)) });
       }, lobbySeatSlots[slot]);
       await expect(page.getByRole('button', { name: 'Sit on bench', exact: true })).toBeVisible();
       await page.keyboard.press('KeyE');
       await expect.poll(() => page.evaluate(() => window.sdpUnified.player.seated)).toBe(true);
+      await expect.poll(() => page.evaluate(() => window.sdpUnified.scene.camera.position.y)).toBeLessThan(-.4);
     }
     await expect.poll(() => second.evaluate(() => window.sdpUnified.network.snapshot!.players.filter(p => (p.seatIndex ?? -1) >= 18).length)).toBe(2);
     await second.keyboard.press('Enter'); await second.getByRole('textbox', { name: 'Chat message' }).fill('Garden conversation'); await second.keyboard.press('Enter');
     await expect(first.locator('.chat-message')).toContainText('Garden conversation');
-    await second.bringToFront();
-    if (await second.locator('.resume-button').isVisible()) await second.locator('.resume-button').click();
-    await expect(second.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
+    await resumeExploration(second);
     await second.locator('.scene-canvas').click({ position: { x: 700, y: 400 }, force: true });
     await second.keyboard.press('KeyE'); await expect.poll(() => second.evaluate(() => window.sdpUnified.player.seated)).toBe(false);
     await second.evaluate(config => {
       const app = window.sdpUnified; app.player.setEnabled(false);
-      app.scene.camera.position.set(config.x + 8, 4.2, config.z - 9); app.scene.camera.lookAt(config.x, .35, config.z);
+      app.scene.camera.position.set(config.x + 12, 3.5, config.z - 16); app.scene.camera.lookAt(config.x, -1, config.z);
     }, listeningGarden);
     await second.waitForTimeout(500);
     expect(await second.evaluate(() => {
       let count = 0; window.sdpUnified.scene.scene.traverse(object => { if (object.name === 'Listening garden / soft enclosing edge') count++; }); return count;
-    })).toBe(6);
+    })).toBe(listeningGardenBenches.length);
     await second.screenshot({ path: '/private/tmp/sdp-listening-garden-desktop.png' });
     await second.setViewportSize({ width: 390, height: 844 }); await second.waitForTimeout(250);
     await second.screenshot({ path: '/private/tmp/sdp-listening-garden-mobile.png' });
@@ -107,6 +164,7 @@ test('E seats a visitor smoothly, keeps chat available and shows the seated pose
     await first.keyboard.press('Enter'); await first.getByRole('textbox', { name: 'Chat message' }).fill('Listening under the tree'); await first.keyboard.press('Enter');
     await expect(second.locator('.chat-message')).toContainText('Listening under the tree');
     expect(await first.evaluate(() => window.sdpUnified.player.seated)).toBe(true);
+    await resumeExploration(first);
     await first.keyboard.press('KeyE'); await expect.poll(() => first.evaluate(() => window.sdpUnified.player.seated)).toBe(false);
     await expect.poll(() => first.evaluate(() => window.sdpUnified.scene.camera.position.y)).toBeGreaterThan(1.6);
     await aimAtBench(first); await first.keyboard.press('KeyE'); await expect.poll(() => first.evaluate(() => window.sdpUnified.player.seated)).toBe(true);

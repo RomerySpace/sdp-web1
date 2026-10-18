@@ -1,7 +1,7 @@
 import { Box3, Group, Mesh, MeshStandardMaterial, Raycaster, Vector2, Vector3, type Camera, type Material, type Object3D, type Scene, type Texture } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { lobbyRetreat, lobbyBenches } from '../../shared/LobbyRetreat';
-import { listeningGarden, listeningGardenBenches } from '../../shared/ListeningGarden';
+import { listeningGarden, listeningGardenBenches, lobbyGroundHeight } from '../../shared/ListeningGarden';
 import type { Atmosphere } from './Atmosphere';
 import { assetBuffer } from '../assets/AssetCache';
 
@@ -9,7 +9,8 @@ function gardenCurve(geometry: RoundedBoxGeometry): RoundedBoxGeometry {
   const positions = geometry.getAttribute('position'), radius = listeningGarden.radius;
   for (let i = 0; i < positions.count; i++) {
     const x = positions.getX(i);
-    positions.setZ(i, positions.getZ(i) + Math.sqrt(radius * radius - x * x) - radius + .08);
+    const halfWidth = lobbyRetreat.seatWidth / 2, bias = (radius - Math.sqrt(radius * radius - halfWidth * halfWidth)) / 2;
+    positions.setZ(i, positions.getZ(i) + Math.sqrt(radius * radius - x * x) - radius + bias);
   }
   positions.needsUpdate = true; geometry.computeVertexNormals();
   return geometry;
@@ -30,13 +31,13 @@ export class LobbyRetreat {
     if (!hit || this.raycaster.intersectObjects(occluders, true).some(other => other.object !== hit.object && other.distance < hit.distance - .03)) return;
     const index = this.seats.findIndex(seat => seat === hit.object || seat === hit.object.parent), seat = lobbyBenches[index];
     if (!seat) return;
-    if (camera.position.y > 1.85 || Math.hypot(camera.position.x - seat.x, camera.position.z - seat.z) > lobbyRetreat.interactionDistance) return;
+    if (camera.position.y - lobbyGroundHeight(camera.position.x, camera.position.z) > 1.85 || Math.hypot(camera.position.x - seat.x, camera.position.z - seat.z) > lobbyRetreat.interactionDistance) return;
     const local = this.seats[index].worldToLocal(hit.point.clone());
     return index * 2 + (local.x >= 0 ? 1 : 0);
   }
   private readonly finish = new MeshStandardMaterial({ color: 0xf5f7f8, roughness: .91, metalness: 0 });
   private readonly seatGeometry = new RoundedBoxGeometry(lobbyRetreat.seatWidth, lobbyRetreat.seatHeight, lobbyRetreat.seatDepth, 5, .2);
-  private readonly gardenSeatGeometry = gardenCurve(new RoundedBoxGeometry(lobbyRetreat.seatWidth, lobbyRetreat.seatHeight, .55, 5, .19));
+  private readonly gardenSeatGeometry = gardenCurve(new RoundedBoxGeometry(lobbyRetreat.seatWidth, lobbyRetreat.seatHeight, .6, 7, .18));
   private readonly gardenBackGeometry = gardenCurve(new RoundedBoxGeometry(lobbyRetreat.seatWidth, listeningGarden.backHeight, .2, 5, .09));
   constructor(scene: Scene, atmosphere: Atmosphere) {
     this.group.name = 'Limbo / listening tree';
@@ -44,7 +45,7 @@ export class LobbyRetreat {
     this.tree.name = 'Listening tree / Lloque'; this.tree.position.set(lobbyRetreat.x, 0, lobbyRetreat.z); this.group.add(this.tree);
     for (const seat of lobbyBenches) {
       const mesh = new Mesh(this.seatGeometry, this.finish); mesh.name = 'Listening seat';
-      mesh.position.set(seat.x, lobbyRetreat.seatHeight / 2, seat.z); mesh.rotation.y = seat.yaw;
+      mesh.position.set(seat.x, lobbyGroundHeight(seat.x, seat.z) + lobbyRetreat.seatHeight / 2, seat.z); mesh.rotation.y = seat.yaw;
       mesh.castShadow = mesh.receiveShadow = true; this.seats.push(mesh); this.group.add(mesh);
       if (listeningGardenBenches.includes(seat)) {
         mesh.name = 'Listening garden / inward-facing seat';
@@ -52,7 +53,8 @@ export class LobbyRetreat {
         const back = new Mesh(this.gardenBackGeometry, this.finish);
         back.name = 'Listening garden / soft enclosing edge';
         // Entire back stays inside the shared bench footprint used by both simulations.
-        back.position.set(0, (listeningGarden.backHeight - lobbyRetreat.seatHeight) / 2, .15);
+        back.position.set(0, lobbyRetreat.seatHeight / 2 + listeningGarden.backHeight / 2 - .08, .12);
+        back.rotation.x = .06;
         back.castShadow = back.receiveShadow = true; mesh.add(back);
       }
     }

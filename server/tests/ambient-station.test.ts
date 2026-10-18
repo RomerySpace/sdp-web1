@@ -24,7 +24,7 @@ test('instrument commands are bounded and cannot inject patterns, identities or 
   assert.deepEqual(Object.values(stationKeyboard), Array.from({ length: 15 }, (_, i) => i));
   const world = new CollisionManager(); assert.equal(world.canOccupy(ambientStation.x, ambientStation.z), false);
   assert.equal(ambientStation.benches.length, 6);
-  assert.equal(lobbyBenches.length, 15); assert.equal(lobbySeatSlots.length, 30);
+  assert.equal(lobbyBenches.length, 9 + listeningGardenBenches.length); assert.equal(lobbySeatSlots.length, lobbyBenches.length * 2);
   for (let i = 0; i < lobbySeatSlots.length; i++) assert.ok(seatExits(i).some(p => world.canOccupy(p.x, p.z)));
   assert.ok(world.canOccupy(listeningGarden.x, listeningGarden.z));
   for (const bench of listeningGardenBenches) {

@@ -92,7 +92,7 @@ export class FirstPersonController {
     if (this.seated) {
       const seat = lobbySeatSlots[this.seatIndex];
       this.eye = MathUtils.damp(this.eye, lobbyRetreat.seatedEye, 10, dt);
-      this.camera.position.set(MathUtils.damp(this.camera.position.x, seat.x, 10, dt), this.eye, MathUtils.damp(this.camera.position.z, seat.z, 10, dt));
+      this.camera.position.set(MathUtils.damp(this.camera.position.x, seat.x, 10, dt), MathUtils.damp(this.camera.position.y, lobbyRetreat.seatedEye + seat.groundY, 10, dt), MathUtils.damp(this.camera.position.z, seat.z, 10, dt));
       this.camera.rotation.set(this.pitch, this.yaw, MathUtils.damp(this.camera.rotation.z, 0, 10, dt), 'YXZ');
       const fov = MathUtils.damp(this.camera.fov, this.baseFov, 6, dt);
       if (Math.abs(fov - this.camera.fov) > .001) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
@@ -115,7 +115,7 @@ export class FirstPersonController {
     this.phase += speed * dt * 2.8;
     this.eye = MathUtils.damp(this.eye, this.input.crouching ? gameplayConfig.limbo.crouchHeight : 1.7, 14, dt);
     const bob = (this.motion.elevation ? 0 : .012) * Math.min(speed / 3, 1.5);
-    this.camera.position.set(this.motion.x, this.eye + (this.motion.elevation ?? 0) + Math.sin(this.phase * 2) * bob, this.motion.z);
+    this.camera.position.set(this.motion.x, this.collision.groundHeight(this.motion.x, this.motion.z) + this.eye + (this.motion.elevation ?? 0) + Math.sin(this.phase * 2) * bob, this.motion.z);
     const roll = MathUtils.damp(this.camera.rotation.z, -this.input.sideways * .018 + Math.sin(this.phase) * bob * .35, 10, dt);
     this.camera.rotation.set(this.pitch, this.yaw, roll, 'YXZ');
   }

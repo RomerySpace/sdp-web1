@@ -1,6 +1,28 @@
 import { test, expect, type Page } from '@playwright/test';
 import { enterExhibition } from './entry';
 import { ambientStation } from '../shared/AmbientStation';
+import type { Mesh } from 'three';
+
+test('instrument supports join the underframe and tabletop without floating gaps', async ({ page }) => {
+  await enter(page, 'Structure Check');
+  const joints = await page.evaluate(() => {
+    const group = window.sdpUnified.scene.scene.getObjectByName('Limbo / ambient instrument')!;
+    group.updateMatrixWorld(true);
+    const bounds = (mesh: Mesh) => { mesh.geometry.computeBoundingBox(); return mesh.geometry.boundingBox!.clone().applyMatrix4(mesh.matrixWorld); };
+    const top = bounds(group.getObjectByName('Instrument / tabletop') as Mesh), apron = bounds(group.getObjectByName('Instrument / joined underframe') as Mesh);
+    return group.children.filter(child => child.name === 'Instrument / connected support').map(child => {
+      const leg = bounds(child as Mesh);
+      return { floor: leg.min.y, top: leg.intersectsBox(top), apron: leg.intersectsBox(apron), overlap: leg.max.y - top.min.y };
+    });
+  });
+  expect(joints).toHaveLength(2);
+  for (const joint of joints) { expect(joint.floor).toBeCloseTo(0); expect(joint.top).toBe(true); expect(joint.apron).toBe(true); expect(joint.overlap).toBeGreaterThan(.05); }
+  await page.evaluate(config => {
+    const app = window.sdpUnified; app.player.setEnabled(false);
+    app.scene.camera.position.set(config.x + 3.4, .8, config.z + 3.6); app.scene.camera.lookAt(config.x, .7, config.z);
+  }, ambientStation);
+  await page.waitForTimeout(400); await page.screenshot({ path: '/private/tmp/sdp-instrument-connected-supports.png' });
+});
 
 async function enter(page: Page, name: string): Promise<void> {
   await page.goto('/?debugMode=limbo');

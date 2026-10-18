@@ -9,6 +9,7 @@ import { MovementSimulation } from '../simulation/MovementSimulation';
 import { spawnPosition } from '../simulation/SpawnPositions';
 import { LobbyState, VisitorState } from '../state/LobbyState';
 import { lobbyRetreat, lobbySeatSlots, seatExits, validSeatRequest } from '../../../shared/LobbyRetreat';
+import { lobbyGroundHeight } from '../../../shared/ListeningGarden';
 import { CollisionManager } from '../../../src/player/CollisionManager';
 import { AmbientStationSession } from '../communication/AmbientStationSession';
 import { validStationCommand } from '../../../shared/AmbientStation';
@@ -60,13 +61,13 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
       this.seatingRequests.set(client.sessionId, now);
       if (player.seatIndex >= 0) return;
       const seat = lobbySeatSlots[raw.seat];
-      if (Math.hypot(player.x - seat.x, player.z - seat.z) > lobbyRetreat.interactionDistance || player.y > 1.8) {
+      if (Math.hypot(player.x - seat.x, player.z - seat.z) > lobbyRetreat.interactionDistance || player.y - lobbyGroundHeight(player.x, player.z) > 1.8) {
         client.send('lobby:notice', 'Move closer to sit.'); return;
       }
       if ([...this.state.players.values()].some(other => other.connected && other.seatIndex === raw.seat)) {
         client.send('lobby:notice', 'That bench is occupied.'); return;
       }
-      player.seatIndex = raw.seat; player.x = seat.x; player.z = seat.z; player.y = lobbyRetreat.seatedEye; player.yaw = seat.yaw; player.crouching = false;
+      player.seatIndex = raw.seat; player.x = seat.x; player.z = seat.z; player.y = seat.groundY + lobbyRetreat.seatedEye; player.yaw = seat.yaw; player.crouching = false;
       const entry = this.inputs.get(client.sessionId);
       if (entry) { entry.value.active = false; entry.value.f = entry.value.r = 0; entry.value.y = seat.yaw; entry.value.p = 0; }
       this.simulation.add(client.sessionId, seat);
@@ -176,7 +177,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
       const position = this.simulation.step(id, entry.value)!;
       player.x = position.x;
       player.z = position.z;
-      player.y = 1.7 + (position.elevation ?? 0);
+      player.y = lobbyGroundHeight(position.x, position.z) + 1.7 + (position.elevation ?? 0);
       player.crouching = Boolean(entry.value.active && entry.value.c);
       player.yaw = entry.value.y;
       player.pitch = entry.value.p;
@@ -193,7 +194,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
     const exits = seatExits(player.seatIndex);
     const position = exits.find(exit => this.seatingWorld.canOccupy(exit.x, exit.z) && [...this.state.players].every(([otherId, other]) => otherId === id || !other.connected || Math.hypot(other.x - exit.x, other.z - exit.z) >= .6)) ?? (force ? exits[0] : undefined);
     if (!position) return false;
-    player.seatIndex = -1; player.x = position.x; player.z = position.z; player.y = 1.7;
+    player.seatIndex = -1; player.x = position.x; player.z = position.z; player.y = lobbyGroundHeight(position.x, position.z) + 1.7;
     this.simulation.add(id, position); return true;
   }
 

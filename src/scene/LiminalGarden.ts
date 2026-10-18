@@ -4,6 +4,7 @@ import type { Atmosphere } from './Atmosphere';
 import { lobbyAmbience } from '../core/LobbyAmbience';
 import { lobbyRetreat, lobbyBenches } from '../../shared/LobbyRetreat';
 import { ambientStation } from '../../shared/AmbientStation';
+import { lobbyGroundGLSL } from '../../shared/ListeningGarden';
 
 /** Instanced tapered blades and a satin column; no external assets. */
 export class LiminalGarden {
@@ -45,7 +46,8 @@ export class LiminalGarden {
         grassAtmosphere(shader, renderer);
         Object.assign(shader.uniforms, { gardenTime: this.time, gardenCenter: this.center });
         shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>
-          uniform float gardenTime; uniform vec2 gardenCenter; varying float bladeHeight;`);
+          uniform float gardenTime; uniform vec2 gardenCenter; varying float bladeHeight;
+          ${lobbyGroundGLSL}`);
         shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
           bladeHeight = position.y;
           vec3 stem = instanceMatrix[3].xyz;
@@ -72,12 +74,13 @@ export class LiminalGarden {
         shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', `
           vec4 mvPosition = instanceMatrix * vec4(transformed, 1.);
           mvPosition.xz += wrapped - stem.xz;
+          mvPosition.y += lobbyGroundHeight(wrapped);
           mvPosition = modelViewMatrix * mvPosition;
           gl_Position = projectionMatrix * mvPosition;`);
         shader.vertexShader = shader.vertexShader.replace('vAtmospherePosition = (modelMatrix * atmosphereVertex).xyz;',
-          'atmosphereVertex.xz += wrapped - stem.xz; vAtmospherePosition = (modelMatrix * atmosphereVertex).xyz;');
+          'atmosphereVertex.xz += wrapped - stem.xz; atmosphereVertex.y += lobbyGroundHeight(wrapped); vAtmospherePosition = (modelMatrix * atmosphereVertex).xyz;');
       };
-      grass.customProgramCacheKey = () => `sdp-white-grass-tree-retreat-v6-${span}`;
+      grass.customProgramCacheKey = () => `sdp-white-grass-listening-hollow-v7-${span}`;
       const blades = new InstancedMesh(geometry, grass, count), dummy = new Object3D();
       let seed = 83; const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
       for (let i = 0; i < blades.count; i++) {

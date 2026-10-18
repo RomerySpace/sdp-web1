@@ -7,6 +7,7 @@ import { createMonolithGeometry, monolithFinish } from './MonolithGeometry';
 import { lobbyAmbience } from '../core/LobbyAmbience';
 import { LobbyRetreat } from './LobbyRetreat';
 import { AmbientStation } from './AmbientStation';
+import { createLobbyGround } from './LobbyGround';
 
 export class Environment {
   readonly retreat: LobbyRetreat;
@@ -19,8 +20,8 @@ export class Environment {
     const floorMaterial = new MeshStandardMaterial({ color: 0xffffff, roughness: 0.94, metalness: 0 });
     floorMaterial.color.multiplyScalar(lobbyAmbience.floorReflectance);
     atmosphere.apply(floorMaterial);
-    const floor = new Mesh(new PlaneGeometry(2000, 2000), floorMaterial);
-    floor.rotation.x = -Math.PI / 2;
+    const floor = new Mesh(createLobbyGround(), floorMaterial);
+    floor.name = 'Limbo / ground with listening hollow';
     floor.receiveShadow = true;
     this.meshes.push(floor);
 

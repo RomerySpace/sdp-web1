@@ -21,7 +21,15 @@ export class AmbientStation {
       const mesh = new Mesh(new RoundedBoxGeometry(w, h, d, 3, Math.min(.1, h / 3)), material);
       mesh.position.set(x, y, z); mesh.castShadow = mesh.receiveShadow = true; this.group.add(mesh); return mesh;
     };
-    this.solids.push(box(3.2, .17, 1.15, 0, 1.04, 0), box(.34, .92, .8, -1.24, .46, 0), box(.34, .92, .8, 1.24, .46, 0));
+    const slabThickness = .17, underside = ambientStation.height - slabThickness / 2;
+    const supportHeight = underside + .065;
+    const top = box(3.2, slabThickness, 1.15, 0, ambientStation.height, 0); top.name = 'Instrument / tabletop';
+    const apron = box(2.85, .18, .82, 0, underside - .025, 0); apron.name = 'Instrument / joined underframe';
+    this.solids.push(top, apron);
+    for (const x of [-1.24, 1.24]) {
+      const leg = box(.34, supportHeight, .8, x, supportHeight / 2, 0);
+      leg.name = 'Instrument / connected support'; this.solids.push(leg);
+    }
     box(2.86, .025, .85, 0, 1.135, 0, dark);
     const whites = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23];
     for (let i = 0; i < whites.length; i++) box(.124, .03, .36, -.88 + i * .135, 1.165, .21);

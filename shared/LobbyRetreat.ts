@@ -1,5 +1,5 @@
 import { ambientStation } from './AmbientStation';
-import { listeningGardenBenches } from './ListeningGarden';
+import { listeningGardenBenches, lobbyGroundHeight } from './ListeningGarden';
 /** Shared footprint for the tree, benches and client/server collisions. */
 export const lobbyRetreat = {
   x: 36, z: -24, treeHeight: 9.5, trunkRadius: .55,
@@ -17,7 +17,7 @@ export const lobbyRetreat = {
 export const lobbyBenches = [...lobbyRetreat.seats, ...ambientStation.benches, ...listeningGardenBenches];
 export const lobbySeatSlots = lobbyBenches.flatMap((bench, benchIndex) =>
   [-.52, .52].map(offset => ({
-    benchIndex, yaw: bench.yaw,
+    benchIndex, yaw: bench.yaw, groundY: lobbyGroundHeight(bench.x, bench.z),
     x: bench.x + offset * Math.cos(bench.yaw),
     z: bench.z - offset * Math.sin(bench.yaw),
   })));
