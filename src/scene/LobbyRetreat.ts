@@ -38,7 +38,7 @@ export class LobbyRetreat {
     return index * 2 + (local.x >= 0 ? 1 : 0);
   }
   private readonly finish = new MeshStandardMaterial({ color: 0xf5f7f8, roughness: .91, metalness: 0 });
-  private readonly galleryFinish = new MeshStandardMaterial({ color: 0xf0f3f4, roughness: .84, emissive: 0xffffff, emissiveIntensity: .12, fog: false });
+  private readonly galleryFinish = new MeshStandardMaterial({ color: 0x9da6a1, roughness: .72, envMapIntensity: .15, fog: false });
   private readonly seatGeometry = new RoundedBoxGeometry(lobbyRetreat.seatWidth, lobbyRetreat.seatHeight, lobbyRetreat.seatDepth, 5, .2);
   private readonly gardenGeometry = createListeningBench();
   private readonly gardenBench = new Mesh(this.gardenGeometry, this.finish);
@@ -52,6 +52,7 @@ export class LobbyRetreat {
       const mesh = new Mesh(this.seatGeometry, gallery ? this.galleryFinish : this.finish); mesh.name = gallery ? 'Gallery / listening bench' : 'Listening seat'; mesh.userData.benchIndex = index;
       mesh.position.set(seat.x, benchGroundHeight(seat) + lobbyRetreat.seatHeight / 2, seat.z); mesh.rotation.y = seat.yaw;
       mesh.castShadow = !gallery; mesh.receiveShadow = true; this.seats.push(mesh); this.group.add(mesh);
+      if (gallery) mesh.layers.enable(7);
     }
     this.gardenBench.name = 'Listening garden / continuous curved bench';
     this.gardenBench.position.set(listeningGarden.x, -listeningGarden.depth, listeningGarden.z);

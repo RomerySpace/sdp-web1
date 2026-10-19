@@ -68,6 +68,7 @@ export class RemotePlayerManager {
           const shin = new Mesh(this.legGeometry, material); shin.position.set(x, .22, -.38); legs.add(thigh, shin);
         }
         group.add(body, marker, halo, legs);
+        group.traverse(object => object.layers.enable(7));
         group.position.set(player.x, player.y - PLAYER_HEIGHT, player.z);
         group.rotation.y = player.yaw;
         visitor = { group, body, legs, posture: 0, name: '', marker, material, halo, level: 0, samples: [] };

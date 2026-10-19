@@ -32,8 +32,14 @@ a continuous ceiling and fine perimeter light instead of a square ceiling grid.
 The lower flight flares from 7.2m to 14m, removing the nested rectangular
 portal into the room. Its side walls, treads, landing, sloped soffit and
 authoritative corridor share that widening footprint.
-The floor is continuous matte mineral material without a tile grid. The film
+The floor is continuous black satin mineral material without a tile grid. The film
 is 3.2m wide, leaving the wall available for future audiovisual pieces.
+The visual revision uses a dark ceiling, charcoal walls and soft exhibition
+spots around the work. A faint, broadly blurred planar reflection retains light
+and color rather than a sharp copy of the film, benches and visitors.
+It renders only while the visitor is downstairs, using a
+768px target (384px for touch devices) and a dedicated layer that excludes the
+outdoor grass and sky. The renderer and animation loop remain shared.
 Three central two-place benches reuse room-owned reservations. The backend
 rejects requests to sit below a player who is still upstairs. Standing and
 reconnections preserve the correct ground layer. Room capacity is unchanged.
@@ -59,8 +65,9 @@ Before an online release, review media compression, delivery and permissions.
 
 ## Visual References
 
-The user's white gallery references guide the architecture: opal ceiling,
-mineral surfaces, quiet joints, low seating and a single moving-image work.
+The user's curved gallery references guide the architecture: a dark continuous
+ceiling, illuminated artworks, reflective mineral surfaces, quiet joints,
+low seating and a single moving-image work.
 Research consulted the scenographer's own portfolio and GOLDRAUM 1, taking
 its immersive material treatment as a reference, not copying its gold palette:
 

@@ -3,6 +3,6 @@
 .gallery-film-audio[hidden] { display: none; }
 .gallery-film-audio:hover { background: #fff; }
 .gallery-film-audio:focus-visible { outline: 2px solid #647d89; outline-offset: 3px; }
-.ui.in-gallery[data-state] :is(.controls-overlay, .control-row > span:nth-child(2), .voice-status, .connection-indicator, .visitor-focus, .bench-interaction) { color: #53636b; text-shadow: none; }
-.ui.in-gallery[data-state] .chat-message { color: #354750; }
-.ui.in-gallery[data-state] .chat-sender { color: #5b727d; }
+.ui.in-gallery[data-state] :is(.controls-overlay, .control-row > span:nth-child(2), .voice-status, .connection-indicator, .visitor-focus) { color: #e0e7e3; text-shadow: 0 1px 4px #101715b3; }
+.ui.in-gallery[data-state] .chat-message { color: #edf1ef; }
+.ui.in-gallery[data-state] .chat-sender { color: #c0d2ca; }

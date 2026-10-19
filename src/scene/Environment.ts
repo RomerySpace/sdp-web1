@@ -66,6 +66,7 @@ export class Environment {
     this.retreat = new LobbyRetreat(scene, atmosphere);
     this.instrument = new AmbientStation(scene, atmosphere); this.occluders.push(...this.instrument.solids);
     this.gallery = new LowerGallery(); scene.add(this.gallery.group); this.occluders.push(...this.gallery.occluders);
+    scene.traverse(object => { if ('isLight' in object) object.layers.enable(7); });
     this.occluders.push(...this.retreat.seats);
     this.retreat.ready.then(() => {
       this.retreat.tree.traverse(object => { if (object instanceof Mesh && object.name.toLowerCase().includes('tronco')) this.occluders.push(object); });

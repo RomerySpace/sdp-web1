@@ -2,7 +2,7 @@ export const lobbyAmbience = {
   music: { height: 14, fullRadius: 3, fadeRadius: 45, distantGain: .22, smoothing: .25,
     reverbSeconds: 8.5, preDelay: .065, dry: .46, wet: .9 },
   monolith: { fadeStart: 12, fadeEnd: 65 },
-  floorReflectance: .95,
+  floorReflectance: .62,
   voice: { silentOpacity: .68, speakingOpacity: .96, noiseFloor: .008, fullLevel: .12,
     glowIntensity: 2.2, haloOpacity: .38 },
   identity: { distance: 6 },
