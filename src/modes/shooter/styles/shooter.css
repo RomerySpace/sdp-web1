@@ -25,7 +25,7 @@
 .shooter-menu-button:focus-visible { outline: 1px solid #728590; outline-offset: 2px; }
 .mode-overlay.has-session .protocol-content { width: min(700px, calc(100% - 40px)); max-height: calc(100dvh - 40px); overflow-y: auto; }
 .mode-overlay.has-session .protocol-status { display: none; }
-.mode-overlay[data-phase="results"] .protocol-status { display: block; }
+.mode-overlay[data-phase="results"] .protocol-status { display: none; }
 .session-result { margin: 0 0 12px; font-size: 10px; color: #506674; overflow-wrap: anywhere; }
 .mode-overlay.has-session :is(.protocol-resume, .protocol-back) { width: 240px; max-width: 100%; margin-inline: auto; }
 .mode-overlay:not([hidden]) ~ .mode-diagnostics { display: none; }

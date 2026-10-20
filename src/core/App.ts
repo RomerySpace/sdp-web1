@@ -5,6 +5,7 @@ import { LiveKitVoiceTransport } from '../audio/LiveKitVoiceTransport';
 import { ChatManager } from '../chat/ChatManager';
 import { ColyseusNetworkAdapter } from '../network/ColyseusNetworkAdapter';
 import { InputSynchronizer } from '../network/InputSynchronizer';
+import { SessionActivity } from '../network/SessionActivity';
 import { FirstPersonController } from '../player/FirstPersonController';
 import { SceneManager } from '../scene/SceneManager';
 import { UIManager } from '../ui/UIManager';
@@ -38,6 +39,8 @@ export class App {
   private readonly voiceTransport: LiveKitVoiceTransport;
   private readonly voice: VoiceChatManager;
   private readonly inputs: InputSynchronizer;
+  private readonly activity: SessionActivity;
+  private inactive = false;
   private readonly chat: ChatManager;
   private readonly ui: UIManager;
   private readonly settingsMenu: SettingsMenu;
@@ -123,6 +126,14 @@ export class App {
     this.instrument = new AmbientStationController(container, this.network, this.ui.element, () => {
       this.pause(); this.ui.element.inert = true;
     }, () => { this.ui.element.inert = false; this.player.input.clear(); if (!document.hidden && !this.disposed && this.network.status.state === 'connected') this.resume(); }, message => this.ui.notify(message));
+    this.activity = new SessionActivity(container, this.network, () => {
+      this.inactive = true; this.pause(); this.modes.pause(); this.inputs.setEnabled(false);
+      this.player.setEnabled(false); this.player.releaseLock(); this.voice.suspend(); this.voiceTransport.setEnabled(false);
+      this.audio.setVisible(false); this.modes.shooter?.audio.setVisible(false);
+      this.scene.environment.gallery.update(this.scene.camera, false, 0);
+      this.instrument.update(this.scene.camera, false, 0, false, 0);
+      this.touchControls?.reset(); this.ui.element.inert = true; cancelAnimationFrame(this.frame);
+    });
     this.unsubscribers.push(
       this.settings.subscribe(state => {
         this.player.sensitivity = state.sensitivity; this.audio.setVolume(state.musicVolume); this.audio.setMuted(state.muted);
@@ -141,7 +152,7 @@ export class App {
       this.voice.subscribe((state) => { this.microphone = state; this.ui.controls.setVoiceState(state); this.touchControls?.voice(state, this.voiceConnection); }),
       this.voiceTransport.subscribe((state) => { this.voiceConnection = state; this.ui.controls.setVoiceConnection(state); this.touchControls?.voice(this.microphone, state); }),
       this.network.subscribeToNotice((message) => this.ui.notify(message)),
-      this.network.subscribeToStatus((status) => this.ui.connection.update(status)),
+      this.network.subscribeToStatus((status) => { this.ui.connection.update(status); this.player.setNetworkReady(status.state === 'connected' && this.network.roomType === LOBBY_NAME); }),
       this.network.subscribeToSpawn((player) => { if (this.network.roomType === LOBBY_NAME) this.player.setSpawn(player); }),
       this.network.subscribeToState((snapshot) => {
         this.audio.receive(snapshot);
@@ -149,7 +160,7 @@ export class App {
         if (this.network.roomType === LOBBY_NAME || !snapshot.players.length) this.scene.remotePlayers.receive(snapshot);
         if (this.network.roomType === LOBBY_NAME) {
           const local = snapshot.players.find(player => player.playerId === snapshot.localPlayerId);
-          if (local) this.player.receiveSeating(local);
+          if (local) { this.player.receiveSeating(local); this.player.reconcile(local); }
         }
         this.visitorOptions.update(snapshot.players.filter(player => player.connected && player.playerId !== snapshot.localPlayerId)
           .map(player => ({ id: player.playerId, name: player.displayName || 'VISITOR' })));
@@ -224,6 +235,7 @@ export class App {
       else this.dispose();
     }, { signal });
     document.addEventListener('visibilitychange', () => {
+      if (this.inactive) return;
       this.audio.setVisible(!document.hidden);
       this.modes.shooter?.audio.setVisible(!document.hidden);
       if (document.hidden) { this.voice.suspend(); this.pause(); cancelAnimationFrame(this.frame); }
@@ -253,6 +265,7 @@ export class App {
   }
 
   private readonly keydown = (event: KeyboardEvent): void => {
+    if (this.inactive) return;
     if (this.instrument.visible) {
       if (event.code === 'KeyV' && !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey && !(event.target instanceof HTMLElement && event.target.closest('input,select,textarea'))) {
         event.preventDefault(); this.voiceTransport.unlock(); void this.voice.activate();
@@ -443,6 +456,7 @@ export class App {
     if (this.modes.value === 'SHOOTER') this.modes.resize(); else this.scene.resize();
   }
   private touchAction(action: TouchAction, active: boolean): void {
+    if (this.inactive) return;
     if (action === 'voice') {
       if (!active) { this.voice.deactivate(); return; }
       if (this.modes.value === 'LIMBO' && ['EXPLORING', 'INSPECTING'].includes(this.state.value)) { this.voiceTransport.unlock(); void this.voice.activate(); }
@@ -506,11 +520,12 @@ export class App {
   }
 
   private readonly tick = (now: number): void => {
-    if (this.disposed || document.hidden) return;
+    if (this.disposed || this.inactive || document.hidden) return;
     const frameDt = this.lastTime ? (now - this.lastTime) / 1000 : 0;
     const dt = Math.min(frameDt, 0.05);
     this.lastTime = now;
     this.elapsed += dt;
+    if (this.voiceTransport.hasVoiceActivity) this.activity.mark();
     if (this.state.value === 'ENTERING') {
       this.entryProgress = Math.min(1, this.entryProgress + dt / 3.6);
       // Quintic smoothstep has zero velocity/acceleration at both endpoints.
@@ -574,6 +589,7 @@ export class App {
     this.instrument.dispose();
     this.modes.dispose(); this.diagnostics?.remove();
     this.inputs.dispose();
+    this.activity.dispose();
     this.voice.dispose(); this.audio.dispose(); this.chat.dispose(); this.network.disconnect();
     this.touchControls?.dispose(); this.player.dispose(); this.scene.dispose(); this.ui.dispose(); this.settingsMenu.dispose(); this.visitorOptions.dispose();
     disposeAudioContext();

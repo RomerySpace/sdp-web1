@@ -47,6 +47,13 @@ async function walk(page: Page, x: number, z: number, touch: boolean, radius = 1
       const app = window.sdpUnified, snapshot = app.network.snapshot!, local = snapshot.players.find(p => p.playerId === snapshot.localPlayerId)!;
       return Math.hypot(local.x - point.x, local.z - point.z);
     }, { x, z }), { timeout: 20000, intervals: [50] }).toBeLessThan(radius);
+  } catch (error) {
+    console.log('Gallery navigation failure', await page.evaluate(() => {
+      const app = window.sdpUnified, snapshot = app.network.snapshot!;
+      return { local: snapshot.players.find(p => p.playerId === snapshot.localPlayerId), camera: app.scene.camera.position.toArray(),
+        yaw: app.scene.camera.rotation.y, input: { f: app.player.input.forward, r: app.player.input.sideways }, hidden: document.hidden };
+    }));
+    throw error;
   } finally { await release(); }
   await page.waitForTimeout(300);
 }

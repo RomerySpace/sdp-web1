@@ -12,6 +12,15 @@
 .protocol-mark { font-size: 32px; font-weight: 500; }
 .protocol-content h1 { font-size: 12px; font-weight: 500; margin: 16px 0 20px; letter-spacing: 0; }
 .protocol-status { font-size: 11px; line-height: 1.6; min-height: 18px; overflow-wrap: anywhere; }
+.round-restart { position: sticky; top: 0; z-index: 2; display: grid; justify-items: center; gap: 7px; margin: 20px 0; padding: 18px 12px 12px; background: #f8fbfd; border-block: 1px solid #8195a333; }
+.round-restart[hidden] { display: none; }
+.round-restart-label { font-size: 14px; font-weight: 500; color: #263b47; }
+.round-countdown { display: grid; place-items: center; min-width: 160px; height: 48px; font-size: 36px; font-weight: 400; font-variant-numeric: tabular-nums; color: #1e3441; }
+.round-restart-note { font-size: 10px; color: #506674; }
+.protocol-content .round-countdown-progress { display: block; width: min(280px, 100%); height: 4px; margin: 8px 0 0; accent-color: #526e7e; }
+.session-idle-overlay { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; background: #f8fbfdf5; }
+.session-idle-overlay[hidden] { display: none; }
+.session-idle-overlay p { font-size: 12px; line-height: 1.6; margin: 24px 0; }
 .protocol-content button { display: block; width: 100%; min-height: 44px; margin-top: 8px; padding: 12px; border: 1px solid #aeb9bf; border-radius: 4px; background: rgba(255,255,255,.82); color: #283039; font: inherit; font-size: 11px; cursor: pointer; }
 .protocol-content button[hidden], .protocol-content progress[hidden] { display: none; }
 .protocol-content .protocol-back { border-color: transparent; background: transparent; }

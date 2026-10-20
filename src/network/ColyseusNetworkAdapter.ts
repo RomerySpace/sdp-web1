@@ -10,6 +10,7 @@ import { validateDisplayName } from '../../shared/PlayerIdentity';
 import type { KillRecord, RoundScore, ShooterMatchSnapshot } from '../../shared/ShooterProtocol';
 import type { AirstrikeFlight, AirstrikeRequest, AirstrikeResult } from '../../shared/AirstrikeProtocol';
 import type { StationCommand, StationSnapshot, StationSound } from '../../shared/AmbientStation';
+import { sessionPolicy } from '../../shared/SessionPolicy';
 
 function serverEndpoint(): string {
   const configured = import.meta.env.VITE_SDP_SERVER_URL;
@@ -51,6 +52,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
   private generation = 0;
   private joinTask?: Promise<void>;
   private retryEnabled = true;
+  private inactive = false;
   roomType = LOBBY_NAME;
   private readonly weapons = new Set<(event: WeaponEvent) => void>();
   private readonly combatEvents = new Set<(event: CombatEvent) => void>();
@@ -88,7 +90,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
   }
 
   private async joinNetwork(): Promise<void> {
-    if (this.disposed || this.joining || this.room) return;
+    if (this.disposed || this.inactive || this.joining || this.room) return;
     const generation = this.generation;
     this.joining = true;
     this.setStatus('connecting');
@@ -154,11 +156,18 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
       room.onError(() => {
         if (this.room === room && !this.disposed) this.setStatus('disconnected');
       });
-      room.onLeave(() => {
+      room.onLeave((code) => {
         if (this.room !== room) return;
+        const inactive = code === sessionPolicy.idleCloseCode;
+        if (inactive) {
+          this.inactive = true;
+          this.retryEnabled = false;
+          room.reconnection.enabled = false;
+          window.clearTimeout(this.retryTimer); this.retryTimer = 0;
+        }
         this.rejectVoiceRequests();
         this.room = undefined;
-        this.setStatus('disconnected');
+        this.setStatus('disconnected', 0, MAX_PLAYERS, '', inactive ? 'inactive' : undefined);
         this.clearRemoteState();
         this.scheduleRetry();
       });
@@ -206,9 +215,9 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
     for (const callback of this.states) callback(snapshot);
   }
 
-  private setStatus(state: ConnectionStatus['state'], online = 0, capacity = MAX_PLAYERS, roomId = ''): void {
-    if (this.disposed || (this.currentStatus.state === state && this.currentStatus.online === online && this.currentStatus.roomId === roomId)) return;
-    this.currentStatus = { state, online, capacity, roomId };
+  private setStatus(state: ConnectionStatus['state'], online = 0, capacity = MAX_PLAYERS, roomId = '', reason?: ConnectionStatus['reason']): void {
+    if (this.disposed || (this.currentStatus.state === state && this.currentStatus.online === online && this.currentStatus.roomId === roomId && this.currentStatus.reason === reason)) return;
+    this.currentStatus = { state, online, capacity, roomId, reason };
     for (const callback of this.statuses) callback(this.currentStatus);
   }
 
@@ -231,6 +240,9 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
 
   sendInput(input: MovementInput): void {
     if (this.currentStatus.state === 'connected' && this.room?.connection.isOpen) this.room.send('input', input);
+  }
+  sendActivity(): void {
+    if (this.currentStatus.state === 'connected' && this.room?.connection.isOpen) this.room.send('session:activity', null);
   }
   requestSeat(seat: number): void {
     if (this.roomType === LOBBY_NAME && this.currentStatus.state === 'connected' && this.room?.connection.isOpen) this.room.send('lobby:seat', { seat });
@@ -276,6 +288,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
     if (this.joinTask) await this.joinTask;
   }
   async switchRoom(type: string): Promise<void> {
+    if (this.inactive) throw new Error('Session expired after inactivity. Please rejoin.');
     await this.leaveRoom();
     if (this.disposed) throw new Error('Multiplayer session is closed.');
     this.roomType = type;

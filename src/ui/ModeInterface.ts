@@ -10,6 +10,9 @@ export class ModeInterface {
   private readonly testJoin = document.createElement('button');
   private readonly progress: HTMLProgressElement;
   private readonly haze = document.createElement('div');
+  private readonly restart: HTMLElement;
+  private readonly countdown: HTMLElement;
+  private readonly countdownProgress: HTMLProgressElement;
   private readonly events = new AbortController();
   private session?: HTMLElement;
   constructor(container: HTMLElement, actions: { join(): void; back(): void; resume(): void }) {
@@ -18,6 +21,7 @@ export class ModeInterface {
     this.element.setAttribute('aria-labelledby', 'protocol-title');
     this.element.innerHTML = `<div class="protocol-content"><span class="protocol-mark">SDP</span>
       <h1 id="protocol-title">SHOOTER PROTOCOL</h1><p class="protocol-status" role="status"></p>
+      <div class="round-restart" hidden><span class="round-restart-label">NEXT ROUND</span><strong class="round-countdown" role="timer"></strong><span class="round-restart-note">STARTS AUTOMATICALLY</span><progress class="round-countdown-progress" aria-label="Time until next round"></progress></div>
       <div class="protocol-session-slot"></div>
       <progress aria-label="Simulation initialization"></progress>
       <button class="protocol-join" type="button">RETRY</button>
@@ -26,7 +30,10 @@ export class ModeInterface {
     this.title = this.element.querySelector('h1')!; this.message = this.element.querySelector('p')!;
     this.join = this.element.querySelector('.protocol-join')!; this.resume = this.element.querySelector('.protocol-resume')!;
     this.back = this.element.querySelector('.protocol-back')!;
-    this.progress = this.element.querySelector('progress')!;
+    this.progress = this.element.querySelector('progress[aria-label="Simulation initialization"]')!;
+    this.restart = this.element.querySelector('.round-restart')!;
+    this.countdown = this.element.querySelector('.round-countdown')!;
+    this.countdownProgress = this.element.querySelector('.round-countdown-progress')!;
     const signal = this.events.signal;
     this.join.addEventListener('click', actions.join, { signal }); this.back.addEventListener('click', actions.back, { signal });
     this.resume.addEventListener('click', actions.resume, { signal });
@@ -51,6 +58,7 @@ export class ModeInterface {
     this.element.hidden = false; this.element.dataset.phase = state;
     this.element.classList.remove('has-session'); if (this.session) this.session.hidden = true;
     this.progress.hidden = state !== 'loading'; this.join.hidden = state !== 'error';
+    this.restart.hidden = state !== 'results';
     this.resume.hidden = state !== 'paused'; this.inspectionActions.hidden = true;
     this.back.hidden = false;
   }
@@ -68,7 +76,11 @@ export class ModeInterface {
     if (this.session && !ready) { this.session.hidden = false; this.element.classList.add('has-session'); }
     this.resume.textContent = ready ? 'ENTER SIMULATION' : 'RESUME'; this.resume.focus();
   }
-  results(text: string): void {
+  results(seconds: number, duration: number): void {
+    const text = 'A NEW ROUND STARTS AUTOMATICALLY';
+    this.countdown.textContent = seconds > 0 ? `${seconds}s` : 'STARTING';
+    this.countdown.setAttribute('aria-label', seconds > 0 ? `Next round in ${seconds} seconds` : 'Next round starting');
+    this.countdownProgress.max = duration; this.countdownProgress.value = Math.max(0, seconds);
     if (!this.element.hidden && this.element.dataset.phase === 'results') {
       if (this.message.textContent !== text) this.message.textContent = text;
       return;

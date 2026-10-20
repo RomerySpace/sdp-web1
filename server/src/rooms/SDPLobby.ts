@@ -13,6 +13,8 @@ import { lobbyGroundHeight } from '../../../shared/ListeningGarden';
 import { CollisionManager } from '../../../src/player/CollisionManager';
 import { AmbientStationSession } from '../communication/AmbientStationSession';
 import { validStationCommand } from '../../../shared/AmbientStation';
+import { RoomInactivity } from '../communication/RoomInactivity';
+import { sessionPolicy } from '../../../shared/SessionPolicy';
 
 interface VisitorInput { value: MovementInput; receivedAt: number; slot: number }
 const INPUT_TIMEOUT_MS = 250;
@@ -35,8 +37,10 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
   private readonly voiceRequests = new Map<string, number>();
   private station!: AmbientStationSession;
   private readonly stationSyncs = new Map<string, number>();
+  private inactivity!: RoomInactivity;
 
   onCreate(): void {
+    this.inactivity = new RoomInactivity(this);
     this.station = new AmbientStationSession(this.roomId, state => this.broadcast('station:state', state), sound => this.broadcast('station:sound', sound));
     this.onMessage('station:command', (client, raw: unknown) => {
       const player = this.state.players.get(client.sessionId), now = Date.now();
@@ -46,6 +50,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
         this.stationSyncs.set(client.sessionId, now);
         client.send('station:state', { ...this.station.state, serverNow: now }); return;
       }
+      this.inactivity.touch(client.sessionId);
       const notice = this.station.handle(client.sessionId, player, raw, now);
       if (notice) client.send('lobby:notice', notice);
     });
@@ -53,6 +58,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
     this.onMessage('lobby:seat', (client, raw: unknown) => {
       const player = this.state.players.get(client.sessionId), now = this.clock.elapsedTime;
       if (!player?.connected || !validSeatRequest(raw)) return;
+      this.inactivity.touch(client.sessionId);
       if (raw.seat === -1) {
         if (!this.stand(client.sessionId) && player.seatIndex >= 0) client.send('lobby:notice', 'Please wait for space beside the bench.');
         return;
@@ -79,6 +85,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
       if (!player?.connected) return;
       const message = this.chat.accept(client.sessionId, raw, this.clock.elapsedTime);
       if (!message) { client.send('chat:error', 'Message is empty, too long, or sent too quickly.'); return; }
+      this.inactivity.touch(client.sessionId);
       const data: RoomChatMessage = {
         messageId: randomUUID(), senderId: client.sessionId, senderName: this.visitorName(client.sessionId),
         message, timestamp: Date.now(), roomId: this.roomId,
@@ -103,6 +110,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
       const entry = this.inputs.get(client.sessionId);
       const value = validateMovementInput(raw);
       if (!entry || !value || value.seq <= entry.value.seq || !this.state.players.get(client.sessionId)?.connected) return;
+      this.inactivity.input(client.sessionId, value, entry.value);
       entry.value = value;
       entry.receivedAt = this.clock.elapsedTime;
     });
@@ -132,9 +140,11 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
       value: { seq: -1, f: 0, r: 0, y: spawn.yaw, p: spawn.pitch, active: false },
     });
     this.simulation.add(client.sessionId, spawn);
+    this.inactivity.join(client.sessionId);
   }
 
-  onDrop(client: Client): void {
+  onDrop(client: Client, code?: number): void {
+    if (code === sessionPolicy.idleCloseCode) return;
     this.station.remove(client.sessionId, Date.now()); this.stationSyncs.delete(client.sessionId);
     this.stand(client.sessionId, true);
     void this.voice.remove(client.sessionId);
@@ -147,11 +157,13 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
   }
 
   onReconnect(client: Client): void {
+    this.inactivity.touch(client.sessionId);
     const player = this.state.players.get(client.sessionId);
     if (player && !player.connected) { player.connected = true; this.state.online++; }
   }
 
   onLeave(client: Client): void {
+    this.inactivity.remove(client.sessionId);
     this.station.remove(client.sessionId, Date.now()); this.stationSyncs.delete(client.sessionId);
     this.seatingRequests.delete(client.sessionId);
     void this.voice.remove(client.sessionId);

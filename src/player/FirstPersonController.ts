@@ -1,4 +1,4 @@
-import { MathUtils, PerspectiveCamera } from 'three';
+import { MathUtils, PerspectiveCamera, Vector3 } from 'three';
 import { simulateMovement, type MotionState } from '../../shared/Movement';
 import type { MovementInput, NetworkPlayer } from '../../shared/MultiplayerProtocol';
 import { PLAYER_HEIGHT } from '../../shared/MultiplayerProtocol';
@@ -8,6 +8,8 @@ import { gameplayConfig } from '../../shared/GameplayConfig';
 import { touchConfig } from '../input/InputCapabilities';
 import { lobbyRetreat, lobbySeatSlots } from '../../shared/LobbyRetreat';
 import { onGalleryStairs } from '../../shared/LowerGallery';
+import { LobbyPredictionHistory } from '../network/LobbyPredictionHistory';
+import { lobbyPrediction } from '../../shared/SessionPolicy';
 
 export class FirstPersonController {
   readonly input = new InputManager();
@@ -18,6 +20,10 @@ export class FirstPersonController {
   private phase = 0;
   private eye = PLAYER_HEIGHT;
   private seatIndex = -1;
+  private readonly prediction = new LobbyPredictionHistory();
+  private readonly viewCorrection = new Vector3();
+  private readonly feet = new Vector3();
+  private networkReady = false;
   get seated(): boolean { return this.seatIndex >= 0; }
   get seat(): number { return this.seatIndex; }
 
@@ -25,6 +31,8 @@ export class FirstPersonController {
     const next = player.seatIndex ?? -1;
     if (next === this.seatIndex) return;
     const wasSeated = this.seated; this.seatIndex = next;
+    this.prediction.reset(); this.viewCorrection.set(0, 0, 0);
+    this.motion.x = player.x; this.motion.z = player.z;
     if (next >= 0) this.input.clear();
     this.motion.velocityX = this.motion.velocityZ = 0;
     this.motion.elevation = this.motion.verticalSpeed = 0; this.motion.jumpHeld = false;
@@ -63,6 +71,8 @@ export class FirstPersonController {
   }
 
   setSpawn(player: NetworkPlayer): void {
+    this.prediction.reset(); this.viewCorrection.set(0, 0, 0);
+    this.motion.x = player.x; this.motion.z = player.z;
     this.seatIndex = -1;
     this.input.clear();
     this.motion.elevation = this.motion.verticalSpeed = 0; this.motion.jumpHeld = false;
@@ -73,6 +83,41 @@ export class FirstPersonController {
     this.pitch = player.pitch;
     this.camera.position.set(player.x, player.y, player.z);
     this.camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
+  }
+
+  setNetworkReady(ready: boolean): void {
+    if (ready === this.networkReady) return;
+    this.networkReady = ready; this.prediction.reset();
+    if (!ready) { this.input.clear(); this.motion.velocityX = this.motion.velocityZ = 0; }
+  }
+  recordInput(sequence: number): void {
+    if (this.seated) return;
+    this.prediction.record(sequence, this.feet.set(this.motion.x, (this.motion.groundY ?? 0) + (this.motion.elevation ?? 0), this.motion.z));
+  }
+  reconcile(player: NetworkPlayer): void {
+    if (!this.networkReady || this.seated || !player.connected) return;
+    const delta = this.prediction.reconcile(player);
+    if (!delta) return;
+    if (delta.length() > lobbyPrediction.teleportDistance) {
+      // Server teleports and floor changes must not retain stale velocity or input history.
+      this.motion.x = player.x; this.motion.z = player.z;
+      this.motion.groundY = this.collision.groundHeight(player.x, player.z, player.y - PLAYER_HEIGHT);
+      this.motion.elevation = Math.max(0, player.y - PLAYER_HEIGHT - this.motion.groundY);
+      this.motion.velocityX = this.motion.velocityZ = this.motion.verticalSpeed = 0;
+      this.viewCorrection.set(0, 0, 0); this.prediction.reset();
+    } else {
+      const feetY = (this.motion.groundY ?? 0) + (this.motion.elevation ?? 0) + delta.y;
+      this.motion.x += delta.x; this.motion.z += delta.z;
+      this.motion.groundY = this.collision.groundHeight(this.motion.x, this.motion.z, this.motion.groundY);
+      this.motion.elevation = Math.max(0, feetY - this.motion.groundY);
+      this.viewCorrection.sub(delta);
+      this.viewCorrection.clampLength(0, lobbyPrediction.maxVisualOffset);
+    }
+    // Also correct while a menu is open, so E uses the same location as the server.
+    if (document.hidden || !this.active || !this.controlling || delta.length() > lobbyPrediction.teleportDistance) {
+      this.viewCorrection.set(0, 0, 0);
+      this.camera.position.set(this.motion.x, (this.motion.groundY ?? 0) + this.eye + (this.motion.elevation ?? 0), this.motion.z);
+    }
   }
 
   setEnabled(enabled: boolean): void {
@@ -102,12 +147,10 @@ export class FirstPersonController {
       if (Math.abs(fov - this.camera.fov) > .001) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
       return;
     }
-    if (!this.active || !this.controlling) return;
+    if (!this.networkReady || !this.active || !this.controlling) return;
     const sprint = this.active && this.controlling && this.input.sprinting && (this.input.forward || this.input.sideways);
     const fov = MathUtils.damp(this.camera.fov, this.baseFov + (sprint ? gameplayConfig.limbo.sprintFovAdjustment : 0), 6, dt);
     if (Math.abs(fov - this.camera.fov) > .001) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
-    this.motion.x = this.camera.position.x;
-    this.motion.z = this.camera.position.z;
     this.movementInput.f = this.input.forward;
     this.movementInput.r = this.input.sideways;
     this.movementInput.y = this.yaw;
@@ -120,8 +163,9 @@ export class FirstPersonController {
     this.eye = MathUtils.damp(this.eye, this.input.crouching ? gameplayConfig.limbo.crouchHeight : PLAYER_HEIGHT, 14, dt);
     const bob = (this.motion.elevation ? 0 : .012) * Math.min(speed / 3, 1.5);
     const targetY = (this.motion.groundY ?? 0) + this.eye + (this.motion.elevation ?? 0) + Math.sin(this.phase * 2) * bob;
-    const y = onGalleryStairs(this.motion.x, this.motion.z) && !this.motion.elevation ? MathUtils.damp(this.camera.position.y, targetY, 18, dt) : targetY;
-    this.camera.position.set(this.motion.x, y, this.motion.z);
+    this.viewCorrection.multiplyScalar(Math.exp(-lobbyPrediction.visualResponse * dt));
+    const y = onGalleryStairs(this.motion.x, this.motion.z) && !this.motion.elevation ? MathUtils.damp(this.camera.position.y - this.viewCorrection.y, targetY, 18, dt) : targetY;
+    this.camera.position.set(this.motion.x, y, this.motion.z).add(this.viewCorrection);
     const roll = MathUtils.damp(this.camera.rotation.z, -this.input.sideways * .018 + Math.sin(this.phase) * bob * .35, 10, dt);
     this.camera.rotation.set(this.pitch, this.yaw, roll, 'YXZ');
   }

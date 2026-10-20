@@ -16,6 +16,8 @@ import { ShooterMatch } from '../simulation/ShooterMatch';
 import { roomDisplayName, validateDisplayName } from '../../../shared/PlayerIdentity';
 import { shotRecoil } from '../../../shared/WeaponRecoil';
 import { advanceGait } from '../../../shared/AvatarAnimation';
+import { RoomInactivity } from '../communication/RoomInactivity';
+import { sessionPolicy } from '../../../shared/SessionPolicy';
 interface Entry { input: ShooterInput; received: number; slot: number; lastAction: number; lastShot: number; nextShotAt: number; reloadUntil: number;
   probe: string; probeAt: number; rtt: number; recovery: HealthRecovery; burstShots: number; awardedStrikes: number; strikeSequence: number; lastStrike: number }
 export class SDPShooterRoom extends Room<{ state: ShooterState }> {
@@ -32,9 +34,11 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
   private readonly combat = new CombatSimulation();
   private readonly match = new ShooterMatch();
   private readonly impacted = new Set<string>();
+  private inactivity!: RoomInactivity;
   async onCreate(): Promise<void> {
     if (!shooterEnabled) throw new ServerError(403, 'Shooter test is disabled.');
     this.world = await ShooterWorld.create();
+    this.inactivity = new RoomInactivity(this);
     this.setPatchRate(1000 / SHOOTER_PATCH_HZ);
     this.onMessage('strike:request', (client, raw: unknown) => {
       const request = validateAirstrikeRequest(raw), entry = this.entries.get(client.sessionId), player = this.state.players.get(client.sessionId);
@@ -58,11 +62,13 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
       player.strikes &= ~strikeBit(request.slot);
       player.protectedUntil = Math.min(player.protectedUntil, now);
       this.state.airstrikes.push(strike); reply(true, 'AIRSTRIKE INBOUND');
+      this.inactivity.touch(client.sessionId);
     });
     this.onMessage('shooter:input', (client, raw: unknown) => {
       const entry = this.entries.get(client.sessionId), input = validateShooterInput(raw);
       const player = this.state.players.get(client.sessionId);
       if (!this.match.active(this.clock.elapsedTime) || !entry || !input || input.seq <= entry.input.seq || !player?.connected || player.dead || input.life !== player.life) return;
+      this.inactivity.input(client.sessionId, input, entry.input);
       entry.input = input; entry.received = this.clock.elapsedTime;
       this.world.input(client.sessionId, input);
     });
@@ -94,6 +100,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
         player.reloading = true; entry.reloadUntil = now + w.reloadDuration * 1000;
       }
       this.broadcast('weapon:event', { ...action, ...(action.action === 'fire' ? this.combat.lastTrace : {}), playerId: client.sessionId, roomId: this.roomId, timestamp: Date.now() });
+      this.inactivity.touch(client.sessionId);
     });
     this.onMessage('combat:pong', (client, nonce: unknown) => {
       const entry = this.entries.get(client.sessionId), now = this.clock.elapsedTime;
@@ -113,6 +120,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
       if (!player?.connected) return;
       const message = this.chat.accept(client.sessionId, raw, this.clock.elapsedTime);
       if (!message) { client.send('chat:error', 'Message is empty, too long, or sent too quickly.'); return; }
+      this.inactivity.touch(client.sessionId);
       const data: RoomChatMessage = { messageId: randomUUID(), senderId: client.sessionId,
         senderName: player.displayName,
         message, timestamp: Date.now(), roomId: this.roomId, position: { x: player.x, y: player.y, z: player.z } };
@@ -138,24 +146,28 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
       spawnX: character.spawn.x, spawnY: character.spawn.y, spawnZ: character.spawn.z });
     player.bornAt = this.clock.elapsedTime; player.protectedUntil = player.bornAt + gameplayConfig.combat.spawnProtection * 1000;
     this.state.players.set(client.sessionId, player); this.state.online++;
+    this.inactivity.join(client.sessionId);
     this.entries.set(client.sessionId, { slot, received: this.clock.elapsedTime, lastAction: -1, lastShot: -1000, nextShotAt: -1000, reloadUntil: 0, probe: '', probeAt: 0, rtt: 0, recovery: new HealthRecovery(), burstShots: 0, awardedStrikes: 0, strikeSequence: -1, lastStrike: -1000,
       input: { seq: -1, life: player.life, f: 0, r: 0, y: player.yaw, p: 0, s: false, c: false, j: false, a: false, active: false } });
     this.combat.record(this.poses(this.clock.elapsedTime));
     if (this.match.phase === 'waiting') this.startMatch(this.clock.elapsedTime, false);
     else if (this.match.phase === 'results') this.world.freeze(client.sessionId);
   }
-  onDrop(client: Client): void {
+  onDrop(client: Client, code?: number): void {
+    if (code === sessionPolicy.idleCloseCode) return;
     const player = this.state.players.get(client.sessionId), entry = this.entries.get(client.sessionId);
     if (player?.connected) { player.connected = false; this.state.online--; }
     if (entry) { entry.input.active = false; this.world.input(client.sessionId, entry.input); }
     this.allowReconnection(client, 5);
   }
   onReconnect(client: Client): void {
+    this.inactivity.touch(client.sessionId);
     const player = this.state.players.get(client.sessionId);
     if (player && !player.connected) { player.connected = true; this.state.online++; }
     if (this.match.phase === 'waiting') this.startMatch(this.clock.elapsedTime, true);
   }
   onLeave(client: Client): void {
+    this.inactivity.remove(client.sessionId);
     for (let i = this.state.airstrikes.length - 1; i >= 0; i--) if (this.state.airstrikes[i].ownerId === client.sessionId) {
       this.impacted.delete(this.state.airstrikes[i].id); this.state.airstrikes.splice(i, 1);
     }

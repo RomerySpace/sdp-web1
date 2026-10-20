@@ -60,6 +60,7 @@ export class LiveKitVoiceTransport implements SpatialVoiceTransport {
   get state(): VoiceConnectionState { return this.currentState; }
   get remoteCount(): number { return this.remotes.size; }
   get transmitting(): boolean { return !!this.local && this.speaking && this.local.mediaStreamTrack.enabled && this.local.mediaStreamTrack.readyState === 'live'; }
+  get hasVoiceActivity(): boolean { return this.transmitting && (this.room?.localParticipant.audioLevel ?? 0) > .02; }
 
   async diagnostics() {
     return {

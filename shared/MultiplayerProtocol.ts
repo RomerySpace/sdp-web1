@@ -72,6 +72,7 @@ export interface LobbySnapshot {
 }
 
 export interface ConnectionStatus {
+  reason?: 'inactive';
   state: 'connecting' | 'connected' | 'disconnected';
   online: number;
   capacity: number;

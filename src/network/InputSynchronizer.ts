@@ -23,6 +23,7 @@ export class InputSynchronizer {
     this.input.s = active && this.player.input.sprinting;
     this.input.j = active && this.player.input.jumping;
     this.input.c = active && this.player.input.crouching;
+    this.player.recordInput(this.input.seq);
     this.network.sendInput(this.input);
   }
 

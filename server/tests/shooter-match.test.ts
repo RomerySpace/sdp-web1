@@ -8,6 +8,7 @@ import type { ShooterState } from '../src/state/ShooterState';
 import { ShooterMatch } from '../src/simulation/ShooterMatch';
 import { gameplayConfig } from '../../shared/GameplayConfig';
 import { rankRound, roundWinners, type RoundScore } from '../../shared/ShooterProtocol';
+import type { RoomInactivity } from '../src/communication/RoomInactivity';
 
 const score = (playerId: string, kills: number, deaths = 0): RoundScore => ({ playerId, displayName: playerId, kills, deaths, streak: 0 });
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -57,6 +58,9 @@ test('two real WebSocket clients receive authoritative results, blocked inputs a
     await waitFor(() => target().dead); assert.equal(own().kills, 1);
     // Only the test process advances the server clock. No client message or public endpoint can do this.
     local.clock.elapsedTime = endsAt;
+    // These players represent an active seven-minute match, not AFK sessions.
+    const inactivity = (local as unknown as { inactivity: RoomInactivity }).inactivity;
+    for (const room of rooms) inactivity.touch(room.sessionId);
     await waitFor(() => a.state.match === 'results' && b.state.match === 'results');
     assert.equal(a.state.results[0].playerId, a.sessionId); assert.equal(a.state.results[0].kills, 1);
     assert.equal(a.state.results[1].deaths, 1); assert.equal(b.state.results[0].displayName, 'Round Winner');
@@ -86,5 +90,5 @@ test('two real WebSocket clients receive authoritative results, blocked inputs a
     a.send('weapon:action', { seq: 4, life: 1, action: 'fire' }); await sleep(60); assert.equal(own().ammo, 30);
     a.send('shooter:input', { ...input, seq: 3, life: own().life, f: 1 }); await sleep(150);
     assert.ok(Math.hypot(own().x - own().spawnX, own().z - own().spawnZ) > .1);
-  } finally { for (const room of rooms) await room.leave().catch(() => {}); await server.gracefullyShutdown(false); }
+  } finally { for (const room of rooms) if (room.connection.isOpen) await room.leave().catch(() => {}); await server.gracefullyShutdown(false); }
 });

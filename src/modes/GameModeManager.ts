@@ -4,7 +4,7 @@ import { SHOOTER_ROOM } from '../../shared/ShooterProtocol';
 import type { ColyseusNetworkAdapter } from '../network/ColyseusNetworkAdapter';
 import type { ShooterMode } from './shooter/ShooterMode';
 import { ModeInterface } from '../ui/ModeInterface';
-import { ENABLE_SHOOTER_TEST } from '../../shared/GameplayConfig';
+import { ENABLE_SHOOTER_TEST, gameplayConfig } from '../../shared/GameplayConfig';
 import { PlayerSettings } from '../core/PlayerSettings';
 export type GameMode = 'LIMBO' | 'SHOOTER_LOADING' | 'SHOOTER' | 'RETURNING_TO_LIMBO';
 interface Hooks {
@@ -104,8 +104,9 @@ export class GameModeManager {
     if (this.value !== 'SHOOTER') return;
     const snapshot = this.network.snapshot;
     if (snapshot?.match?.phase === 'results') {
-      const seconds = Math.max(0, Math.ceil((snapshot.match.nextRoundAt - (snapshot.serverTime ?? 0)) / 1000));
-      this.ui.results(`NEXT ROUND IN ${seconds}s`);
+      const now = (snapshot.serverTime ?? 0) + Math.max(0, performance.now() - snapshot.receivedAt);
+      const seconds = Math.max(0, Math.ceil((snapshot.match.nextRoundAt - now) / 1000));
+      this.ui.results(seconds, gameplayConfig.match.resultsDuration);
     } else this.ui.pause();
   }
   pause(): void { if (this.value === 'SHOOTER') this.shooter?.pause(); }

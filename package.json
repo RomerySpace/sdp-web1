@@ -7,6 +7,7 @@
     "test:airstrike": "playwright test --config playwright.airstrike.config.ts",
     "test:shooter-disabled": "playwright test --config playwright.disabled.config.ts",
     "test:unified": "playwright test --config playwright.unified.config.ts",
+    "test:session": "playwright test --config playwright.session.config.ts",
     "test:regression": "playwright test --config playwright.regression.config.ts",
     "prepare:shooter": "npm --prefix server run prepare:shooter",
     "dev:unified": "node scripts/dev-unified.mjs",
@@ -23,7 +24,7 @@
     "typecheck:all": "npm run typecheck && npm --prefix server run typecheck",
     "test:server": "npm --prefix server test",
     "test:load": "npm --prefix server run test:load --",
-    "test": "npm run test:regression && npm run test:unified",
+    "test": "npm run test:regression && npm run test:unified && npm run test:session",
     "process:graphics": "node scripts/process-graphics.mjs",
     "test:graphics": "node --test scripts/process-graphics.test.mjs"
   },
