@@ -69,26 +69,31 @@ button { border: 0; background: none; }
 .exhibition-mark span:first-child { font-size: 16px; font-weight: 400; letter-spacing: 0.2em; }
 .exhibition-mark span:last-child { font-size: 8px; letter-spacing: 0.18em; color: var(--muted); padding-left: 20px; border-left: 1px solid #cdd4d8; }
 
-.intro { position: absolute; inset: 0; opacity: 1; transition: opacity 2s ease, visibility 2s; }
-.intro-composition { position: absolute; left: 50%; top: 48%; transform: translate(-50%, -50%); text-align: center; width: max-content; max-width: 90vw; }
-.intro h1 { margin: 0 0 20px; padding-left: 0.3em; font-size: clamp(68px, 7.2vw, 100px); font-weight: 200; letter-spacing: 0.3em; line-height: 1.05; color: #68737a; }
-.intro-subtitle { margin: 0; padding-left: 0.22em; font-size: 9px; font-weight: 400; letter-spacing: 0.22em; }
-.intro-subtitle span { margin: 0 7px; color: #9aa4aa; }
-.enter-button { display: inline-flex; align-items: center; gap: 18px; margin-top: 64px; padding: 16px 8px; font-size: 8px; letter-spacing: 0.23em; transition: opacity 300ms; }
-.enter-button:disabled { opacity: 0.45; }
-.enter-button:hover:not(:disabled) { color: #303d46; }
-.enter-rule { width: 24px; height: 1px; background: currentColor; opacity: 0.25; transition: width 500ms; }
-.enter-button:hover:not(:disabled) .enter-rule { width: 34px; }
-.intro-caption { position: absolute; left: 0; right: 0; bottom: var(--edge); text-align: center; margin: 0; font-size: 8px; letter-spacing: 0.28em; color: var(--muted); }
+.intro { position: absolute; inset: 0; overflow: hidden; background: #f7f8f7; color: #262b2d; opacity: 1; transition: opacity 2s ease, visibility 2s; }
+.intro-composition { position: absolute; inset: 0 var(--edge); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 64px; text-align: center; }
+.intro h1 { margin: 0; font-size: 116px; font-weight: 400; letter-spacing: 0; line-height: .95; color: #262b2d; }
+.intro-subtitle { margin: 18px 0 0; font-size: 10px; font-weight: 400; letter-spacing: 0; color: #737b7d; }
+.intro-entry { display: grid; place-items: start center; width: min(100%, 320px); min-height: 112px; }
+.enter-button { display: inline-flex; justify-content: center; align-items: center; gap: 24px; min-height: 48px; min-width: 204px; margin: 16px 0 0; padding: 12px 0; border-bottom: 1px solid #949e9c; font-size: 11px; letter-spacing: 0; transition: color 250ms, border-color 250ms; }
+.enter-button:disabled { opacity: .45; }
+.enter-button:hover:not(:disabled) { color: #000; border-color: #262b2d; }
+.enter-icon { display: grid; place-items: center; transition: transform 250ms; }
+.enter-icon svg { width: 18px; height: 18px; stroke-width: 1.2; }
+.enter-button:hover:not(:disabled) .enter-icon { transform: translate(2px, -2px); }
 .intro.is-leaving { opacity: 0; visibility: hidden; }
-.intro-name-form { width: 280px; max-width: 82vw; margin: 46px auto 0; text-align: left; }
+.intro-name-form { width: 100%; margin: 0; text-align: left; animation: intro-name-in 350ms ease both; }
 .intro-name-form label { display: block; margin-bottom: 10px; font-size: 9px; letter-spacing: 0; color: var(--muted); }
-.intro-name-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border-bottom: 1px solid #cbd4d9; }
-.intro-name-row input { width: 100%; min-width: 0; height: 44px; border: 0; background: transparent; color: #465762; padding: 8px 0; font-size: 13px; user-select: text; }
+.intro-name-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border-bottom: 1px solid #aab2b0; transition: border-color 200ms; }
+.intro-name-row:focus-within { border-color: #303637; }
+.intro-name-row input { width: 100%; min-width: 0; height: 44px; border: 0; border-radius: 0; background: transparent; color: #262b2d; padding: 8px 0; font-size: 16px; user-select: text; }
+.intro-name-row input::placeholder { color: #939b99; }
+.intro-name-row input:focus-visible { outline: none; }
 .intro-name-submit { min-width: 82px; height: 44px; padding: 8px 10px; font-size: 9px; letter-spacing: 0; }
 .intro-name-message { min-height: 32px; margin: 10px 0 0; line-height: 1.5; font-size: 10px; color: #778892; }
 .ui[data-state="INTRO"] .connection-indicator { visibility: hidden; }
-.device-note { position: absolute; top: calc(48% + 150px); left: 20px; right: 20px; text-align: center; font-size: 11px; color: var(--muted); }
+.device-note { position: absolute; bottom: 8%; left: 24px; right: 24px; text-align: center; font-size: 10px; color: var(--muted); }
+@keyframes intro-name-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@media (min-width: 1800px) { .intro h1 { font-size: 140px; } }
 
 .crosshair { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 3px; height: 3px; border-radius: 50%; background: #75838c; opacity: 0; transition: opacity 1s; }
 .inspect-button, .inspection-close {
@@ -162,14 +167,25 @@ kbd, .key-label { font: inherit; font-size: 9px; letter-spacing: 0.04em; }
 @media (max-width: 600px) {
   .exhibition-mark span:last-child, .exhibit-caption { display: none; }
   .top-controls { gap: 5px; }
-  .intro h1 { font-size: 66px; }
-  .intro-subtitle { font-size: 8px; }
+  .intro h1 { font-size: 84px; }
+  .intro-subtitle { font-size: 9px; }
   .controls-overlay { font-size: 10px; }
-  .intro-caption { font-size: 7px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.1s !important; }
+  .intro-name-form { animation: none; }
+}
+
+@media (max-height: 620px) {
+  .intro-composition { gap: 32px; }
+  .intro h1 { font-size: 52px; }
+  .intro-subtitle { margin-top: 8px; font-size: 8px; }
+  .intro-entry { min-height: 78px; }
+  .enter-button { margin-top: 0; min-height: 44px; }
+  .intro-name-form label { margin-bottom: 4px; }
+  .intro-name-row input, .intro-name-submit { height: 36px; }
+  .intro-name-message { min-height: 18px; margin-top: 4px; font-size: 9px; }
 }
 
 @media (hover: none) and (pointer: coarse) {

@@ -92,10 +92,12 @@ export class ShooterMode {
         this.airstrikes.receive(snapshot.airstrikes??[]);
         this.environment.setLighting(snapshot.match?.lighting ?? 'day');
         const finished = snapshot.match?.phase === 'results';
+        const nextRound = this.roundComplete && snapshot.match?.phase === 'playing';
         if (finished !== this.roundComplete) { this.roundComplete = finished; if (this.active) this.pause(); }
         const local = snapshot.players.find(player => player.playerId === snapshot.localPlayerId);
         if (!local || !this.player) return;
         if (local.life !== this.life) this.spawn(local);
+        if (nextRound && !document.hidden) this.resume();
         this.applyHealth(local.health ?? this.health);
         if (local.dead) this.die();
         const delta = this.prediction.reconcile(local);

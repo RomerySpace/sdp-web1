@@ -2,7 +2,7 @@ import { defineConfig } from '@playwright/test';
 // @ts-expect-error Node-only audio fixture generator.
 import { voiceFixture } from './scripts/test-voice-fixture.mjs';
 export default defineConfig({
-  testDir: './tests', testMatch: ['unified.spec.ts', 'unified-production.spec.ts', 'touch.spec.ts', 'mobile-polish.spec.ts', 'lobby-preferences.spec.ts', 'ambient-station.spec.ts', 'touch-layout.spec.ts', 'lower-gallery.spec.ts'], workers: 1, fullyParallel: false,
+  testDir: './tests', testMatch: ['intro.spec.ts', 'unified.spec.ts', 'unified-production.spec.ts', 'touch.spec.ts', 'mobile-polish.spec.ts', 'lobby-preferences.spec.ts', 'ambient-station.spec.ts', 'touch-layout.spec.ts', 'lower-gallery.spec.ts'], workers: 1, fullyParallel: false,
   outputDir: 'test-results/unified',
   timeout: 180000, expect: { timeout: 30000 }, reporter: 'list',
   use: { baseURL: process.env.SDP_UNIFIED_TEST_URL || 'http://localhost:5383', viewport: { width: 1440, height: 1000 },

@@ -3,6 +3,8 @@ export const lobbyAmbience = {
     reverbSeconds: 8.5, preDelay: .065, dry: .46, wet: .9 },
   monolith: { fadeStart: 12, fadeEnd: 65 },
   floorReflectance: .62,
+  grass: { emissiveIntensity: .2, rootBrightness: .91 },
+  fireflies: { count: 64, mobileCount: 32, radius: 6, height: 4.2, size: .085, opacity: .85 },
   voice: { silentOpacity: .68, speakingOpacity: .96, noiseFloor: .008, fullLevel: .12,
     glowIntensity: 2.2, haloOpacity: .38 },
   identity: { distance: 6 },

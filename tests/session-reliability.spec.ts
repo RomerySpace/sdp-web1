@@ -33,6 +33,7 @@ test('instrument E survives focused buttons, lost prediction history and rejecte
     if (await first.getByRole('button', { name: 'RESUME', exact: true }).isVisible()) await first.getByRole('button', { name: 'RESUME', exact: true }).click();
     const identity = await first.evaluate(() => ({ id: window.sdpUnified.network.snapshot!.localPlayerId, room: window.sdpUnified.network.snapshot!.roomId }));
     const room = fixture.room(identity.room) as unknown as SDPLobby;
+    expect(await first.evaluate(() => window.sdpUnified.network.snapshot!.interactionVersion)).toBe(1);
     const place = (x: number, z: number) => {
       const p = room.state.players.get(identity.id)!; p.x = x; p.z = z; p.y = 1.8;
       (room as unknown as { simulation: MovementSimulation }).simulation.add(identity.id, { x, z, groundY: 0 });
@@ -60,6 +61,28 @@ test('instrument E survives focused buttons, lost prediction history and rejecte
     const panel = first.getByRole('dialog', { name: 'SDP field instrument' }); await expect(panel).toBeVisible();
     expect((room as unknown as { station: { state: { ownerId: string } } }).station.state.ownerId).toBe(identity.id);
     await first.keyboard.press('Escape'); await expect(panel).toBeHidden();
+    // Drop both forms of acknowledgement once. The same request must recover automatically.
+    const client = room.clients.find(client => client.sessionId === identity.id)!;
+    const send = client.send.bind(client), broadcast = room.broadcast.bind(room);
+    let droppedReply = false, droppedState = false;
+    client.send = ((type: string, ...args: unknown[]) => {
+      if (type === 'station:claim-result' && !droppedReply) { droppedReply = true; return; }
+      return (send as (...args: unknown[]) => void)(type, ...args);
+    }) as typeof client.send;
+    room.broadcast = ((type: string, ...args: unknown[]) => {
+      if (type === 'station:state' && !droppedState) { droppedState = true; return; }
+      return (broadcast as (...args: unknown[]) => void)(type, ...args);
+    }) as typeof room.broadcast;
+    await expect(first.locator('.instrument-interaction')).toBeVisible();
+    await first.keyboard.press('KeyE'); await expect(panel).toBeVisible();
+    expect(droppedReply && droppedState).toBe(true);
+    client.send = send; room.broadcast = broadcast;
+    await first.keyboard.press('Escape'); await expect(panel).toBeHidden();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await expect(first.locator('.instrument-interaction')).toBeVisible();
+      await first.keyboard.press('KeyE'); await expect(panel).toBeVisible();
+      await first.keyboard.press('Escape'); await expect(panel).toBeHidden();
+    }
     // A half-open connection must not let the camera walk on without server state.
     room.setPatchRate(0);
     await first.keyboard.down('KeyS');
@@ -173,5 +196,19 @@ test('next round countdown is prominent on desktop and mobile and a real server 
     const round = local.state.round; local.clock.elapsedTime = local.state.nextRoundAt + 1;
     await expect.poll(() => local.state.round).toBe(round + 1);
     await expect(page.locator('.round-restart')).toBeHidden();
+    await expect.poll(() => page.evaluate(() => window.sdpUnified.modes.shooter!.paused)).toBe(false);
+    await expect(page.locator('.mode-overlay')).toBeHidden();
+    const before = await page.evaluate(() => window.sdpUnified.modes.shooter!.snapshot.position!);
+    await page.keyboard.down('KeyW'); await page.waitForTimeout(700); await page.keyboard.up('KeyW');
+    const after = await page.evaluate(() => window.sdpUnified.modes.shooter!.snapshot.position!);
+    expect(Math.hypot(after[0] - before[0], after[2] - before[2])).toBeGreaterThan(.2);
+    // Repeat a complete result/restart cycle: no stale pause overlay or controls.
+    local.clock.elapsedTime = local.state.matchEndsAt;
+    for (const client of local.clients) tracker.touch(client.sessionId);
+    await expect(page.locator('.round-restart')).toBeVisible();
+    const secondRound = local.state.round; local.clock.elapsedTime = local.state.nextRoundAt + 1;
+    await expect.poll(() => local.state.round).toBe(secondRound + 1);
+    await expect.poll(() => page.evaluate(() => window.sdpUnified.modes.shooter!.paused)).toBe(false);
+    await expect(page.locator('.mode-overlay')).toBeHidden();
   } finally { await context.close(); }
 });

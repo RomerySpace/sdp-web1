@@ -41,7 +41,7 @@ export class LiminalGarden {
     // Two camera-following fields wrap only beyond the visible ground. The far field
     // keeps the horizon covered without drawing the same density for hundreds of metres.
     for (const [span, count, distant] of [[64, 128000, 0], [200, 64000, 1]]) {
-      const grass = new MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: .08, roughness: .92, side: DoubleSide });
+      const grass = new MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: lobbyAmbience.grass.emissiveIntensity, roughness: .92, side: DoubleSide });
       atmosphere.apply(grass); const grassAtmosphere = grass.onBeforeCompile.bind(grass);
       grass.onBeforeCompile = (shader, renderer) => {
         grassAtmosphere(shader, renderer);
@@ -73,7 +73,7 @@ export class LiminalGarden {
           transformed.x += wave * .11 * position.y * position.y * root * fieldFade;
           transformed.z += cos(wrapped.x * .8 + gardenTime) * .04 * position.y * position.y * root * fieldFade;`);
         shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nvarying float bladeHeight;')
-          .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= mix(.78, 1., smoothstep(0., .65, bladeHeight));');
+          .replace('#include <color_fragment>', `#include <color_fragment>\ndiffuseColor.rgb *= mix(${lobbyAmbience.grass.rootBrightness}, 1., smoothstep(0., .65, bladeHeight));`);
         // Apply the same world-space wrap to projection and atmospheric fog.
         shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', `
           vec4 mvPosition = instanceMatrix * vec4(transformed, 1.);
@@ -84,7 +84,7 @@ export class LiminalGarden {
         shader.vertexShader = shader.vertexShader.replace('vAtmospherePosition = (modelMatrix * atmosphereVertex).xyz;',
           'atmosphereVertex.xz += wrapped - stem.xz; atmosphereVertex.y += lobbyGroundHeight(wrapped); vAtmospherePosition = (modelMatrix * atmosphereVertex).xyz;');
       };
-      grass.customProgramCacheKey = () => `sdp-white-grass-gallery-v9-${span}`;
+      grass.customProgramCacheKey = () => `sdp-white-grass-gallery-v10-${span}`;
       const blades = new InstancedMesh(geometry, grass, count), dummy = new Object3D();
       let seed = 83; const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
       for (let i = 0; i < blades.count; i++) {

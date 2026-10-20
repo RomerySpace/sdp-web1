@@ -20,6 +20,8 @@ export class AmbientStationController {
   private disposed = false;
   private failed = false;
   private pendingTimer = 0;
+  private retryTimer = 0;
+  private claimWithId = false;
   private readonly timer: number;
   private readonly abort = new AbortController();
   private readonly subscriptions: (() => void)[] = [];
@@ -30,21 +32,19 @@ export class AmbientStationController {
     this.prompt.addEventListener('click', () => this.interact(), { signal: this.abort.signal });
     this.subscriptions.push(network.subscribeToStation(state => {
       this.snapshot = state; this.receivedAt = performance.now(); this.synth?.receive(state, this.ping / 2);
-      if (!state) { this.pending = false; this.pendingRequest = ''; window.clearTimeout(this.pendingTimer); if (this.panel.visible) this.hide(); return; }
+      if (!state) { this.clearPending(); if (this.panel.visible) this.hide(); return; }
       const owns = state.ownerId === network.snapshot?.localPlayerId;
-      if (this.pending && owns) { this.pending = false; this.panel.receive(state); this.panel.open(); container.classList.add('instrument-open'); this.opened(); }
+      if (this.pending && owns) this.open(state);
       if (this.panel.visible && !owns) this.hide();
       if (this.panel.visible) this.panel.receive(state);
     }), network.subscribeToStationSound(sound => this.synth?.sound(sound)), network.subscribeToStationClaim(result => {
-      if (result.requestId !== this.pendingRequest) {
+      if (!this.pending || (this.claimWithId && result.requestId !== this.pendingRequest)) {
         if (result.accepted && !this.pending && !this.visible) network.sendStation({ type: 'release' });
         return;
       }
-      this.pending = false; this.pendingRequest = ''; window.clearTimeout(this.pendingTimer);
       this.snapshot = result.state; this.receivedAt = performance.now();
-      if (!result.accepted) { this.notice(result.message || 'The instrument is unavailable. Please try again.'); return; }
-      this.panel.receive(result.state);
-      if (!this.visible) { this.panel.open(); container.classList.add('instrument-open'); this.opened(); }
+      if (!result.accepted) { this.clearPending(); this.notice(result.message || 'The instrument is unavailable. Please try again.'); return; }
+      this.open(result.state);
     }));
     this.timer = window.setInterval(() => {
       if (this.panel.visible) network.sendStation({ type: 'heartbeat' });
@@ -55,6 +55,16 @@ export class AmbientStationController {
     document.addEventListener('visibilitychange', () => { if (document.hidden) { this.synth?.suspend(); if (this.panel.visible || this.pending) this.close(); } }, { signal: this.abort.signal });
   }
   get visible(): boolean { return this.panel.visible; }
+  private clearPending(): void {
+    this.pending = false; this.pendingRequest = ''; window.clearTimeout(this.pendingTimer); window.clearInterval(this.retryTimer);
+  }
+  private open(state: StationSnapshot): void {
+    this.clearPending(); this.panel.receive(state);
+    if (!this.visible) { this.panel.open(); this.container.classList.add('instrument-open'); this.opened(); }
+  }
+  private sendClaim(): void {
+    this.network.sendStation(this.claimWithId ? { type: 'claim', requestId: this.pendingRequest } : { type: 'claim' });
+  }
   get audioDiagnostics(): { loaded: boolean; level: number; scheduled: number } { return { loaded: !!this.synth, level: this.synth?.level ?? 0, scheduled: this.synth?.scheduledNotes ?? 0 }; }
   unlock(): void { void sharedAudioContext().resume().catch(() => {}); }
   private prepare(): void {
@@ -72,10 +82,13 @@ export class AmbientStationController {
     if (this.snapshot?.ownerId && this.snapshot.ownerId !== this.network.snapshot?.localPlayerId) { this.notice(`The instrument is occupied by ${this.snapshot.ownerName}.`); return; }
     this.requesting(); this.failed = false; this.unlock(); this.prepare(); this.pending = true;
     this.pendingRequest = crypto.randomUUID();
-    this.network.sendStation(this.network.snapshot?.interactionVersion ? { type: 'claim', requestId: this.pendingRequest } : { type: 'claim' });
+    this.claimWithId = !!this.network.snapshot?.interactionVersion;
+    this.sendClaim();
+    // Reuse the same request: a delayed acknowledgement must not reserve another session.
+    this.retryTimer = window.setInterval(() => { if (this.pending && this.connectionFresh) this.sendClaim(); }, 1200);
     window.clearTimeout(this.pendingTimer); this.pendingTimer = window.setTimeout(() => {
       if (!this.pending) return;
-      this.pending = false; this.pendingRequest = ''; this.network.sendStation({ type: 'release' });
+      this.clearPending(); this.network.sendStation({ type: 'release' });
       this.notice('The instrument did not respond. Please try again.');
     }, 8000);
   }
@@ -95,7 +108,7 @@ export class AmbientStationController {
   }
   private hide(): void { this.panel.hide(); this.container.classList.remove('instrument-open'); this.closed(); }
   close(): void {
-    const pending = this.pending; this.pending = false; this.pendingRequest = ''; window.clearTimeout(this.pendingTimer);
+    const pending = this.pending; this.clearPending();
     if (pending) this.network.sendStation({ type: 'release' });
     if (this.panel.visible) { this.panel.releaseKeys(); this.network.sendStation({ type: 'release' }); this.hide(); }
   }
