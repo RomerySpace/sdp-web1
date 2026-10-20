@@ -125,7 +125,7 @@ export class App {
     container.dataset.mode = 'LIMBO';
     this.instrument = new AmbientStationController(container, this.network, this.ui.element, () => {
       this.pause(); this.ui.element.inert = true;
-    }, () => { this.ui.element.inert = false; this.player.input.clear(); if (!document.hidden && !this.disposed && this.network.status.state === 'connected') this.resume(); }, message => this.ui.notify(message));
+    }, () => { this.ui.element.inert = false; this.player.input.clear(); if (!document.hidden && !this.disposed && this.network.status.state === 'connected') this.resume(); }, message => this.ui.notify(message), () => { this.player.input.clear(); this.inputs.stop(); });
     this.activity = new SessionActivity(container, this.network, () => {
       this.inactive = true; this.pause(); this.modes.pause(); this.inputs.setEnabled(false);
       this.player.setEnabled(false); this.player.releaseLock(); this.voice.suspend(); this.voiceTransport.setEnabled(false);
@@ -154,13 +154,17 @@ export class App {
       this.network.subscribeToNotice((message) => this.ui.notify(message)),
       this.network.subscribeToStatus((status) => { this.ui.connection.update(status); this.player.setNetworkReady(status.state === 'connected' && this.network.roomType === LOBBY_NAME); }),
       this.network.subscribeToSpawn((player) => { if (this.network.roomType === LOBBY_NAME) this.player.setSpawn(player); }),
+      this.network.subscribeToCorrection(player => { if (this.network.roomType === LOBBY_NAME) this.player.correctAuthoritative(player); }),
       this.network.subscribeToState((snapshot) => {
         this.audio.receive(snapshot);
         if (this.network.roomType === LOBBY_NAME) this.scene.environment.gallery.film.receive(snapshot.wallTime, snapshot.receivedAt);
         if (this.network.roomType === LOBBY_NAME || !snapshot.players.length) this.scene.remotePlayers.receive(snapshot);
         if (this.network.roomType === LOBBY_NAME) {
           const local = snapshot.players.find(player => player.playerId === snapshot.localPlayerId);
-          if (local) { this.player.receiveSeating(local); this.player.reconcile(local); }
+          if (local) {
+            if (!this.player.synchronized) this.player.correctAuthoritative(local);
+            this.player.setNetworkReady(true); this.player.receiveSeating(local); this.player.reconcile(local);
+          }
         }
         this.visitorOptions.update(snapshot.players.filter(player => player.connected && player.playerId !== snapshot.localPlayerId)
           .map(player => ({ id: player.playerId, name: player.displayName || 'VISITOR' })));
@@ -323,13 +327,13 @@ export class App {
       return;
     }
     const target = event.target;
-    if (target instanceof HTMLElement && target.closest('input, button')) return;
+    if (typing || target instanceof HTMLElement && target.closest('button') && this.state.value !== 'EXPLORING') return;
     if (event.repeat) return;
     if (event.code === 'KeyE' && ['EXPLORING', 'PAUSED'].includes(this.state.value)) {
       event.preventDefault();
       if (this.player.seated) this.interactSeat();
-      else if (this.focusedVisitor && !this.ui.isHudHidden) this.openVisitorOptions(this.focusedVisitor.id);
       else if (!this.instrument.prompt.hidden) this.instrument.interact();
+      else if (this.focusedVisitor && !this.ui.isHudHidden) this.openVisitorOptions(this.focusedVisitor.id);
       else if (this.player.seated || this.focusedSeat !== undefined) this.interactSeat();
       else this.interact();
     } else if (event.code === 'Enter' && ['EXPLORING', 'PAUSED'].includes(this.state.value) && !this.limited) {
@@ -537,6 +541,7 @@ export class App {
       this.updateTouchControls();
       // Shooter catches up bounded fixed steps after a slow render frame.
       this.modes.update(this.modes.value === 'SHOOTER' ? Math.min(frameDt, .125) : dt);
+      if (this.modes.value === 'LIMBO') this.player.update(dt);
       this.audio.updateEnvironment(this.scene.camera, this.modes.value === 'LIMBO', this.reveal);
       const instrumentFocus = this.modes.value === 'LIMBO' && this.state.value === 'EXPLORING' && !this.settingsMenu.visible && !this.visitorOptions.visible && !this.player.seated
         && this.scene.environment.instrument.focus(this.scene.camera, [this.scene.sculpture.root, ...this.scene.environment.occluders]);
@@ -546,7 +551,6 @@ export class App {
       this.instrument.update(this.scene.camera, this.modes.value === 'LIMBO', this.reveal, instrumentFocus, audioSettings.muted ? 0 : audioSettings.volume);
       this.scene.environment.instrument.update(!!this.instrument.snapshot?.ownerId, this.elapsed);
       if (this.modes.value !== 'SHOOTER' && this.modes.value !== 'RETURNING_TO_LIMBO') {
-        if (this.modes.value === 'LIMBO') this.player.update(dt);
         this.ui.inspection.update(
           this.limited && this.modes.value === 'LIMBO' && this.state.value === 'EXPLORING' ? this.scene.sculpture.loaded : this.canInteract(),
           this.state.value === 'INSPECTING',

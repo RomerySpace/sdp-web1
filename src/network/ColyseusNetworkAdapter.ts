@@ -9,7 +9,7 @@ import { validateChatText, type RoomChatMessage, type VoiceAccess } from '../../
 import { validateDisplayName } from '../../shared/PlayerIdentity';
 import type { KillRecord, RoundScore, ShooterMatchSnapshot } from '../../shared/ShooterProtocol';
 import type { AirstrikeFlight, AirstrikeRequest, AirstrikeResult } from '../../shared/AirstrikeProtocol';
-import type { StationCommand, StationSnapshot, StationSound } from '../../shared/AmbientStation';
+import type { StationClaimResult, StationCommand, StationSnapshot, StationSound } from '../../shared/AmbientStation';
 import { sessionPolicy } from '../../shared/SessionPolicy';
 
 function serverEndpoint(): string {
@@ -24,6 +24,7 @@ function serverEndpoint(): string {
 }
 
 interface DecodedLobby {
+  interactionVersion?: number;
   killFeed?: Iterable<KillRecord>;
   airstrikes?: Iterable<AirstrikeFlight>;
   players: { forEach(callback: (player: Omit<NetworkPlayer, 'playerId'>, id: string) => void): void };
@@ -60,6 +61,9 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
   private readonly stationStates = new Set<(state: StationSnapshot | null) => void>();
   private readonly stationSounds = new Set<(sound: StationSound) => void>();
   private stationSnapshot: StationSnapshot | null = null;
+  private readonly corrections = new Set<(player: NetworkPlayer) => void>();
+  private readonly stationClaims = new Set<(result: StationClaimResult) => void>();
+  private stationRequestId?: string;
   private needsSpawn = true;
   private retryTimer = 0;
   private retries = 0;
@@ -120,6 +124,18 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
       });
       room.onMessage<StationSound>('station:sound', sound => {
         if (this.room === room && sound.roomId === room.roomId) for (const callback of this.stationSounds) callback(sound);
+      });
+      room.onMessage<StationClaimResult>('station:claim-result', result => {
+        if (this.room !== room || result.roomId !== room.roomId || result.player.playerId !== room.sessionId) return;
+        if (result.requestId && result.requestId === this.stationRequestId) {
+          this.stationRequestId = undefined;
+          for (const callback of this.corrections) callback(result.player);
+        }
+        for (const callback of this.stationClaims) callback(result);
+      });
+      room.onMessage<{ roomId: string; player: NetworkPlayer }>('lobby:correction', result => {
+        if (this.room === room && result.roomId === room.roomId && result.player.playerId === room.sessionId)
+          for (const callback of this.corrections) callback(result.player);
       });
       if (this.roomType === LOBBY_NAME) room.send('station:command', { type: 'sync' });
       room.onMessage<WeaponEvent>('weapon:event', event => {
@@ -200,6 +216,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
     }
     this.setStatus('connected', state.online, state.capacity, room.roomId);
     const snapshot: LobbySnapshot = {
+      interactionVersion: state.interactionVersion,
       roomId: room.roomId, localPlayerId: room.sessionId,
       tick: state.tick, receivedAt: performance.now(), players,
       wallTime: state.wallTime, serverTime: state.serverTime, shooterEnabled: state.shooterEnabled,
@@ -222,6 +239,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
   }
 
   private clearRemoteState(): void {
+    this.stationRequestId = undefined;
     this.stationSnapshot = null; for (const callback of this.stationStates) callback(null);
     this.latestSnapshot = {
       roomId: '', localPlayerId: '', tick: 0, receivedAt: performance.now(), players: [],
@@ -251,10 +269,16 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
     if (this.currentStatus.state === 'connected' && this.room?.connection.isOpen) this.room.send('shooter:input', input);
   }
   sendStation(command: StationCommand): void {
-    if (this.roomType === LOBBY_NAME && this.currentStatus.state === 'connected' && this.room?.connection.isOpen) this.room.send('station:command', command);
+    if (this.roomType === LOBBY_NAME && this.currentStatus.state === 'connected' && this.room?.connection.isOpen) {
+      if (command.type === 'claim') this.stationRequestId = command.requestId;
+      else if (command.type === 'release') this.stationRequestId = undefined;
+      this.room.send('station:command', command);
+    }
   }
   subscribeToStation(callback: (state: StationSnapshot | null) => void): () => void { this.stationStates.add(callback); callback(this.stationSnapshot); return () => this.stationStates.delete(callback); }
   subscribeToStationSound(callback: (sound: StationSound) => void): () => void { this.stationSounds.add(callback); return () => this.stationSounds.delete(callback); }
+  subscribeToCorrection(callback: (player: NetworkPlayer) => void): () => void { this.corrections.add(callback); return () => this.corrections.delete(callback); }
+  subscribeToStationClaim(callback: (result: StationClaimResult) => void): () => void { this.stationClaims.add(callback); return () => this.stationClaims.delete(callback); }
   sendWeaponAction(action: WeaponAction): void {
     if (this.currentStatus.state === 'connected' && this.room?.connection.isOpen) this.room.send('weapon:action', action);
   }
@@ -367,5 +391,6 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
     this.weapons.clear();
     this.combatEvents.clear();
     this.strikeResults.clear();
+    this.corrections.clear(); this.stationClaims.clear();
   }
 }

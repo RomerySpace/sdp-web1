@@ -58,6 +58,7 @@ export interface NetworkPlayer {
 }
 
 export interface LobbySnapshot {
+  interactionVersion?: number;
   roomId: string;
   localPlayerId: string;
   tick: number;

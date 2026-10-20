@@ -1,3 +1,5 @@
+import type { NetworkPlayer } from './MultiplayerProtocol';
+
 export const ambientStation = {
   x: -34, z: -26, width: 3.2, depth: 1.15, height: 1.04,
   interactionDistance: 3, fullRadius: 5, hearingRadius: 30,
@@ -12,6 +14,17 @@ export const ambientStation = {
     { x: -34, z: -33, yaw: Math.PI },
   ],
 } as const;
+
+/** Reach is measured from the table edge, with the same rule in both processes. */
+export function stationWithinReach(player: { x: number; y: number; z: number; seatIndex?: number }): boolean {
+  const dx = Math.max(0, Math.abs(player.x - ambientStation.x) - ambientStation.width / 2);
+  const dz = Math.max(0, Math.abs(player.z - ambientStation.z) - ambientStation.depth / 2);
+  return (player.seatIndex ?? -1) < 0 && player.y >= .65 && player.y <= 2.2 && Math.hypot(dx, dz) <= ambientStation.interactionDistance;
+}
+export interface StationClaimResult {
+  roomId: string; requestId?: string; accepted: boolean; message?: string;
+  player: NetworkPlayer; state: StationSnapshot;
+}
 export const stationPresets = ['pad', 'glass', 'grain', 'drone'] as const;
 export type StationPreset = typeof stationPresets[number];
 export interface StationNote { id: number; note: number; step: number; duration: number; velocity: number; firstAt: number }
@@ -24,7 +37,7 @@ export interface StationSnapshot {
   leaseExpiresAt: number; playing: boolean; startedAt: number; bpm: number; tracks: StationTrack[];
 }
 export interface StationSound { roomId: string; track: number; note: number; velocity: number; on: boolean; at: number }
-export type StationCommand = { type: 'claim' | 'release' | 'heartbeat' | 'sync' }
+export type StationCommand = { type: 'claim'; requestId?: string } | { type: 'release' | 'heartbeat' | 'sync' }
   | { type: 'transport'; playing: boolean }
   | { type: 'tempo'; bpm: number }
   | { type: 'clear'; track: number }
@@ -50,7 +63,8 @@ export function validStationCommand(raw: unknown): raw is StationCommand {
   const track = Number.isInteger(r.track) && Number(r.track) >= 0 && Number(r.track) < ambientStation.tracks;
   const unit = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1;
   switch (r.type) {
-    case 'claim': case 'release': case 'heartbeat': case 'sync': return fields();
+    case 'claim': return fields() || (fields('requestId') && typeof r.requestId === 'string' && /^[a-zA-Z0-9-]{1,64}$/.test(r.requestId));
+    case 'release': case 'heartbeat': case 'sync': return fields();
     case 'transport': return fields('playing') && typeof r.playing === 'boolean';
     case 'tempo': return fields('bpm') && Number.isInteger(r.bpm) && Number(r.bpm) >= 50 && Number(r.bpm) <= 110;
     case 'clear': return track && fields('track');

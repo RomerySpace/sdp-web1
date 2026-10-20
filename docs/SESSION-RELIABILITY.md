@@ -21,6 +21,18 @@ the server location and clear stale history/velocity. Seating and reconnecting
 reset history. Movement pauses during a lost connection. Clients still cannot
 submit arbitrary positions.
 
+Stationary recovery additionally compares the current feet position to settled
+server updates, even when an acknowledgement has no matching history sample.
+It waits until the last moving input has been acknowledged, avoiding corrections
+back to pre-movement snapshots. A 1.5-second stale-state guard stops prediction
+during a half-open connection and restores authoritative position on recovery.
+
+The instrument uses one shared reach rule measured from the tabletop edge.
+Every claim has a request ID and a direct accepted/rejected response carrying
+the authoritative player position. Pending claims display feedback, time out
+explicitly, and release late/cancelled ownership. Bench distance rejections also
+send a position correction. Gameplay E is not swallowed by a focused HUD button.
+
 Round results now have a prominent NEXT ROUND countdown and progress indicator
 above the ranking. The display uses server time plus snapshot age, and the server
 continues to control the automatic restart.

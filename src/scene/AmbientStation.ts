@@ -1,6 +1,6 @@
 import { CanvasTexture, CylinderGeometry, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, Raycaster, Vector2, type Camera, type Object3D, type Scene } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { ambientStation } from '../../shared/AmbientStation';
+import { ambientStation, stationWithinReach } from '../../shared/AmbientStation';
 import type { Atmosphere } from './Atmosphere';
 
 export class AmbientStation {
@@ -49,7 +49,8 @@ export class AmbientStation {
     scene.add(this.group);
   }
   focus(camera: Camera, occluders: Object3D[]): boolean {
-    if (Math.hypot(camera.position.x - ambientStation.x, camera.position.z - ambientStation.z) > ambientStation.interactionDistance) return false;
+    if (!stationWithinReach(camera.position)) return false;
+    camera.updateMatrixWorld();
     this.ray.setFromCamera(this.center, camera); this.ray.far = ambientStation.interactionDistance;
     const hit = this.ray.intersectObject(this.group, true)[0];
     return !!hit && !this.ray.intersectObjects(occluders, true).some(other => !this.solids.includes(other.object as Mesh) && other.distance < hit.distance - .03);

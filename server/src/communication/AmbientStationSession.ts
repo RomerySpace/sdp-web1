@@ -1,4 +1,4 @@
-import { ambientStation, createStation, stationPhase, stationStepMs, validStationCommand, type StationSnapshot, type StationSound } from '../../../shared/AmbientStation';
+import { ambientStation, createStation, stationPhase, stationStepMs, stationWithinReach, validStationCommand, type StationSnapshot, type StationSound } from '../../../shared/AmbientStation';
 
 interface Visitor { x: number; y: number; z: number; connected: boolean; displayName: string; seatIndex: number }
 interface Held { track: number; note: number; at: number; recorded?: number }
@@ -12,7 +12,7 @@ export class AmbientStationSession {
     this.state = createStation(roomId);
   }
   private near(player?: Visitor): boolean {
-    return !!player?.connected && player.seatIndex < 0 && player.y < 2 && Math.hypot(player.x - ambientStation.x, player.z - ambientStation.z) <= ambientStation.interactionDistance + .2;
+    return !!player?.connected && stationWithinReach(player);
   }
   private publish(now: number): void { this.state.serverNow = now; this.state.revision++; this.changed(this.state); }
   handle(id: string, player: Visitor | undefined, raw: unknown, now: number): string | undefined {

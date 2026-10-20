@@ -10,4 +10,6 @@ export const lobbyPrediction = {
   teleportDistance: 2.5,
   visualResponse: 12,
   maxVisualOffset: .4,
+  settledMs: 350,
+  stateTimeoutMs: 1500,
 } as const;

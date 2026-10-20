@@ -4,7 +4,7 @@ import { Server, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { Client, type Room } from '@colyseus/sdk';
 import { AmbientStationSession } from '../src/communication/AmbientStationSession';
-import { ambientStation, validStationCommand, stationKeyboard, type StationSnapshot, type StationSound } from '../../shared/AmbientStation';
+import { ambientStation, stationWithinReach, validStationCommand, stationKeyboard, type StationClaimResult, type StationSnapshot, type StationSound } from '../../shared/AmbientStation';
 import { SDPLobby } from '../src/rooms/SDPLobby';
 import type { LobbyState } from '../src/state/LobbyState';
 import type { MovementSimulation } from '../src/simulation/MovementSimulation';
@@ -22,6 +22,11 @@ test('instrument commands are bounded and cannot inject patterns, identities or 
     { type: 'clear', track: 4 }, { type: 'parameter', track: 0, key: { toString: 0 }, value: 1 }, { type: 'note', track: 0, note: 97, velocity: 1, on: true },
     { type: 'note', track: 0, note: 60, velocity: 1, on: true, at: 1 }, { type: 'preset', track: 1, preset: 'url' }]) assert.equal(validStationCommand(raw), false);
   assert.equal(validStationCommand({ type: 'note', track: 0, note: 60, velocity: .7, on: true }), true);
+  assert.equal(validStationCommand({ type: 'claim', requestId: 'test-request-1' }), true);
+  assert.equal(validStationCommand({ type: 'claim', requestId: { x: 1 } }), false);
+  assert.equal(stationWithinReach({ x: ambientStation.x + 3.8, y: 1.8, z: ambientStation.z }), true);
+  assert.equal(stationWithinReach({ x: ambientStation.x + 4.8, y: 1.8, z: ambientStation.z }), false);
+  assert.equal(stationWithinReach({ x: ambientStation.x, y: -5.4, z: ambientStation.z }), false);
   assert.deepEqual(Object.values(stationKeyboard), Array.from({ length: 15 }, (_, i) => i));
   const world = new CollisionManager(); assert.equal(world.canOccupy(ambientStation.x, ambientStation.z), false);
   assert.equal(ambientStation.benches.length, 6);
@@ -84,6 +89,9 @@ test('three real clients receive shared notes, loop edits and vacancy only insid
     a.onMessage('station:sound', () => {}); b.onMessage('station:sound', sound => sounds.push(sound));
     isolated.onMessage('station:state', state => foreign.push(state)); isolated.onMessage('station:sound', sound => foreign.push(sound));
     for (const room of rooms) room.onMessage('lobby:notice', message => notices.push(message));
+    const claims: StationClaimResult[] = [];
+    a.onMessage('station:claim-result', result => claims.push(result));
+    b.onMessage('station:claim-result', () => {});
     const room = matchMaker.getLocalRoomById(a.roomId) as SDPLobby;
     function approach(id: string) {
       const point = visitor(), p = room.state.players.get(id)!; p.x = point.x; p.z = point.z;
@@ -91,8 +99,13 @@ test('three real clients receive shared notes, loop edits and vacancy only insid
     }
     await until(() => !!a.state.players?.get(b.sessionId));
     a.send('station:command', { type: 'claim' }); await until(() => notices.length > 0);
+    assert.equal(claims[0].accepted, false); assert.equal(claims[0].player.playerId, a.sessionId);
+    assert.equal(claims[0].player.x, room.state.players.get(a.sessionId)!.x);
     approach(a.sessionId); approach(b.sessionId); a.send('station:command', { type: 'claim' });
     await until(() => stateA?.ownerId === a.sessionId && stateB?.ownerId === a.sessionId);
+    a.send('station:command', { type: 'claim', requestId: 'confirm-open' });
+    await until(() => claims.some(result => result.requestId === 'confirm-open'));
+    assert.equal(claims.find(result => result.requestId === 'confirm-open')!.accepted, true);
     b.send('station:command', { type: 'transport', playing: true }); await sleep(100); assert.equal(stateB!.playing, false);
     a.send('station:command', { type: 'record', track: 0, enabled: true }); await until(() => !!stateB?.tracks[0].recording);
     a.send('station:command', { type: 'note', track: 0, note: 60, velocity: .7, on: true }); await until(() => sounds.length === 1);

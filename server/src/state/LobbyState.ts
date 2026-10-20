@@ -22,6 +22,7 @@ defineTypes(VisitorState, {
 });
 
 export class LobbyState extends Schema {
+  interactionVersion = 1;
   wallTime = Date.now();
   shooterEnabled = shooterEnabled;
   players = new MapSchema<VisitorState>();
@@ -30,6 +31,7 @@ export class LobbyState extends Schema {
   tick = 0;
 }
 defineTypes(LobbyState, { wallTime: 'float64',
+  interactionVersion: 'uint8',
   shooterEnabled: 'boolean',
   players: { map: VisitorState }, online: 'uint8', capacity: 'uint8', tick: 'uint32',
 });

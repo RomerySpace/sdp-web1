@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { validVoiceRequest, type RoomChatMessage } from '../../../shared/CommunicationProtocol';
 import { ChatPolicy } from '../communication/ChatPolicy';
 import { VoiceSessions } from '../communication/VoiceSessions';
-import { MAX_PLAYERS, PLAYER_HEIGHT, SIMULATION_HZ, validateMovementInput, type MovementInput } from '../../../shared/MultiplayerProtocol';
+import { MAX_PLAYERS, PLAYER_HEIGHT, SIMULATION_HZ, validateMovementInput, type MovementInput, type NetworkPlayer } from '../../../shared/MultiplayerProtocol';
 import { MovementSimulation } from '../simulation/MovementSimulation';
 import { spawnPosition } from '../simulation/SpawnPositions';
 import { LobbyState, VisitorState } from '../state/LobbyState';
@@ -12,7 +12,7 @@ import { lobbyRetreat, lobbySeatSlots, seatExits, validSeatRequest } from '../..
 import { lobbyGroundHeight } from '../../../shared/ListeningGarden';
 import { CollisionManager } from '../../../src/player/CollisionManager';
 import { AmbientStationSession } from '../communication/AmbientStationSession';
-import { validStationCommand } from '../../../shared/AmbientStation';
+import { validStationCommand, type StationClaimResult } from '../../../shared/AmbientStation';
 import { RoomInactivity } from '../communication/RoomInactivity';
 import { sessionPolicy } from '../../../shared/SessionPolicy';
 
@@ -52,7 +52,13 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
       }
       this.inactivity.touch(client.sessionId);
       const notice = this.station.handle(client.sessionId, player, raw, now);
-      if (notice) client.send('lobby:notice', notice);
+      if (raw.type === 'claim') {
+        const accepted = !notice && this.station.state.ownerId === client.sessionId;
+        client.send('station:claim-result', { roomId: this.roomId, requestId: raw.requestId, accepted,
+          message: notice ?? (accepted ? undefined : 'The instrument could not be opened. Please try again.'),
+          player: this.visitorPosition(client.sessionId)!, state: { ...this.station.state, serverNow: now } } satisfies StationClaimResult);
+      }
+      if (notice && (raw.type !== 'claim' || !raw.requestId)) client.send('lobby:notice', notice);
     });
     this.voice = new VoiceSessions(this.roomId);
     this.onMessage('lobby:seat', (client, raw: unknown) => {
@@ -69,6 +75,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
       const seat = lobbySeatSlots[raw.seat];
       const relativeEye = player.y - seat.groundY;
       if (Math.hypot(player.x - seat.x, player.z - seat.z) > lobbyRetreat.interactionDistance || relativeEye > PLAYER_HEIGHT + .1 || relativeEye < PLAYER_HEIGHT - .25) {
+        client.send('lobby:correction', { roomId: this.roomId, player: this.visitorPosition(client.sessionId) });
         client.send('lobby:notice', 'Move closer to sit.'); return;
       }
       if ([...this.state.players.values()].some(other => other.connected && other.seatIndex === raw.seat)) {
@@ -200,6 +207,12 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
   }
 
   private visitorName(id: string): string { return this.state.players.get(id)?.displayName ?? 'VISITOR'; }
+
+  private visitorPosition(id: string): NetworkPlayer | undefined {
+    const p = this.state.players.get(id);
+    return p ? { playerId: id, displayName: p.displayName, x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch,
+      connected: p.connected, lastProcessedInput: p.lastProcessedInput, seatIndex: p.seatIndex, crouching: p.crouching } : undefined;
+  }
 
   private stand(id: string, force = false): boolean {
     const player = this.state.players.get(id);

@@ -23,9 +23,14 @@ export class FirstPersonController {
   private readonly prediction = new LobbyPredictionHistory();
   private readonly viewCorrection = new Vector3();
   private readonly feet = new Vector3();
+  private readonly lastServerFeet = new Vector3(Infinity, Infinity, Infinity);
+  private serverStableSince = 0;
+  private lastMovementAt = 0;
+  private lastMovementSequence = -1;
   private networkReady = false;
   get seated(): boolean { return this.seatIndex >= 0; }
   get seat(): number { return this.seatIndex; }
+  get synchronized(): boolean { return this.networkReady; }
 
   receiveSeating(player: NetworkPlayer): void {
     const next = player.seatIndex ?? -1;
@@ -71,6 +76,7 @@ export class FirstPersonController {
   }
 
   setSpawn(player: NetworkPlayer): void {
+    this.lastServerFeet.set(Infinity, Infinity, Infinity); this.lastMovementSequence = -1;
     this.prediction.reset(); this.viewCorrection.set(0, 0, 0);
     this.motion.x = player.x; this.motion.z = player.z;
     this.seatIndex = -1;
@@ -90,14 +96,23 @@ export class FirstPersonController {
     this.networkReady = ready; this.prediction.reset();
     if (!ready) { this.input.clear(); this.motion.velocityX = this.motion.velocityZ = 0; }
   }
-  recordInput(sequence: number): void {
+  recordInput(sequence: number, moving = false): void {
+    if (moving) { this.lastMovementAt = performance.now(); this.lastMovementSequence = sequence; }
     if (this.seated) return;
     this.prediction.record(sequence, this.feet.set(this.motion.x, (this.motion.groundY ?? 0) + (this.motion.elevation ?? 0), this.motion.z));
   }
   reconcile(player: NetworkPlayer): void {
     if (!this.networkReady || this.seated || !player.connected) return;
-    const delta = this.prediction.reconcile(player);
+    const now = performance.now(), serverFeet = this.feet.set(player.x, player.y - PLAYER_HEIGHT, player.z);
+    if (serverFeet.distanceToSquared(this.lastServerFeet) > .0004) this.serverStableSince = now;
+    this.lastServerFeet.copy(serverFeet);
+    const settled = !this.input.forward && !this.input.sideways && !this.input.jumping && Math.hypot(this.motion.velocityX, this.motion.velocityZ) < .1
+      && now - this.lastMovementAt >= lobbyPrediction.settledMs && now - this.serverStableSince >= lobbyPrediction.settledMs
+      && player.lastProcessedInput >= this.lastMovementSequence;
+    // A stationary player can be aligned even if an acknowledgement has no history sample.
+    const delta = settled ? serverFeet.clone().sub(new Vector3(this.motion.x, (this.motion.groundY ?? 0) + (this.motion.elevation ?? 0), this.motion.z)) : this.prediction.reconcile(player);
     if (!delta) return;
+    if (settled) { if (delta.length() < lobbyPrediction.correctionTolerance) return; this.prediction.reset(); }
     if (delta.length() > lobbyPrediction.teleportDistance) {
       // Server teleports and floor changes must not retain stale velocity or input history.
       this.motion.x = player.x; this.motion.z = player.z;
@@ -118,6 +133,17 @@ export class FirstPersonController {
       this.viewCorrection.set(0, 0, 0);
       this.camera.position.set(this.motion.x, (this.motion.groundY ?? 0) + this.eye + (this.motion.elevation ?? 0), this.motion.z);
     }
+  }
+
+  correctAuthoritative(player: NetworkPlayer): void {
+    this.receiveSeating(player);
+    if (this.seated) return;
+    this.prediction.reset(); this.viewCorrection.set(0, 0, 0);
+    this.motion.x = player.x; this.motion.z = player.z;
+    this.motion.groundY = this.collision.groundHeight(player.x, player.z, player.y - PLAYER_HEIGHT);
+    this.motion.elevation = Math.max(0, player.y - PLAYER_HEIGHT - this.motion.groundY);
+    this.motion.velocityX = this.motion.velocityZ = this.motion.verticalSpeed = 0;
+    this.camera.position.set(player.x, this.motion.groundY + this.eye + this.motion.elevation, player.z);
   }
 
   setEnabled(enabled: boolean): void {

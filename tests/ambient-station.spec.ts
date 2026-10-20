@@ -48,7 +48,7 @@ async function approach(page: Page): Promise<void> {
     const app = window.sdpUnified, snapshot = app.network.snapshot!, local = snapshot.players.find(p => p.playerId === snapshot.localPlayerId)!;
     app.player.setSpawn({ ...local, yaw: Math.atan2(-(config.x - local.x), -(config.z - local.z)), pitch: Math.atan2(1.12 - local.y, Math.hypot(config.x - local.x, config.z - local.z)) });
   }, ambientStation);
-  await expect(page.getByRole('button', { name: 'Play field instrument', exact: true })).toBeVisible();
+  await expect(page.locator('.instrument-interaction')).toBeVisible();
 }
 
 test('ambient instrument: two browsers hear real synth and granular audio, share loops and protect the performer', async ({ browser }) => {
@@ -61,9 +61,7 @@ test('ambient instrument: two browsers hear real synth and granular audio, share
     expect(requests.some(url => url.includes('AmbientSynth'))).toBe(false);
     expect(requests.some(url => url.includes('/shooter/'))).toBe(false);
     await enter(second, 'Field Listener');
-    await second.evaluate(config => {
-      const app = window.sdpUnified; app.player.setEnabled(false); app.scene.camera.position.set(config.x + 4, 1.7, config.z + 4); app.scene.camera.lookAt(config.x, 1, config.z);
-    }, ambientStation);
+    await approach(second);
     await approach(first); await first.keyboard.press('KeyE');
     const panel = first.getByRole('dialog', { name: 'SDP field instrument' }); await expect(panel).toBeVisible();
     await expect.poll(() => first.evaluate(() => window.sdpUnified.instrument.audioDiagnostics.loaded)).toBe(true);
@@ -97,9 +95,7 @@ test('ambient instrument: two browsers hear real synth and granular audio, share
     expect(await second.evaluate(() => window.sdpUnified.instrument.snapshot!.ownerId)).toBe(owner);
     const startedAt = await first.evaluate(() => window.sdpUnified.instrument.snapshot!.startedAt);
     await enter(second, 'Late Listener');
-    await second.evaluate(config => {
-      const app = window.sdpUnified; app.player.setEnabled(false); app.scene.camera.position.set(config.x + 4, 1.7, config.z + 4); app.scene.camera.lookAt(config.x, 1, config.z);
-    }, ambientStation);
+    await approach(second);
     await expect.poll(() => second.evaluate(() => window.sdpUnified.instrument.snapshot?.startedAt)).toBe(startedAt);
     await expect.poll(() => second.evaluate(() => window.sdpUnified.instrument.audioDiagnostics.scheduled), { timeout: 20000 }).toBeGreaterThan(0);
     await first.bringToFront();
