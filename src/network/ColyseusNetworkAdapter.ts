@@ -200,6 +200,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
     state.players.forEach((player, id) => players.push({
       displayName: player.displayName, automatic: player.automatic, kills: player.kills, deaths: player.deaths, streak: player.streak, strikes: player.strikes, lastDamageAt: player.lastDamageAt,
       playerId: id, x: player.x, y: player.y, z: player.z,
+      listening: player.listening,
       yaw: player.yaw, pitch: player.pitch, connected: player.connected,
       lastProcessedInput: player.lastProcessedInput,
       seatIndex: player.seatIndex, crouching: player.crouching, sprinting: player.sprinting, grounded: player.grounded, height: player.height, lean: player.lean,
@@ -274,6 +275,10 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
       else if (command.type === 'release') this.stationRequestId = undefined;
       this.room.send('station:command', command);
     }
+  }
+  sendGalleryListening(listening: boolean): void {
+    if (this.roomType === LOBBY_NAME && this.currentStatus.state === 'connected' && this.room?.connection.isOpen)
+      this.room.send('gallery:listen', { listening });
   }
   subscribeToStation(callback: (state: StationSnapshot | null) => void): () => void { this.stationStates.add(callback); callback(this.stationSnapshot); return () => this.stationStates.delete(callback); }
   subscribeToStationSound(callback: (sound: StationSound) => void): () => void { this.stationSounds.add(callback); return () => this.stationSounds.delete(callback); }

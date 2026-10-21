@@ -9,6 +9,7 @@ import { lobbySeatSlots } from '../shared/LobbyRetreat';
 import { sessionPolicy } from '../shared/SessionPolicy';
 import { enterExhibition } from './entry';
 import { ambientStation } from '../shared/AmbientStation';
+import { lowerGallery, galleryListening } from '../shared/LowerGallery';
 
 let fixture: Awaited<ReturnType<typeof airstrikeFixture>>, vite: ViteDevServer, url: string;
 test.beforeAll(async () => {
@@ -20,6 +21,50 @@ test.beforeAll(async () => {
   await vite.listen(); url = `http://127.0.0.1:${port}`;
 });
 test.afterAll(async () => { await vite?.close(); await fixture?.server.gracefullyShutdown(false); });
+
+test('gallery headphones: keyboard and touch listen simultaneously, show remote headsets and stop at the exit', async ({ browser }) => {
+  const desktop = await browser.newContext(), mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const first = await desktop.newPage(), second = await mobile.newPage(), errors: string[] = [];
+  try {
+    for (const [page, name] of [[first, 'Headphone visitor'], [second, 'Touch listener']] as const) {
+      page.on('pageerror', e => errors.push(e.message));
+      await page.goto(`${url}/?debugMode=limbo`); await enterExhibition(page, name);
+    }
+    const ids = await Promise.all([first, second].map(page => page.evaluate(() => ({ id: window.sdpUnified.network.snapshot!.localPlayerId, room: window.sdpUnified.network.snapshot!.roomId }))));
+    const room = fixture.room(ids[0].room) as unknown as SDPLobby;
+    const place = (id: string, x: number, z: number, groundY: number = lowerGallery.floorY) => {
+      const player = room.state.players.get(id)!; player.x = x; player.z = z; player.y = groundY + 1.8;
+      (room as unknown as { simulation: MovementSimulation }).simulation.add(id, { x, z, groundY });
+    };
+    for (const [index, page] of [first, second].entries()) {
+      place(ids[index].id, -9.5, galleryListening.z + index * .6);
+      await page.bringToFront();
+      if (await page.locator('.resume-button').isVisible()) await page.locator('.resume-button').click();
+      await expect.poll(() => page.evaluate(() => window.sdpUnified.scene.camera.position.x)).toBeCloseTo(-9.5, 1);
+      await page.evaluate(target => {
+        const app = window.sdpUnified, s = app.network.snapshot!, p = s.players.find(p => p.playerId === s.localPlayerId)!;
+        app.player.setSpawn({ ...p, yaw: Math.atan2(-(target.x - p.x), -(target.z - p.z)), pitch: Math.atan2(target.y + .1 - p.y, Math.hypot(target.x - p.x, target.z - p.z)) });
+      }, galleryListening);
+      const button = page.getByRole('button', { name: 'Listen to Kenosis', exact: true }); await expect(button).toBeVisible();
+      if (index) await button.tap(); else await page.keyboard.press('KeyE');
+      await expect.poll(() => page.evaluate(() => window.sdpUnified.scene.environment.gallery.film.listening)).toBe(true);
+      await expect.poll(() => page.evaluate(() => window.sdpUnified.scene.environment.gallery.film.diagnostics.level)).toBeGreaterThan(.00001);
+    }
+    expect([...room.state.players.values()].filter(p => p.listening).length).toBe(2);
+    await expect.poll(() => second.evaluate(id => window.sdpUnified.scene.remotePlayers.group.getObjectByName(`Visitor:${id}`)?.getObjectByName('Gallery headphones')?.visible, ids[0].id)).toBe(true);
+    await second.evaluate(id => {
+      const app = window.sdpUnified, p = app.network.snapshot!.players.find(p => p.playerId === id)!;
+      app.player.setEnabled(false); app.scene.camera.position.set(-8, -5.4, 1); app.scene.camera.lookAt(p.x, -5.8, p.z);
+    }, ids[0].id);
+    await second.screenshot({ path: '/private/tmp/sdp-gallery-remote-headphones-mobile.png' });
+    await second.evaluate(() => window.sdpUnified.player.setEnabled(true));
+    place(ids[1].id, 8, 0);
+    await expect.poll(() => second.evaluate(() => window.sdpUnified.scene.environment.gallery.film.listening)).toBe(false);
+    await expect.poll(() => second.evaluate(() => window.sdpUnified.scene.environment.gallery.film.diagnostics.level)).toBeLessThan(.00001);
+    expect(room.state.players.get(ids[0].id)!.listening).toBe(true);
+    expect(errors).toEqual([]);
+  } finally { await desktop.close(); await mobile.close(); }
+});
 
 test('instrument E survives focused buttons, lost prediction history and rejected claims without reloading', async ({ browser }) => {
   const a = await browser.newContext(), b = await browser.newContext();

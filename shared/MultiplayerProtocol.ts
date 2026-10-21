@@ -16,6 +16,7 @@ export interface MovementInput {
 }
 
 export interface NetworkPlayer {
+  listening?: boolean;
   seatIndex?: number;
   playerId: string;
   displayName?: string;

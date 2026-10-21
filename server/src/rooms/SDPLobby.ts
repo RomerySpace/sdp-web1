@@ -15,6 +15,7 @@ import { AmbientStationSession } from '../communication/AmbientStationSession';
 import { validStationCommand, type StationClaimResult } from '../../../shared/AmbientStation';
 import { RoomInactivity } from '../communication/RoomInactivity';
 import { sessionPolicy } from '../../../shared/SessionPolicy';
+import { canKeepGalleryHeadphones, canTakeGalleryHeadphones, validGalleryListening } from '../../../shared/LowerGallery';
 
 interface VisitorInput { value: MovementInput; receivedAt: number; slot: number }
 const INPUT_TIMEOUT_MS = 250;
@@ -41,6 +42,15 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
 
   onCreate(): void {
     this.inactivity = new RoomInactivity(this);
+    this.onMessage('gallery:listen', (client, raw: unknown) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player?.connected || !validGalleryListening(raw)) return;
+      if (raw.listening && !canTakeGalleryHeadphones(player)) {
+        client.send('lobby:correction', { roomId: this.roomId, player: this.visitorPosition(client.sessionId) });
+        client.send('lobby:notice', 'Move closer to the headphones.'); return;
+      }
+      player.listening = raw.listening; this.inactivity.touch(client.sessionId);
+    });
     this.station = new AmbientStationSession(this.roomId, state => this.broadcast('station:state', state), sound => this.broadcast('station:sound', sound));
     this.onMessage('station:command', (client, raw: unknown) => {
       const player = this.state.players.get(client.sessionId), now = Date.now();
@@ -156,7 +166,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
     this.stand(client.sessionId, true);
     void this.voice.remove(client.sessionId);
     const player = this.state.players.get(client.sessionId);
-    if (player?.connected) { player.connected = false; this.state.online--; }
+    if (player?.connected) { player.listening = false; player.connected = false; this.state.online--; }
     this.simulation.stop(client.sessionId);
     const entry = this.inputs.get(client.sessionId);
     if (entry) entry.value.active = false;
@@ -189,6 +199,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
     for (const [id, entry] of this.inputs) {
       const player = this.state.players.get(id);
       if (!player?.connected) continue;
+      if (player.listening && !canKeepGalleryHeadphones(player)) player.listening = false;
       if (this.clock.elapsedTime - entry.receivedAt > INPUT_TIMEOUT_MS) entry.value.active = false;
       if (player.seatIndex >= 0 && entry.value.active && (entry.value.f !== 0 || entry.value.r !== 0 || entry.value.j)) this.stand(id);
       if (player.seatIndex >= 0) {

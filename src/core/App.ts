@@ -96,7 +96,7 @@ export class App {
       seat: () => this.interactSeat(),
     }, this.limited, this.network.displayName);
     this.audio.attach(this.ui.element);
-    this.scene.environment.gallery.film.attach(this.ui.element);
+    this.scene.environment.gallery.film.attach(this.ui.element, listening => this.network.sendGalleryListening(listening));
     this.settingsMenu = new SettingsMenu(container, this.settings, () => this.closeSettings(), () => this.openVisitorOptions());
     this.visitorOptions = new VisitorOptions(container, this.visitorPreferences, () => {
       this.voiceTransport.setMutedVisitors(id => this.visitorPreferences.muted(id));
@@ -161,6 +161,7 @@ export class App {
         if (this.network.roomType === LOBBY_NAME || !snapshot.players.length) this.scene.remotePlayers.receive(snapshot);
         if (this.network.roomType === LOBBY_NAME) {
           const local = snapshot.players.find(player => player.playerId === snapshot.localPlayerId);
+          this.scene.environment.gallery.film.setListening(!!local?.listening);
           if (local) {
             if (!this.player.synchronized) this.player.correctAuthoritative(local);
             this.player.setNetworkReady(true); this.player.receiveSeating(local); this.player.reconcile(local);
@@ -331,7 +332,8 @@ export class App {
     if (event.repeat) return;
     if (event.code === 'KeyE' && ['EXPLORING', 'PAUSED'].includes(this.state.value)) {
       event.preventDefault();
-      if (this.player.seated) this.interactSeat();
+      if (!this.scene.environment.gallery.film.listenButton.hidden) this.scene.environment.gallery.film.toggleListening();
+      else if (this.player.seated) this.interactSeat();
       else if (!this.instrument.prompt.hidden) this.instrument.interact();
       else if (this.focusedVisitor && !this.ui.isHudHidden) this.openVisitorOptions(this.focusedVisitor.id);
       else if (this.player.seated || this.focusedSeat !== undefined) this.interactSeat();
@@ -542,10 +544,12 @@ export class App {
       // Shooter catches up bounded fixed steps after a slow render frame.
       this.modes.update(this.modes.value === 'SHOOTER' ? Math.min(frameDt, .125) : dt);
       if (this.modes.value === 'LIMBO') this.player.update(dt);
-      this.audio.updateEnvironment(this.scene.camera, this.modes.value === 'LIMBO', this.reveal);
+      this.audio.updateEnvironment(this.scene.camera, this.modes.value === 'LIMBO', this.reveal, this.scene.environment.gallery.film.listening);
       const instrumentFocus = this.modes.value === 'LIMBO' && this.state.value === 'EXPLORING' && !this.settingsMenu.visible && !this.visitorOptions.visible && !this.player.seated
         && this.scene.environment.instrument.focus(this.scene.camera, [this.scene.sculpture.root, ...this.scene.environment.occluders]);
       const audioSettings = this.settings.value;
+      const headphonesFocus = this.modes.value === 'LIMBO' && this.state.value === 'EXPLORING' && !this.settingsMenu.visible && !this.visitorOptions.visible
+        && this.scene.environment.gallery.focusHeadphones(this.scene.camera);
       this.ui.element.classList.toggle('in-gallery', this.modes.value === 'LIMBO' && galleryImmersion(this.scene.camera.position.x, this.scene.camera.position.y, this.scene.camera.position.z) > .4);
       this.scene.environment.gallery.update(this.scene.camera, this.modes.value === 'LIMBO' && this.reveal > .95 && !this.scene.inspection.active, audioSettings.muted ? 0 : audioSettings.volume);
       this.instrument.update(this.scene.camera, this.modes.value === 'LIMBO', this.reveal, instrumentFocus, audioSettings.muted ? 0 : audioSettings.volume);
@@ -558,10 +562,10 @@ export class App {
         this.modes.setInspection(this.modes.value === 'LIMBO' && this.state.value === 'INSPECTING' && !this.settingsMenu.visible);
         if (this.modes.value === 'LIMBO') this.voiceTransport.update(this.scene.camera);
         this.scene.render(dt, this.elapsed, this.reveal, this.modes.value === 'LIMBO', this.state.value === 'CHATTING');
-        this.focusedVisitor = this.modes.value === 'LIMBO' && this.state.value === 'EXPLORING' && !this.settingsMenu.visible && !this.visitorOptions.visible
+        this.focusedVisitor = !headphonesFocus && this.modes.value === 'LIMBO' && this.state.value === 'EXPLORING' && !this.settingsMenu.visible && !this.visitorOptions.visible
           ? this.scene.remotePlayers.focus(this.scene.camera, [this.scene.sculpture.root, ...this.scene.environment.occluders]) : undefined;
         this.ui.focusVisitor(this.focusedVisitor?.name);
-        const seatAvailable = this.modes.value === 'LIMBO' && this.state.value === 'EXPLORING' && !this.settingsMenu.visible && !this.visitorOptions.visible && !this.focusedVisitor && !instrumentFocus;
+        const seatAvailable = !headphonesFocus && this.modes.value === 'LIMBO' && this.state.value === 'EXPLORING' && !this.settingsMenu.visible && !this.visitorOptions.visible && !this.focusedVisitor && !instrumentFocus;
         this.focusedSeat = seatAvailable && !this.player.seated ? this.scene.environment.retreat.focusSeat(this.scene.camera, [this.scene.sculpture.root, ...this.scene.environment.occluders]) : undefined;
         // Offer the other half rather than marking a partly occupied bench unavailable.
         if (this.focusedSeat !== undefined) {
@@ -572,6 +576,8 @@ export class App {
         const seatOccupied = this.focusedSeat !== undefined && !!this.network.snapshot?.players.some(player => player.connected && player.seatIndex === this.focusedSeat);
         this.ui.seating(seatAvailable && (this.player.seated || this.focusedSeat !== undefined), this.player.seated, seatOccupied);
       }
+      this.scene.environment.gallery.film.interaction(this.modes.value === 'LIMBO' && this.state.value === 'EXPLORING' && !this.settingsMenu.visible && !this.visitorOptions.visible,
+        headphonesFocus, !!this.focusedVisitor || this.focusedSeat !== undefined || this.player.seated);
     }
     if (this.diagnostics && dt > 0) {
       this.fps += (1 / frameDt - this.fps) * .08;

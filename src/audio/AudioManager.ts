@@ -97,7 +97,7 @@ export class AudioManager {
   toggleMute(): boolean { this.setMuted(!this.muted); try { localStorage.setItem(MUTE_KEY, String(this.muted)); } catch {} return this.muted; }
   setMuted(muted: boolean): void { this.muted = muted; this.updateGain(); }
   setVolume(volume: number): void { this.volume = Math.max(0, Math.min(1, volume)); this.updateGain(); }
-  updateEnvironment(camera: Camera, active: boolean, reveal: number): void {
+  updateEnvironment(camera: Camera, active: boolean, reveal: number, listening = false): void {
     // Keep the current credit during buffering; HUD visibility is handled independently by CSS.
     this.label.hidden = !active || this.media.paused || !!this.media.error || this.media.readyState < HTMLMediaElement.HAVE_METADATA;
     const settings = lobbyAmbience.music;
@@ -106,6 +106,7 @@ export class AudioManager {
     this.environmentGain = active ? reveal * (1 - (1 - settings.distantGain) * t * t * (3 - 2 * t)) : 0;
     const interior = galleryImmersion(camera.position.x, camera.position.y, camera.position.z);
     this.environmentGain *= 1 - .97 * interior;
+    if (listening) this.environmentGain *= .12;
     if (interior > .8) this.label.hidden = true;
     const context = this.context;
     if (!context || !this.ambience) return;

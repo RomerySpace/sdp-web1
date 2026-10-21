@@ -1,12 +1,19 @@
-import { CanvasTexture, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, BoxGeometry, BufferGeometry, Shape, ShapeGeometry, ExtrudeGeometry, DoubleSide, SRGBColorSpace, SpotLight, PointLight, Vector2, LinearMipmapLinearFilter, type Camera, type Material } from 'three';
+import { CanvasTexture, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry, BoxGeometry, BufferGeometry, Shape, ShapeGeometry, ExtrudeGeometry, DoubleSide, SRGBColorSpace, SpotLight, PointLight, Vector2, Vector3, Raycaster, CylinderGeometry, TubeGeometry, CatmullRomCurve3, LinearMipmapLinearFilter, type Camera, type Material } from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { lowerGallery as g, galleryOutline, galleryStairWidth, galleryStairHeight, galleryImmersion, onGalleryStairs } from '../../shared/LowerGallery';
 import { GalleryFilm } from './GalleryFilm';
+import { ListeningHeadphones } from './ListeningHeadphones';
+import { galleryListening, canTakeGalleryHeadphones } from '../../shared/LowerGallery';
 
 export class LowerGallery {
   readonly group = new Group();
   readonly occluders: Mesh[] = [];
   readonly film: GalleryFilm;
+  readonly headphones: Group;
+  private readonly headphoneKit = new ListeningHeadphones();
+  private readonly headphoneRay = new Raycaster();
+  private readonly headphoneTarget: Mesh;
+  private readonly center = new Vector2();
   private readonly materials = new Set<Material>();
   private readonly textures: CanvasTexture[] = [];
   private readonly reflection: Reflector;
@@ -92,6 +99,21 @@ export class LowerGallery {
     });
     screen.material = this.film.material; this.group.add(screen);
     this.occluders.push(screen);
+    this.headphones = this.headphoneKit.create(); this.headphones.name = 'Gallery / Kenosis listening headphones';
+    this.headphones.position.set(galleryListening.x, galleryListening.y, galleryListening.z); this.headphones.rotation.y = Math.PI / 2;
+    this.group.add(this.headphones);
+    const targetMaterial = new MeshBasicMaterial({ visible: false }); this.materials.add(targetMaterial);
+    this.headphoneTarget = new Mesh(new BoxGeometry(.34, .42, .42), targetMaterial);
+    this.headphoneTarget.position.copy(this.headphones.position).add(new Vector3(0, .1, 0)); this.group.add(this.headphoneTarget);
+    const socketMaterial = new MeshStandardMaterial({ color: 0xffffff, metalness: .12, roughness: .45, fog: false }); this.materials.add(socketMaterial);
+    box('Gallery / headphone hook', .34, .016, .025, -11.75, galleryListening.y + .26, galleryListening.z, socketMaterial, false);
+    const socket = new Mesh(new CylinderGeometry(.023, .023, .018, 20), socketMaterial);
+    socket.rotation.z = Math.PI / 2; socket.position.set(-g.halfWidth + .105, g.floorY + .3, g.film.z + .28); socket.name = 'Gallery / audio socket'; this.group.add(socket);
+    const cable = new Mesh(new TubeGeometry(new CatmullRomCurve3([
+      new Vector3(galleryListening.x, galleryListening.y - .06, galleryListening.z - .15),
+      new Vector3(galleryListening.x + .02, g.floorY + .15, galleryListening.z - .08),
+      new Vector3(g.film.x + .04, g.floorY + .15, g.film.z + .23), socket.position.clone(),
+    ]), 32, .0035, 5, false), socketMaterial); cable.name = 'Gallery / listening cable'; this.group.add(cable);
     const label = this.artworkLabel(); label.scale.setScalar(.7); label.position.set(-11.73, g.floorY + 1.45, -3.4); label.rotation.y = Math.PI / 2; this.group.add(label);
     this.exhibitionLighting();
     this.benchContactShadows();
@@ -213,8 +235,17 @@ export class LowerGallery {
     const approaching = onGalleryStairs(p.x, p.z) && p.x < 28;
     this.film.update(enabled && (immersion > .05 || approaching), gameVolume * immersion);
   }
+  focusHeadphones(camera: Camera): boolean {
+    if (!canTakeGalleryHeadphones(camera.position)) return false;
+    camera.updateMatrixWorld(); this.group.updateMatrixWorld(true);
+    this.headphoneRay.setFromCamera(this.center, camera); this.headphoneRay.far = galleryListening.interactionDistance;
+    const hit = this.headphoneRay.intersectObject(this.headphoneTarget, false)[0];
+    return !!hit && !this.headphoneRay.intersectObjects(this.occluders, false).some(other => other.distance < hit.distance - .02);
+  }
   dispose(): void {
     this.reflection.dispose();
+    this.headphones.removeFromParent();
+    this.headphoneKit.dispose();
     this.group.removeFromParent(); this.group.traverse(object => { if (object instanceof Mesh) object.geometry.dispose(); });
     this.materials.forEach(material => material.dispose()); this.textures.forEach(texture => texture.dispose()); this.film.dispose();
   }

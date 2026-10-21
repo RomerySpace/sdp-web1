@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { enterExhibition } from './entry';
 import { touchDriver } from './touch-driver';
-import { lowerGallery } from '../shared/LowerGallery';
+import { lowerGallery, galleryListening } from '../shared/LowerGallery';
 import { lobbySeatSlots } from '../shared/LobbyRetreat';
 import { Box3, ObjectLoader, Raycaster, Vector3 } from 'three';
 
@@ -94,6 +94,24 @@ test('lower gallery: two visitors descend, see the real film, sit below the mono
     await descend(first, false); await descend(second, true); await walk(second, 8, -6, true);
     await first.bringToFront(); await resume(first);
     await expect.poll(() => first.evaluate(() => window.sdpUnified.scene.environment.gallery.film.diagnostics.ready), { timeout: 20000 }).toBeGreaterThanOrEqual(2);
+    expect(await first.evaluate(() => window.sdpUnified.scene.environment.gallery.film.diagnostics.listening)).toBe(false);
+    expect(await first.evaluate(() => window.sdpUnified.scene.environment.gallery.film.diagnostics.level)).toBeLessThan(.00001);
+    await walk(first, 8, -6, false); await walk(first, -9.5, -6, false); await walk(first, -9.5, galleryListening.z, false, .4);
+    await first.evaluate(target => {
+      const app = window.sdpUnified, s = app.network.snapshot!, local = s.players.find(p => p.playerId === s.localPlayerId)!;
+      app.player.setSpawn({ ...local, yaw: Math.atan2(-(target.x - local.x), -(target.z - local.z)), pitch: Math.atan2(target.y + .1 - local.y, Math.hypot(target.x - local.x, target.z - local.z)) });
+    }, galleryListening);
+    await expect(first.getByRole('button', { name: 'Listen to Kenosis', exact: true })).toBeVisible();
+    await first.screenshot({ path: '/private/tmp/sdp-gallery-headphones.png' });
+    await first.keyboard.press('KeyE');
+    await expect.poll(() => first.evaluate(() => window.sdpUnified.scene.environment.gallery.film.listening)).toBe(true);
+    await expect.poll(() => second.evaluate(() => window.sdpUnified.network.snapshot!.players.find(p => p.displayName === 'Gallery Visitor')?.listening)).toBe(true);
+    await expect.poll(() => second.evaluate(() => window.sdpUnified.scene.environment.gallery.film.listening)).toBe(false);
+    await expect.poll(() => second.evaluate(() => window.sdpUnified.scene.environment.gallery.film.diagnostics.level)).toBeLessThan(.00001);
+    await expect.poll(() => second.evaluate(() => {
+      const app = window.sdpUnified, player = app.network.snapshot!.players.find(p => p.displayName === 'Gallery Visitor');
+      return !!app.scene.remotePlayers.group.getObjectByName(`Visitor:${player?.playerId}`)?.getObjectByName('Gallery headphones')?.visible;
+    })).toBe(true);
     if (await first.getByRole('button', { name: 'Enable film audio' }).isVisible()) { await first.keyboard.press('Escape'); await first.getByRole('button', { name: 'Enable film audio' }).click(); await resume(first); }
     await expect.poll(() => first.evaluate(() => window.sdpUnified.scene.environment.gallery.film.diagnostics.playing)).toBe(true);
     const frames = await first.evaluate(() => window.sdpUnified.scene.environment.gallery.film.diagnostics.frames);
@@ -102,6 +120,9 @@ test('lower gallery: two visitors descend, see the real film, sit below the mono
     const metadata = await first.evaluate(() => window.sdpUnified.scene.environment.gallery.film.diagnostics);
     console.log('Gallery film metadata', JSON.stringify(metadata));
     expect(metadata.width).toBeGreaterThan(0); expect(metadata.error).toBeUndefined();
+    await first.keyboard.press('KeyE');
+    await expect.poll(() => first.evaluate(() => window.sdpUnified.scene.environment.gallery.film.listening)).toBe(false);
+    await expect.poll(() => first.evaluate(() => window.sdpUnified.scene.environment.gallery.film.diagnostics.level)).toBeLessThan(.00001);
     const shell = await first.evaluate(() => {
       const scene = window.sdpUnified.scene.scene;
       return ['Gallery / continuous sloped stair ceiling', 'Gallery / seamless curved mineral floor', 'Gallery / continuous quiet ceiling', 'Gallery / protected entrance end'].map(name => scene.getObjectByName(name)!.toJSON());

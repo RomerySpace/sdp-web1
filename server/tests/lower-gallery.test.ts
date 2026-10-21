@@ -4,7 +4,7 @@ import { Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three';
 import { Server, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { Client, type Room } from '@colyseus/sdk';
-import { lowerGallery as g, galleryStairHeight, inGalleryRoom, galleryBarrier } from '../../shared/LowerGallery';
+import { lowerGallery as g, galleryStairHeight, inGalleryRoom, galleryBarrier, galleryListening, canTakeGalleryHeadphones, canKeepGalleryHeadphones, validGalleryListening } from '../../shared/LowerGallery';
 import { simulateMovement, type MotionState } from '../../shared/Movement';
 import { PLAYER_HEIGHT } from '../../shared/MultiplayerProtocol';
 import { CollisionManager } from '../../src/player/CollisionManager';
@@ -13,6 +13,45 @@ import { lobbySeatSlots } from '../../shared/LobbyRetreat';
 import { SDPLobby } from '../src/rooms/SDPLobby';
 import type { LobbyState } from '../src/state/LobbyState';
 import type { MovementSimulation } from '../src/simulation/MovementSimulation';
+
+test('headphone access is bounded to the real gallery and accepts only a listening toggle', () => {
+  assert.equal(canTakeGalleryHeadphones({ x: -9.5, y: g.floorY + PLAYER_HEIGHT, z: galleryListening.z }), true);
+  assert.equal(canTakeGalleryHeadphones({ x: -9.5, y: PLAYER_HEIGHT, z: galleryListening.z }), false);
+  assert.equal(canTakeGalleryHeadphones({ x: 1, y: g.floorY + PLAYER_HEIGHT, z: 0 }), false);
+  assert.equal(canKeepGalleryHeadphones({ x: 1, y: g.floorY + 1.18, z: 0 }), true);
+  assert.equal(canKeepGalleryHeadphones({ x: 8, y: g.floorY + PLAYER_HEIGHT, z: 0 }), false);
+  for (const raw of [null, [], { listening: 1 }, { listening: true, playerId: 'other' }, { listening: true, x: -10 }]) assert.equal(validGalleryListening(raw), false);
+  assert.equal(validGalleryListening({ listening: true }), true);
+});
+
+test('two real listeners can share an artwork; the server rejects remote pickup and removes headphones on exit', { timeout: 12000 }, async () => {
+  const transport = new WebSocketTransport(), server = new Server({ transport, greet: false, gracefullyShutdown: false });
+  server.define('GalleryAudio', SDPLobby); await server.listen(0, '127.0.0.1');
+  const client = new Client(`http://127.0.0.1:${(transport.server!.address() as { port: number }).port}`), rooms: Room<LobbyState>[] = [];
+  const until = async (fn: () => boolean) => { const end = Date.now() + 4000; while (!fn()) { if (Date.now() > end) throw new Error('Headphone state timeout'); await new Promise(r => setTimeout(r, 20)); } };
+  try {
+    const a = await client.create<LobbyState>('GalleryAudio'), b = await client.joinById<LobbyState>(a.roomId), isolated = await client.create<LobbyState>('GalleryAudio'); rooms.push(a, b, isolated);
+    const notices: string[] = [];
+    for (const room of rooms) { room.onMessage('lobby:notice', text => notices.push(text)); room.onMessage('lobby:correction', () => {}); }
+    await until(() => !!b.state.players?.get(a.sessionId));
+    const room = matchMaker.getLocalRoomById(a.roomId) as SDPLobby;
+    const place = (id: string, x: number, groundY: number = g.floorY) => {
+      const p = room.state.players.get(id)!; p.x = x; p.z = galleryListening.z; p.y = groundY + PLAYER_HEIGHT;
+      (room as unknown as { simulation: MovementSimulation }).simulation.add(id, { x: p.x, z: p.z, groundY });
+    };
+    a.send('gallery:listen', { listening: true }); await until(() => notices.length > 0);
+    assert.equal(room.state.players.get(a.sessionId)!.listening, false);
+    place(a.sessionId, -9.6); place(b.sessionId, -9.8);
+    a.send('gallery:listen', { listening: true }); b.send('gallery:listen', { listening: true });
+    await until(() => !!b.state.players.get(a.sessionId)?.listening && !!a.state.players.get(b.sessionId)?.listening);
+    assert.equal(isolated.state.players.has(a.sessionId), false);
+    a.send('gallery:listen', { listening: false }); await until(() => !b.state.players.get(a.sessionId)!.listening);
+    assert.equal(a.state.players.get(b.sessionId)!.listening, true);
+    place(b.sessionId, 8); await until(() => !a.state.players.get(b.sessionId)!.listening);
+    place(a.sessionId, -9.6); a.send('gallery:listen', { listening: true }); await until(() => !!b.state.players.get(a.sessionId)!.listening);
+    place(a.sessionId, -9.6, 0); await until(() => !b.state.players.get(a.sessionId)!.listening);
+  } finally { await Promise.all(rooms.map(room => room.leave())); await server.gracefullyShutdown(false); }
+});
 
 test('stairs reach the lower floor through bounded treads and a real opening without removing the monolith floor', () => {
   assert.equal(galleryStairHeight(30), 0); assert.ok(Math.abs(galleryStairHeight(12) - g.floorY) < 1e-8);

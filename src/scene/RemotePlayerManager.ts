@@ -4,14 +4,16 @@ import { PLAYER_HEIGHT } from '../../shared/MultiplayerProtocol';
 import type { Atmosphere } from './Atmosphere';
 import { lobbyAmbience } from '../core/LobbyAmbience';
 import { lobbyRetreat, lobbySeatSlots } from '../../shared/LobbyRetreat';
+import { ListeningHeadphones } from './ListeningHeadphones';
 
 interface Sample { time: number; x: number; y: number; z: number; yaw: number; pitch: number; crouching: boolean; seat: number }
-interface RemoteVisitor { group: Group; body: Mesh; legs: Group; posture: number; name: string; marker: Mesh; material: MeshStandardMaterial; halo: Mesh<CapsuleGeometry, ShaderMaterial>; level: number; samples: Sample[] }
+interface RemoteVisitor { group: Group; body: Mesh; legs: Group; headphones: Group; posture: number; name: string; marker: Mesh; material: MeshStandardMaterial; halo: Mesh<CapsuleGeometry, ShaderMaterial>; level: number; samples: Sample[] }
 const INTERPOLATION_DELAY_MS = 100;
 
 export class RemotePlayerManager {
   readonly group = new Group();
   private readonly visitors = new Map<string, RemoteVisitor>();
+  private readonly headphoneKit = new ListeningHeadphones();
   private voiceLevels: ReadonlyMap<string, number> = new Map();
   private lastUpdate = 0;
   private readonly raycaster = new Raycaster();
@@ -67,15 +69,17 @@ export class RemotePlayerManager {
           const thigh = new Mesh(this.legGeometry, material); thigh.position.set(x, .46, -.18); thigh.rotation.x = Math.PI / 2;
           const shin = new Mesh(this.legGeometry, material); shin.position.set(x, .22, -.38); legs.add(thigh, shin);
         }
-        group.add(body, marker, halo, legs);
+        const headphones = this.headphoneKit.create(); headphones.scale.set(1.7, 1.2, 1.5); headphones.visible = false;
+        group.add(body, marker, halo, legs, headphones);
         group.traverse(object => object.layers.enable(7));
         group.position.set(player.x, player.y - PLAYER_HEIGHT, player.z);
         group.rotation.y = player.yaw;
-        visitor = { group, body, legs, posture: 0, name: '', marker, material, halo, level: 0, samples: [] };
+        visitor = { group, body, legs, headphones, posture: 0, name: '', marker, material, halo, level: 0, samples: [] };
         this.visitors.set(player.playerId, visitor);
         this.group.add(group);
       }
       visitor.name = player.displayName || 'VISITOR';
+      visitor.headphones.visible = !!player.listening;
       visitor.samples.push({ time: snapshot.receivedAt, x: player.x, y: player.y, z: player.z, yaw: player.yaw, pitch: player.pitch, crouching: Boolean(player.crouching), seat: player.seatIndex ?? -1 });
       if (visitor.samples.length > 8) visitor.samples.shift();
     }
@@ -139,12 +143,15 @@ export class RemotePlayerManager {
       const pitch = before.pitch + (after.pitch - before.pitch) * t;
       visitor.marker.position.y = 1.48 - visitor.posture * .23 + Math.sin(pitch) * 0.08;
       visitor.marker.rotation.y = 0;
+      visitor.headphones.position.y = visitor.marker.position.y - .15;
+      visitor.headphones.rotation.x = pitch * .45;
     }
   }
 
   dispose(): void {
     for (const visitor of this.visitors.values()) { visitor.group.removeFromParent(); visitor.group.clear(); visitor.material.dispose(); visitor.halo.material.dispose(); }
     this.visitors.clear();
+    this.headphoneKit.dispose();
     this.group.removeFromParent();
     this.body.dispose(); this.legGeometry.dispose(); this.markerGeometry.dispose(); this.material.dispose(); this.haloMaterial.dispose();
   }

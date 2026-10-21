@@ -9,6 +9,22 @@ export const lowerGallery = {
   film: { url: '/gallery/kenosis.mp4', x: -11.76, y: -5.35, z: -1.2, width: 3.2, height: 1.8 },
 } as const;
 
+export const galleryListening = {
+  x: lowerGallery.film.x + .18, y: lowerGallery.floorY + .62, z: lowerGallery.film.z,
+  interactionDistance: 2.6, hearingRadius: 18,
+} as const;
+export function canKeepGalleryHeadphones(p: { x: number; y: number; z: number }): boolean {
+  return p.y < lowerGallery.layerThreshold && inGalleryRoom(p.x, p.z)
+    && Math.hypot(p.x - galleryListening.x, p.z - galleryListening.z) <= galleryListening.hearingRadius;
+}
+export function canTakeGalleryHeadphones(p: { x: number; y: number; z: number }): boolean {
+  return canKeepGalleryHeadphones(p) && Math.hypot(p.x - galleryListening.x, p.y - galleryListening.y, p.z - galleryListening.z) <= galleryListening.interactionDistance;
+}
+export function validGalleryListening(raw: unknown): raw is { listening: boolean } {
+  return !!raw && typeof raw === 'object' && !Array.isArray(raw) && Object.keys(raw).length === 1
+    && 'listening' in raw && typeof raw.listening === 'boolean';
+}
+
 export function onGalleryStairs(x: number, z: number): boolean {
   return x >= lowerGallery.stairBottom && x <= lowerGallery.stairTop && Math.abs(z - lowerGallery.stairZ) < galleryStairWidth(x);
 }
