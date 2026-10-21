@@ -13,6 +13,7 @@ export class Atmosphere {
     atmosphereTime: { value: 0 }, atmosphereReveal: { value: 0 },
     atmosphereHorizon: this.horizon,
     atmosphereInterior: { value: 0 },
+    atmosphereNight: { value: 0 },
   };
   private readonly backdrop: Mesh<PlaneGeometry, ShaderMaterial>;
 
@@ -34,12 +35,15 @@ export class Atmosphere {
       `,
       fragmentShader: `
         uniform float atmosphereReveal;
+        uniform float atmosphereNight;
         uniform vec3 atmosphereHorizon;
         varying vec3 vWorldDirection;
         void main() {
           float elevation = normalize(vWorldDirection).y;
           vec3 color = mix(atmosphereHorizon, vec3(.38, .42, .46), smoothstep(-.035, .68, elevation));
           color = mix(color, vec3(.29, .34, .40), smoothstep(.62, 1.0, elevation) * .3);
+          vec3 nightSky = mix(vec3(.045, .052, .057), vec3(.018, .023, .027), smoothstep(-.04, .7, elevation));
+          color = mix(color, nightSky, atmosphereNight);
           gl_FragColor = vec4(mix(vec3(1.0), color, atmosphereReveal), 1.0);
         }
       `,
@@ -72,6 +76,7 @@ export class Atmosphere {
           uniform float atmosphereReveal;
           uniform vec3 atmosphereHorizon;
           uniform float atmosphereInterior;
+          uniform float atmosphereNight;
         `)
         .replace('#include <fog_fragment>', `
           float opticalDistance = length(vAtmospherePosition - cameraPosition);
@@ -83,18 +88,21 @@ export class Atmosphere {
           float haze = 1.0 - exp(-pow(opticalDistance * density, 2.0) * heightFalloff * (1.0 + flow * 0.12));
           vec3 hazeColor = mix(vec3(0.72, 0.74, 0.76), atmosphereHorizon,
                                smoothstep(18.0, 90.0, opticalDistance));
+          hazeColor = mix(hazeColor, vec3(.045, .052, .057), atmosphereNight);
+          gl_FragColor.rgb *= mix(1.0, .52, atmosphereNight);
           haze = mix(1.0, haze, smoothstep(0.0, 0.3, atmosphereReveal));
           hazeColor = mix(vec3(1.0), hazeColor, atmosphereReveal);
           hazeColor = mix(hazeColor, vec3(.94, .96, .97), atmosphereInterior);
           gl_FragColor.rgb = mix(gl_FragColor.rgb, hazeColor, clamp(haze, 0.0, 1.0));
         `);
     };
-    material.customProgramCacheKey = () => 'sdp-atmosphere-v4';
+    material.customProgramCacheKey = () => 'sdp-atmosphere-v5';
   }
 
-  update(time: number, reveal: number, camera?: PerspectiveCamera): void {
+  update(time: number, reveal: number, camera?: PerspectiveCamera, night = 0): void {
     this.uniforms.atmosphereTime.value = time;
     this.uniforms.atmosphereReveal.value = reveal;
+    this.uniforms.atmosphereNight.value = night;
     if (camera) {
       this.uniforms.atmosphereInterior.value = galleryImmersion(camera.position.x, camera.position.y, camera.position.z);
       camera.updateMatrixWorld();

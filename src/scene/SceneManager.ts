@@ -12,6 +12,8 @@ import { DigitalFragmentManager } from './graphics/DigitalFragmentManager';
 import { RemotePlayerManager } from './RemotePlayerManager';
 import { LobbyRain } from './LobbyRain';
 import { TreeFireflies } from './TreeFireflies';
+import { treeNightTarget } from './TreeNight';
+import { lobbyAmbience } from '../core/LobbyAmbience';
 
 export class SceneManager {
   readonly scene = new Scene();
@@ -27,6 +29,8 @@ export class SceneManager {
   readonly remotePlayers: RemotePlayerManager;
   readonly rain: LobbyRain;
   readonly fireflies: TreeFireflies;
+  private treeNight = 0;
+  get treeNightAmount(): number { return this.treeNight; }
 
   constructor(container: HTMLElement) {
     this.renderer = new WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
@@ -63,11 +67,15 @@ export class SceneManager {
   }
 
   render(dt: number, time: number, reveal: number, limbo = true, chatting = false): void {
+    const target = treeNightTarget(this.camera.position, limbo && reveal > .95 && !this.inspection.active);
+    this.treeNight += (target - this.treeNight) * (1 - Math.exp(-dt * lobbyAmbience.treeNight.response));
+    if (Math.abs(target - this.treeNight) < .0001) this.treeNight = target;
+    this.lighting.update(this.treeNight);
     this.garden.update(time, reveal, this.camera.position);
     this.sculpture.update(dt);
-    this.atmosphere.update(time, reveal, this.camera);
+    this.atmosphere.update(time, reveal, this.camera, this.treeNight);
     this.environment.update(reveal);
-    this.graphics.update(dt, time, reveal);
+    this.graphics.update(dt, time, reveal, 1 - (1 - lobbyAmbience.treeNight.fragmentLight) * this.treeNight);
     this.remotePlayers.update(performance.now(), reveal);
     this.rain.update(dt, time, reveal, this.camera, limbo && !this.inspection.active);
     this.fireflies.update(time, reveal, limbo && !this.inspection.active);

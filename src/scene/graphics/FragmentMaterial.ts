@@ -11,6 +11,7 @@ export class FragmentMaterial {
       uniforms: UniformsUtils.merge([UniformsLib.fog, {
         uColor: { value: new Color(points ? '#B8CDD8' : '#A9C7D7') },
         uTime: { value: 0 }, uProgress: { value: 0 }, uOpacity: { value: 0 },
+        uAmbientLight: { value: 1 },
         uDepthStrength: { value: 0.8 }, uDensity: { value: 1 }, uPhase: { value: 0 },
         uDriftSpeed: { value: 0.12 }, uPixelRatio: { value: 1 },
       }]),
@@ -59,6 +60,7 @@ export class FragmentMaterial {
         #include <fog_pars_fragment>
         uniform vec3 uColor;
         uniform float uOpacity;
+        uniform float uAmbientLight;
         uniform float uDensity;
         varying float vPresence;
         varying float vSeed;
@@ -72,6 +74,7 @@ export class FragmentMaterial {
           gl_FragColor = vec4(uColor, alpha);
           #include <fog_fragment>
           #include <colorspace_fragment>
+          gl_FragColor.rgb *= uAmbientLight;
         }
       `,
     });

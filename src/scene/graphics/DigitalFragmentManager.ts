@@ -142,7 +142,9 @@ export class DigitalFragmentManager {
     this.lastRefresh.copy(this.cameraPosition);
   }
 
-  update(dt: number, time: number, reveal: number): void {
+  update(dt: number, time: number, reveal: number, ambientLight = 1): void {
+    this.materials.lines.uniforms.uAmbientLight.value = ambientLight;
+    this.materials.points.uniforms.uAmbientLight.value = ambientLight;
     if (this.disposed || !this.assets.length) return;
     const entered = reveal >= 0.999;
     const enabled = this.settings.enabled && entered;

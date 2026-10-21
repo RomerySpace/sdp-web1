@@ -5,6 +5,8 @@ export const lobbyAmbience = {
   floorReflectance: .62,
   grass: { emissiveIntensity: .2, rootBrightness: .91 },
   fireflies: { count: 64, mobileCount: 32, radius: 6, height: 4.2, size: .085, opacity: .85 },
+  treeNight: { fullRadius: 8, outerRadius: 22, response: 1.4, keyScale: .16, fillScale: .24,
+    skyScale: .28, environmentScale: .18, bounceIntensity: 8, fragmentLight: .18 },
   voice: { silentOpacity: .68, speakingOpacity: .96, noiseFloor: .008, fullLevel: .12,
     glowIntensity: 2.2, haloOpacity: .38 },
   identity: { distance: 6 },
