@@ -7,12 +7,18 @@ import { SDPShooterRoom } from './rooms/SDPShooterRoom';
 import { SHOOTER_ROOM } from '../../shared/ShooterProtocol';
 import { OriginPolicy } from './config/OriginPolicy';
 import { liveKitURLs } from './config/LiveKitConfig';
+import { admission } from './communication/Admission';
+import { SDPAdmission } from './rooms/SDPAdmission';
+import { admissionConfig } from '../../shared/Admission';
 
 const port = Number(process.env.PORT || 2567);
 const host = process.env.HOST || '0.0.0.0';
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT must be between 1 and 65535.');
 
 const origins = new OriginPolicy();
+const capacity = Number(process.env.SDP_VISITOR_CAPACITY || MAX_PLAYERS);
+if (!Number.isInteger(capacity) || capacity < 1 || capacity > 1000) throw new Error('SDP_VISITOR_CAPACITY must be between 1 and 1000.');
+admission.enabled = true; admission.capacity = capacity;
 const voiceConfigured = Boolean(process.env.LIVEKIT_API_KEY && process.env.LIVEKIT_API_SECRET);
 if (Boolean(process.env.LIVEKIT_API_KEY) !== Boolean(process.env.LIVEKIT_API_SECRET)) {
   throw new Error('LIVEKIT_API_KEY and LIVEKIT_API_SECRET must both be set on the backend.');
@@ -33,6 +39,7 @@ const server = new Server({
   greet: false,
 });
 server.define(LOBBY_NAME, SDPLobby);
+server.define(admissionConfig.room, SDPAdmission);
 server.define('SDPLobby', SDPLobby);
 server.define(SHOOTER_ROOM, SDPShooterRoom);
 server.router = createRouter({}, {

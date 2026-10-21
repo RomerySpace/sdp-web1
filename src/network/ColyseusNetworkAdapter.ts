@@ -12,6 +12,8 @@ import type { AirstrikeFlight, AirstrikeRequest, AirstrikeResult } from '../../s
 import type { StationClaimResult, StationCommand, StationSnapshot, StationSound } from '../../shared/AmbientStation';
 import { sessionPolicy } from '../../shared/SessionPolicy';
 import type { GalleryListenResult } from '../../shared/LowerGallery';
+import { AdmissionClient } from './AdmissionClient';
+import { admissionConfig } from '../../shared/Admission';
 
 function serverEndpoint(): string {
   const configured = import.meta.env.VITE_SDP_SERVER_URL;
@@ -43,6 +45,8 @@ type LobbyRoom = Room<LobbyRoomType, DecodedLobby>;
 
 export class ColyseusNetworkAdapter implements MultiplayerConnection {
   private readonly client: Client;
+  private readonly admission: AdmissionClient;
+  private lastReservationSave = 0;
   private profileName = '';
   private room: LobbyRoom | undefined;
   private readonly states = new Set<(snapshot: LobbySnapshot) => void>();
@@ -76,6 +80,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
 
   constructor(endpoint = serverEndpoint()) {
     this.client = new Client(endpoint);
+    this.admission = new AdmissionClient(this.client);
     try { this.profileName = validateDisplayName(localStorage.getItem('sdp:displayName')) ?? ''; } catch {}
   }
   get displayName(): string { return this.profileName; }
@@ -102,17 +107,34 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
     this.setStatus('connecting');
     try {
       const preferredRoom = import.meta.env.DEV && this.roomType === LOBBY_NAME ? new URLSearchParams(location.search).get('room') : null;
-      const room = preferredRoom
-        ? await this.client.joinById<LobbyRoomType>(preferredRoom, { displayName: this.profileName || undefined })
-        : await this.client.joinOrCreate<LobbyRoomType>(this.roomType, { displayName: this.profileName || undefined });
+      let room: LobbyRoom | undefined;
+      const saved = this.savedReconnect();
+      if (saved) {
+        try {
+          const previous = await this.client.reconnect<LobbyRoomType>(saved.token);
+          if (saved.type === this.roomType) room = previous;
+          else { previous.reconnection.enabled = false; await previous.leave(); this.clearReconnect(); }
+        } catch (error) {
+          if ((error as { code?: number }).code === 522) this.clearReconnect();
+          else throw error;
+        }
+      }
+      if (!room) {
+        const admissionToken = await this.admission.enter(position => this.setStatus('connecting', 0, MAX_PLAYERS, '', undefined, position));
+        if (this.disposed || generation !== this.generation) return;
+        const options = { displayName: this.profileName || undefined, admissionToken };
+        room = preferredRoom ? await this.client.joinById<LobbyRoomType>(preferredRoom, options)
+          : await this.client.joinOrCreate<LobbyRoomType>(this.roomType, options);
+      }
       if (this.disposed || generation !== this.generation) { await room.leave(); return; }
       this.room = room;
+      this.saveReconnect(room);
       this.needsSpawn = true;
       this.retries = 0;
       room.reconnection.minUptime = 0;
-      room.reconnection.maxRetries = 6;
+      room.reconnection.maxRetries = 65;
       room.reconnection.minDelay = 250;
-      room.reconnection.maxDelay = 1000;
+      room.reconnection.maxDelay = 2000;
       room.reconnection.maxEnqueuedMessages = 0;
       room.onMessage<RoomChatMessage>('chat:message', (message) => {
         if (this.room !== room || message.roomId !== room.roomId) return;
@@ -169,11 +191,13 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
         if (this.room !== room || this.disposed) return;
         this.rejectVoiceRequests();
         this.needsSpawn = true;
+        this.saveReconnect(room);
         this.setStatus('connecting');
+        for (const callback of this.notices) callback('Connection interrupted. Your place is reserved for up to two minutes.');
         this.clearRemoteState();
       });
       room.onReconnect(() => {
-        if (this.room === room && !this.disposed) { this.receive(room, room.state); if (this.roomType === LOBBY_NAME) room.send('station:command', { type: 'sync' }); }
+        if (this.room === room && !this.disposed) { queueMicrotask(() => { if (this.room === room) this.saveReconnect(room); }); this.receive(room, room.state); if (this.roomType === LOBBY_NAME) room.send('station:command', { type: 'sync' }); }
       });
       room.onError(() => {
         if (this.room === room && !this.disposed) this.setStatus('disconnected');
@@ -182,6 +206,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
         if (this.room !== room) return;
         const inactive = code === sessionPolicy.idleCloseCode;
         if (inactive) {
+          this.clearReconnect();
           this.inactive = true;
           this.retryEnabled = false;
           room.reconnection.enabled = false;
@@ -202,6 +227,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
 
   private receive(room: LobbyRoom, state: DecodedLobby): void {
     if (this.room !== room || this.disposed || room.reconnection.isReconnecting || !state?.players) return;
+    if (Date.now() - this.lastReservationSave > 5000) this.saveReconnect(room);
     const players: NetworkPlayer[] = [];
     state.players.forEach((player, id) => players.push({
       displayName: player.displayName, automatic: player.automatic, kills: player.kills, deaths: player.deaths, streak: player.streak, strikes: player.strikes, lastDamageAt: player.lastDamageAt,
@@ -241,9 +267,9 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
       request.finish({ roomId: room.roomId, requestId, accepted: true, listening: request.value, player: local });
   }
 
-  private setStatus(state: ConnectionStatus['state'], online = 0, capacity = MAX_PLAYERS, roomId = '', reason?: ConnectionStatus['reason']): void {
-    if (this.disposed || (this.currentStatus.state === state && this.currentStatus.online === online && this.currentStatus.roomId === roomId && this.currentStatus.reason === reason)) return;
-    this.currentStatus = { state, online, capacity, roomId, reason };
+  private setStatus(state: ConnectionStatus['state'], online = 0, capacity = MAX_PLAYERS, roomId = '', reason?: ConnectionStatus['reason'], queuePosition?: number): void {
+    if (this.disposed || (this.currentStatus.state === state && this.currentStatus.online === online && this.currentStatus.roomId === roomId && this.currentStatus.reason === reason && this.currentStatus.queuePosition === queuePosition)) return;
+    this.currentStatus = { state, online, capacity, roomId, reason, queuePosition };
     for (const callback of this.statuses) callback(this.currentStatus);
   }
 
@@ -325,6 +351,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
     });
   }
   async leaveRoom(): Promise<void> {
+    this.admission.stop(); this.clearReconnect();
     this.retryEnabled = false; ++this.generation;
     window.clearTimeout(this.retryTimer); this.retryTimer = 0;
     this.rejectVoiceRequests();
@@ -405,8 +432,11 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
     return () => this.spawns.delete(callback);
   }
 
-  disconnect(): void {
+  disconnect(preservePlace = false): void {
     if (this.disposed) return;
+    this.admission.stop();
+    if (preservePlace && this.room?.connection.isOpen) this.saveReconnect(this.room);
+    else if (!preservePlace) this.clearReconnect();
     this.setStatus('disconnected');
     this.clearRemoteState();
     this.disposed = true;
@@ -414,7 +444,11 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
     window.clearTimeout(this.retryTimer);
     const room = this.room;
     this.room = undefined;
-    if (room) { room.reconnection.enabled = false; void room.leave().catch(() => {}); }
+    if (room) {
+      room.reconnection.enabled = false;
+      if (preservePlace) room.connection.close(4010, 'Page suspended');
+      else void room.leave().catch(() => {});
+    }
     this.states.clear(); this.statuses.clear(); this.spawns.clear();
     this.messages.clear(); this.notices.clear();
     this.weapons.clear();
@@ -422,4 +456,17 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
     this.strikeResults.clear();
     this.corrections.clear(); this.stationClaims.clear();
   }
+
+  private saveReconnect(room: LobbyRoom): void {
+    this.lastReservationSave = Date.now();
+    try { sessionStorage.setItem('sdp:reconnect', JSON.stringify({ token: room.reconnectionToken, type: this.roomType, expires: Date.now() + admissionConfig.reservationSeconds * 1000 })); } catch {}
+  }
+  private savedReconnect(): { token: string; type: string } | undefined {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem('sdp:reconnect') || 'null');
+      if (typeof saved?.type === 'string' && typeof saved.token === 'string' && saved.expires > Date.now()) return saved;
+    } catch {}
+    this.clearReconnect(); return;
+  }
+  private clearReconnect(): void { try { sessionStorage.removeItem('sdp:reconnect'); } catch {} }
 }

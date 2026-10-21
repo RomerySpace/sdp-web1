@@ -74,6 +74,7 @@ export interface LobbySnapshot {
 }
 
 export interface ConnectionStatus {
+  queuePosition?: number;
   reason?: 'inactive';
   state: 'connecting' | 'connected' | 'disconnected';
   online: number;

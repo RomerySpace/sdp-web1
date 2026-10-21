@@ -23,5 +23,6 @@ export class RoomInactivity {
       client.leave(sessionPolicy.idleCloseCode, 'Inactive for 5 minutes');
     }
   }
+  isExpired(id: string): boolean { return this.expiring.has(id); }
   remove(id: string): void { this.activity.delete(id); this.expiring.delete(id); }
 }

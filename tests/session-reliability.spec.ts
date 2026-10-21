@@ -7,7 +7,8 @@ import type { MovementSimulation } from '../server/src/simulation/MovementSimula
 import type { RoomInactivity } from '../server/src/communication/RoomInactivity';
 import { lobbySeatSlots } from '../shared/LobbyRetreat';
 import { sessionPolicy } from '../shared/SessionPolicy';
-import { enterExhibition } from './entry';
+import { enterExhibition, submitName } from './entry';
+import { admission } from '../server/src/communication/Admission';
 import { ambientStation } from '../shared/AmbientStation';
 import { lowerGallery, galleryListening } from '../shared/LowerGallery';
 
@@ -21,6 +22,42 @@ test.beforeAll(async () => {
   await vite.listen(); url = `http://127.0.0.1:${port}`;
 });
 test.afterAll(async () => { await vite?.close(); await fixture?.server.gracefullyShutdown(false); });
+
+test('entry queue: loading bar, mobile waiting position, reload reservation and automatic admission', async ({ browser }) => {
+  admission.enabled = true; admission.capacity = 1;
+  const desktop = await browser.newContext(), mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const first = await desktop.newPage(), second = await mobile.newPage(), errors: string[] = [];
+  try {
+    for (const page of [first, second]) page.on('pageerror', error => errors.push(error.message));
+    await first.route('**/SDP/SDPv1.glb', async route => { await new Promise(resolve => setTimeout(resolve, 2000)); await route.continue(); });
+    await first.goto(`${url}/?debugMode=limbo`, { waitUntil: 'domcontentloaded' });
+    await expect(first.locator('.intro-loading')).toBeVisible();
+    await first.screenshot({ path: '/private/tmp/sdp-entry-loading.png' });
+    await enterExhibition(first, 'Reserved browser');
+    const original = await first.evaluate(() => ({ id: window.sdpUnified.network.snapshot!.localPlayerId, room: window.sdpUnified.network.snapshot!.roomId }));
+    await second.goto(`${url}/?debugMode=limbo`); await submitName(second, 'Waiting browser');
+    await expect(second.locator('.intro-loading')).toContainText('1 IN QUEUE');
+    await second.screenshot({ path: '/private/tmp/sdp-entry-queue-mobile.png' });
+    await desktop.setOffline(true);
+    await expect(first.locator('.connection-indicator')).toHaveAttribute('data-connection', 'connecting');
+    await new Promise(resolve => setTimeout(resolve, 7000));
+    await desktop.setOffline(false);
+    await expect(first.locator('.connection-indicator')).toHaveAttribute('data-connection', 'connected');
+    expect(await first.evaluate(() => window.sdpUnified.network.snapshot!.localPlayerId)).toBe(original.id);
+    await expect(second.locator('.intro-loading')).toContainText('1 IN QUEUE');
+    await first.reload(); await enterExhibition(first, 'Reserved browser');
+    expect(await first.evaluate(() => ({ id: window.sdpUnified.network.snapshot!.localPlayerId, room: window.sdpUnified.network.snapshot!.roomId }))).toEqual(original);
+    await expect(second.locator('.intro-loading')).toContainText('1 IN QUEUE');
+    await first.evaluate(() => window.sdpUnified.network.leaveRoom());
+    admission.tick(Date.now() + 30001);
+    await expect(second.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
+    await expect(second.locator('.connection-indicator')).toHaveAttribute('data-connection', 'connected');
+    expect(errors).toEqual([]);
+  } finally {
+    for (const page of [first, second]) await page.evaluate(() => window.sdpUnified?.network.disconnect()).catch(() => {});
+    await desktop.close(); await mobile.close(); admission.enabled = false; admission.capacity = 25;
+  }
+});
 
 test('gallery headphones: keyboard and touch listen simultaneously, show remote headsets and stop at the exit', async ({ browser }) => {
   const desktop = await browser.newContext(), mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
@@ -240,7 +277,7 @@ test('two browsers recover divergent lobby positions, reserve a real seat, then 
     await first.keyboard.press('KeyE'); await expect.poll(() => local.state.players.get(id)!.seatIndex).toBe(seatIndex);
     await expect.poll(() => second.evaluate(id => window.sdpUnified.network.snapshot!.players.find(p => p.playerId === id)?.seatIndex, id)).toBe(seatIndex);
     await first.keyboard.press('KeyE'); await expect.poll(() => local.state.players.get(id)!.seatIndex).toBe(-1);
-    local.clock.elapsedTime = sessionPolicy.idleMs + 20000;
+    local.clock.elapsedTime += sessionPolicy.idleMs + 20000;
     const tracker = (local as unknown as { inactivity: RoomInactivity }).inactivity;
     for (const peer of local.clients) if (peer.sessionId !== id) tracker.touch(peer.sessionId);
     tracker.check();

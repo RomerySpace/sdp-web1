@@ -70,7 +70,7 @@ test('production matchmaking and WebSocket upgrades enforce the same allowed ori
     assert.equal(preflight.status, 204);
     assert.equal(preflight.headers.get('access-control-allow-origin'), 'https://sdp.example');
     assert.equal(preflight.headers.get('access-control-allow-credentials'), 'true');
-    const allowed = await fetch(`${url}/matchmake/joinOrCreate/SDPLobby`, { method: 'POST', headers, body: '{}' });
+    const allowed = await fetch(`${url}/matchmake/joinOrCreate/SDPAdmission`, { method: 'POST', headers, body: '{}' });
     assert.equal(allowed.status, 200);
     assert.equal(allowed.headers.get('access-control-allow-origin'), 'https://sdp.example');
     const denied = await fetch(`${url}/matchmake/joinOrCreate/SDPLobby`, {

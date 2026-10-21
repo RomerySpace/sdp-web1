@@ -17,7 +17,7 @@ export class ConnectionIndicator {
 
   update(status: ConnectionStatus): void {
     this.element.dataset.connection = status.state;
-    this.stateLabel.textContent = labels[status.state];
+    this.stateLabel.textContent = status.queuePosition ? `Waiting · ${status.queuePosition} in queue` : labels[status.state];
     this.population.textContent = `ONLINE: ${status.online} / ${status.capacity}`;
     this.element.title = status.roomId ? `SDPLobby ${status.roomId}` : labels[status.state];
   }

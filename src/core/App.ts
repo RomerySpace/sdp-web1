@@ -156,7 +156,14 @@ export class App {
       this.voice.subscribe((state) => { this.microphone = state; this.ui.controls.setVoiceState(state); this.touchControls?.voice(state, this.voiceConnection); }),
       this.voiceTransport.subscribe((state) => { this.voiceConnection = state; this.ui.controls.setVoiceConnection(state); this.touchControls?.voice(this.microphone, state); }),
       this.network.subscribeToNotice((message) => this.ui.notify(message)),
-      this.network.subscribeToStatus((status) => { this.ui.connection.update(status); this.player.setNetworkReady(status.state === 'connected' && this.network.roomType === LOBBY_NAME); }),
+      this.network.subscribeToStatus((status) => {
+        this.ui.connection.update(status); this.player.setNetworkReady(status.state === 'connected' && this.network.roomType === LOBBY_NAME);
+        if (this.entering && this.state.value === 'INTRO' && status.queuePosition !== undefined) {
+          this.ui.intro.waiting(status.queuePosition);
+          if (status.queuePosition > 0) this.player.releaseLock();
+        }
+        if (this.entering && this.state.value === 'INTRO' && status.state === 'connected') this.state.set('ENTERING');
+      }),
       this.network.subscribeToSpawn((player) => { if (this.network.roomType === LOBBY_NAME) this.player.setSpawn(player); }),
       this.network.subscribeToCorrection(player => { if (this.network.roomType === LOBBY_NAME) this.player.correctAuthoritative(player); }),
       this.network.subscribeToState((snapshot) => {
@@ -241,7 +248,7 @@ export class App {
     window.addEventListener('blur', () => { this.voice.release(); this.pause(); }, { signal });
     window.addEventListener('pagehide', (event) => {
       if (event.persisted) { this.voice.suspend(); this.pause(); }
-      else this.dispose();
+      else this.dispose(true);
     }, { signal });
     document.addEventListener('visibilitychange', () => {
       if (this.inactive) return;
@@ -361,8 +368,8 @@ export class App {
     this.voiceTransport.unlock();
     void this.network.connect().then(() => {
       if (this.disposed) return;
-      if (this.network.status.state === 'disconnected') this.ui.notify('Multiplayer unavailable. Reconnecting in the background.');
-      this.state.set('ENTERING');
+      if (this.network.status.state === 'disconnected') this.ui.intro.connecting(true, 'RECONNECTING TO THE EXHIBITION');
+      else if (this.state.value === 'INTRO') this.state.set('ENTERING');
     }).catch(() => {
       this.entering = false; this.player.releaseLock(); this.ui.intro.connecting(false, 'Connection unavailable. Please try again.');
     });
@@ -610,7 +617,7 @@ export class App {
     this.frame = requestAnimationFrame(this.tick);
   };
 
-  dispose(): void {
+  dispose(preservePlace = false): void {
     if (this.disposed) return;
     this.disposed = true;
     cancelAnimationFrame(this.frame); this.events.abort();
@@ -619,7 +626,7 @@ export class App {
     this.modes.dispose(); this.diagnostics?.remove();
     this.inputs.dispose();
     this.activity.dispose();
-    this.voice.dispose(); this.audio.dispose(); this.chat.dispose(); this.network.disconnect();
+    this.voice.dispose(); this.audio.dispose(); this.chat.dispose(); this.network.disconnect(preservePlace);
     this.touchControls?.dispose(); this.player.dispose(); this.scene.dispose(); this.ui.dispose(); this.settingsMenu.dispose(); this.visitorOptions.dispose();
     disposeAudioContext();
   }

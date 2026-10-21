@@ -18,12 +18,15 @@ import { shotRecoil } from '../../../shared/WeaponRecoil';
 import { advanceGait } from '../../../shared/AvatarAnimation';
 import { RoomInactivity } from '../communication/RoomInactivity';
 import { sessionPolicy } from '../../../shared/SessionPolicy';
+import { admission } from '../communication/Admission';
+import { admissionConfig } from '../../../shared/Admission';
 interface Entry { input: ShooterInput; received: number; slot: number; lastAction: number; lastShot: number; nextShotAt: number; reloadUntil: number;
   probe: string; probeAt: number; rtt: number; recovery: HealthRecovery; burstShots: number; awardedStrikes: number; strikeSequence: number; lastStrike: number }
 export class SDPShooterRoom extends Room<{ state: ShooterState }> {
-  static async onAuth(_token: string, options: { displayName?: unknown } = {}): Promise<boolean> {
+  static async onAuth(_token: string, options: { displayName?: unknown; admissionToken?: unknown } = {}): Promise<boolean> {
     if (!shooterEnabled) throw new ServerError(403, 'Shooter test is disabled.');
     if (options.displayName !== undefined && !validateDisplayName(options.displayName)) throw new ServerError(400, 'Invalid display name.');
+    admission.validate(options.admissionToken);
     return true;
   }
   state = new ShooterState(); maxClients = MAX_PLAYERS; maxMessagesPerSecond = 100;
@@ -135,7 +138,8 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
       while (this.accumulator >= 1000 / SHOOTER_HZ) { this.step(); this.accumulator -= 1000 / SHOOTER_HZ; }
     }, 1000 / SHOOTER_HZ);
   }
-  onJoin(client: Client, options: { displayName?: unknown } = {}): void {
+  onJoin(client: Client, options: { displayName?: unknown; admissionToken?: unknown } = {}): void {
+    admission.attach(options.admissionToken, client.sessionId);
     if (!shooterEnabled) throw new ServerError(403, 'Shooter test is disabled.');
     if (options.displayName !== undefined && !validateDisplayName(options.displayName)) throw new ServerError(400, 'Invalid display name.');
     const used = new Set([...this.entries.values()].map(entry => entry.slot)); let slot = 0; while (used.has(slot)) slot++;
@@ -158,7 +162,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     const player = this.state.players.get(client.sessionId), entry = this.entries.get(client.sessionId);
     if (player?.connected) { player.connected = false; this.state.online--; }
     if (entry) { entry.input.active = false; this.world.input(client.sessionId, entry.input); }
-    this.allowReconnection(client, 5);
+    this.allowReconnection(client, admissionConfig.reservationSeconds);
   }
   onReconnect(client: Client): void {
     this.inactivity.touch(client.sessionId);
@@ -167,6 +171,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     if (this.match.phase === 'waiting') this.startMatch(this.clock.elapsedTime, true);
   }
   onLeave(client: Client): void {
+    admission.release(client.sessionId, Date.now(), this.inactivity.isExpired(client.sessionId));
     this.inactivity.remove(client.sessionId);
     for (let i = this.state.airstrikes.length - 1; i >= 0; i--) if (this.state.airstrikes[i].ownerId === client.sessionId) {
       this.impacted.delete(this.state.airstrikes[i].id); this.state.airstrikes.splice(i, 1);

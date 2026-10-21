@@ -62,7 +62,16 @@ export async function runPhase(client, count, config, runId, interrupted) {
       const start = performance.now();
       const group = groups[Math.floor(index / MAX_PLAYERS)];
       // Explicit room IDs keep the benchmark out of existing visitors' rooms.
-      const room = group ? await client.joinById(group.roomId) : await client.create(LOBBY_NAME);
+      const queue = await client.joinOrCreate('SDPAdmission');
+      let admissionToken;
+      try {
+        admissionToken = await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('Admission full: configure SDP_VISITOR_CAPACITY for the intended local load test.')), 5000);
+          queue.onMessage('queue:status', status => { if (status.ready) { clearTimeout(timeout); resolve(status.token); } });
+          queue.send('queue:sync');
+        });
+      } finally { await queue.leave(); }
+      const room = group ? await client.joinById(group.roomId, { admissionToken }) : await client.create(LOBBY_NAME, { admissionToken });
       room.reconnection.enabled = false;
       const bot = { room, index, seq: 0, ack: 0, pending: new Map(), lastState: performance.now(),
         previous: null, lastPosition: null, moved: false, received: new Set(), lastChat: -Infinity };

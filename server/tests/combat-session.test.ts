@@ -8,6 +8,7 @@ import { Client } from '@colyseus/sdk';
 import { SHOOTER_ROOM, type CombatEvent } from '../../shared/ShooterProtocol';
 import type { ShooterState } from '../src/state/ShooterState';
 import type { LobbyState } from '../src/state/LobbyState';
+import { admissionOptions } from './admission-fixture';
 async function waitFor(predicate: () => boolean, timeout = 5000): Promise<void> {
   const end = Date.now() + timeout;
   while (!predicate()) { if (Date.now() >= end) throw new Error('Authoritative state timed out.'); await new Promise(r => setTimeout(r, 20)); }
@@ -35,7 +36,7 @@ test('disabled feature rejects matchmaking and advertises the restriction in Lim
   const server = await host(false); const client = new Client(server.url);
   try {
     await assert.rejects(() => client.joinOrCreate(SHOOTER_ROOM), /disabled/i);
-    const limbo = await client.joinOrCreate<{ state: LobbyState }>('SDPLimboRoom');
+    const limbo = await client.joinOrCreate<LobbyState>('SDPLimboRoom', await admissionOptions(client));
     try { await waitFor(() => !!limbo.state.players); assert.equal(limbo.state.shooterEnabled, false); }
     finally { await limbo.leave(); }
     await assert.rejects(() => client.create(SHOOTER_ROOM), /disabled/i);
@@ -43,7 +44,7 @@ test('disabled feature rejects matchmaking and advertises the restriction in Lim
 });
 test('real server controls fire rate, health, dead input, respawn and stale-life replay', { timeout: 20000 }, async () => {
   const server = await host(true), client = new Client(server.url);
-  const a = await client.joinOrCreate<{ state: ShooterState }>(SHOOTER_ROOM), b = await client.joinOrCreate<{ state: ShooterState }>(SHOOTER_ROOM);
+  const a = await client.joinOrCreate<ShooterState>(SHOOTER_ROOM, await admissionOptions(client)), b = await client.joinOrCreate<ShooterState>(SHOOTER_ROOM, await admissionOptions(client));
   const events: CombatEvent[] = [];
   for (const room of [a, b]) {
     room.onMessage('combat:ping', (nonce: string) => room.send('combat:pong', nonce));
@@ -79,8 +80,8 @@ test('real server controls fire rate, health, dead input, respawn and stale-life
 });
 test('real sessions synchronize chosen names, regional damage, interrupted regeneration, streaks and automatic fire', { timeout: 35000 }, async () => {
   const server = await host(true), client = new Client(server.url);
-  const a = await client.joinOrCreate<ShooterState>(SHOOTER_ROOM, { displayName: 'Burst One' });
-  const b = await client.joinOrCreate<ShooterState>(SHOOTER_ROOM, { displayName: 'Target Two' });
+  const a = await client.joinOrCreate<ShooterState>(SHOOTER_ROOM, { ...await admissionOptions(client), displayName: 'Burst One' });
+  const b = await client.joinOrCreate<ShooterState>(SHOOTER_ROOM, { ...await admissionOptions(client), displayName: 'Target Two' });
   const events: CombatEvent[] = [];
   for (const room of [a, b]) {
     room.onMessage('combat:ping', (nonce: string) => room.send('combat:pong', nonce));

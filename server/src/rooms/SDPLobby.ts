@@ -15,14 +15,17 @@ import { AmbientStationSession } from '../communication/AmbientStationSession';
 import { validStationCommand, type StationClaimResult } from '../../../shared/AmbientStation';
 import { RoomInactivity } from '../communication/RoomInactivity';
 import { sessionPolicy } from '../../../shared/SessionPolicy';
+import { admission } from '../communication/Admission';
+import { admissionConfig } from '../../../shared/Admission';
 import { canKeepGalleryHeadphones, canTakeGalleryHeadphones, validGalleryListening, type GalleryListenResult } from '../../../shared/LowerGallery';
 
 interface VisitorInput { value: MovementInput; receivedAt: number; slot: number }
 const INPUT_TIMEOUT_MS = 250;
 
 export class SDPLobby extends Room<{ state: LobbyState }> {
-  static async onAuth(_token: string, options: { displayName?: unknown } = {}): Promise<boolean> {
+  static async onAuth(_token: string, options: { displayName?: unknown; admissionToken?: unknown } = {}): Promise<boolean> {
     if (options.displayName !== undefined && !validateDisplayName(options.displayName)) throw new ServerError(400, 'Invalid display name.');
+    admission.validate(options.admissionToken);
     return true;
   }
   state = new LobbyState();
@@ -145,7 +148,8 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
     }, 1000 / SIMULATION_HZ);
   }
 
-  onJoin(client: Client, options: { displayName?: unknown } = {}): void {
+  onJoin(client: Client, options: { displayName?: unknown; admissionToken?: unknown } = {}): void {
+    admission.attach(options.admissionToken, client.sessionId);
     if (options.displayName !== undefined && !validateDisplayName(options.displayName)) throw new ServerError(400, 'Invalid display name.');
     const occupied = new Set(Array.from(this.inputs.values(), (entry) => entry.slot));
     let slot = 0;
@@ -174,7 +178,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
     this.simulation.stop(client.sessionId);
     const entry = this.inputs.get(client.sessionId);
     if (entry) entry.value.active = false;
-    this.allowReconnection(client, 5);
+    this.allowReconnection(client, admissionConfig.reservationSeconds);
   }
 
   onReconnect(client: Client): void {
@@ -184,6 +188,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
   }
 
   onLeave(client: Client): void {
+    admission.release(client.sessionId, Date.now(), this.inactivity.isExpired(client.sessionId));
     this.inactivity.remove(client.sessionId);
     this.station.remove(client.sessionId, Date.now()); this.stationSyncs.delete(client.sessionId);
     this.seatingRequests.delete(client.sessionId);

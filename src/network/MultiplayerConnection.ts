@@ -5,7 +5,7 @@ export interface MultiplayerConnection {
   readonly status: ConnectionStatus;
   readonly snapshot: LobbySnapshot | undefined;
   connect(): Promise<void>;
-  disconnect(): void;
+  disconnect(preservePlace?: boolean): void;
   sendInput(input: MovementInput): void;
   sendChat(text: string): boolean;
   requestVoiceAccess(): Promise<VoiceAccess>;
