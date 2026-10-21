@@ -17,11 +17,16 @@ import type { MovementSimulation } from '../src/simulation/MovementSimulation';
 test('headphone access is bounded to the real gallery and accepts only a listening toggle', () => {
   assert.equal(canTakeGalleryHeadphones({ x: -9.5, y: g.floorY + PLAYER_HEIGHT, z: galleryListening.z }), true);
   assert.equal(canTakeGalleryHeadphones({ x: -9.5, y: PLAYER_HEIGHT, z: galleryListening.z }), false);
+  // Standing and crouching cameras must agree with the server's canonical eye height.
+  assert.equal(canTakeGalleryHeadphones({ x: galleryListening.x + 2.5, y: g.floorY + PLAYER_HEIGHT, z: galleryListening.z }), true);
+  assert.equal(canTakeGalleryHeadphones({ x: galleryListening.x + 2.5, y: g.floorY + 1.1, z: galleryListening.z }), true);
   assert.equal(canTakeGalleryHeadphones({ x: 1, y: g.floorY + PLAYER_HEIGHT, z: 0 }), false);
   assert.equal(canKeepGalleryHeadphones({ x: 1, y: g.floorY + 1.18, z: 0 }), true);
   assert.equal(canKeepGalleryHeadphones({ x: 8, y: g.floorY + PLAYER_HEIGHT, z: 0 }), false);
   for (const raw of [null, [], { listening: 1 }, { listening: true, playerId: 'other' }, { listening: true, x: -10 }]) assert.equal(validGalleryListening(raw), false);
   assert.equal(validGalleryListening({ listening: true }), true);
+  assert.equal(validGalleryListening({ listening: true, requestId: 'listen-1' }), true);
+  assert.equal(validGalleryListening({ listening: true, requestId: { playerId: 'other' } }), false);
 });
 
 test('two real listeners can share an artwork; the server rejects remote pickup and removes headphones on exit', { timeout: 12000 }, async () => {
@@ -32,7 +37,8 @@ test('two real listeners can share an artwork; the server rejects remote pickup 
   try {
     const a = await client.create<LobbyState>('GalleryAudio'), b = await client.joinById<LobbyState>(a.roomId), isolated = await client.create<LobbyState>('GalleryAudio'); rooms.push(a, b, isolated);
     const notices: string[] = [];
-    for (const room of rooms) { room.onMessage('lobby:notice', text => notices.push(text)); room.onMessage('lobby:correction', () => {}); }
+    const replies: { requestId?: string; accepted: boolean }[] = [];
+    for (const room of rooms) { room.onMessage('lobby:notice', text => notices.push(text)); room.onMessage('lobby:correction', () => {}); room.onMessage('gallery:result', result => replies.push(result)); }
     await until(() => !!b.state.players?.get(a.sessionId));
     const room = matchMaker.getLocalRoomById(a.roomId) as SDPLobby;
     const place = (id: string, x: number, groundY: number = g.floorY) => {
@@ -41,6 +47,9 @@ test('two real listeners can share an artwork; the server rejects remote pickup 
     };
     a.send('gallery:listen', { listening: true }); await until(() => notices.length > 0);
     assert.equal(room.state.players.get(a.sessionId)!.listening, false);
+    a.send('gallery:listen', { listening: true, requestId: 'remote-denial' });
+    await until(() => replies.some(r => r.requestId === 'remote-denial'));
+    assert.equal(replies.find(r => r.requestId === 'remote-denial')!.accepted, false);
     place(a.sessionId, -9.6); place(b.sessionId, -9.8);
     a.send('gallery:listen', { listening: true }); b.send('gallery:listen', { listening: true });
     await until(() => !!b.state.players.get(a.sessionId)?.listening && !!a.state.players.get(b.sessionId)?.listening);

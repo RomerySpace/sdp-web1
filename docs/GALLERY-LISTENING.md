@@ -31,3 +31,17 @@ Mobile checks use Chrome touch emulation, not a physical Safari device.
 This is a local prototype for Kenosis only. Adding other works will require
 explicit artwork identifiers and per-work listening state. Publishing requires
 both frontend and backend updates because the visitor schema has a new flag.
+
+## Interaction confirmation
+
+Pickup reach uses horizontal distance on the lower floor, so crouching does not
+disagree with the server's canonical eye height. Before taking headphones or
+sitting, movement stops and the client waits for the server to acknowledge that
+input. It then restores the confirmed position before requesting the action.
+No arbitrary client coordinates are accepted by the server.
+
+Headphone requests carry an ID and receive an explicit acceptance or rejection.
+Retries reuse the same ID; authoritative state can also confirm success if the
+direct reply is lost. Disconnects and bounded timeouts terminate the pending UI.
+The browser regression includes 300ms round-trip latency, a lost reply and a
+deliberately incorrect camera position followed by automatic correction.

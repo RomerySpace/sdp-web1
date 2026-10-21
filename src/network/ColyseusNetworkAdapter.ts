@@ -11,6 +11,7 @@ import type { KillRecord, RoundScore, ShooterMatchSnapshot } from '../../shared/
 import type { AirstrikeFlight, AirstrikeRequest, AirstrikeResult } from '../../shared/AirstrikeProtocol';
 import type { StationClaimResult, StationCommand, StationSnapshot, StationSound } from '../../shared/AmbientStation';
 import { sessionPolicy } from '../../shared/SessionPolicy';
+import type { GalleryListenResult } from '../../shared/LowerGallery';
 
 function serverEndpoint(): string {
   const configured = import.meta.env.VITE_SDP_SERVER_URL;
@@ -64,6 +65,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
   private readonly corrections = new Set<(player: NetworkPlayer) => void>();
   private readonly stationClaims = new Set<(result: StationClaimResult) => void>();
   private stationRequestId?: string;
+  private readonly galleryRequests = new Map<string, { value: boolean; finish: (result: GalleryListenResult) => void; reject: (error: Error) => void }>();
   private needsSpawn = true;
   private retryTimer = 0;
   private retries = 0;
@@ -132,6 +134,10 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
           for (const callback of this.corrections) callback(result.player);
         }
         for (const callback of this.stationClaims) callback(result);
+      });
+      room.onMessage<GalleryListenResult>('gallery:result', result => {
+        if (this.room !== room || result.roomId !== room.roomId || result.player.playerId !== room.sessionId || !result.requestId) return;
+        this.galleryRequests.get(result.requestId)?.finish(result);
       });
       room.onMessage<{ roomId: string; player: NetworkPlayer }>('lobby:correction', result => {
         if (this.room === room && result.roomId === room.roomId && result.player.playerId === room.sessionId)
@@ -231,6 +237,8 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
     };
     this.latestSnapshot = snapshot;
     for (const callback of this.states) callback(snapshot);
+    for (const [requestId, request] of this.galleryRequests) if (local?.listening === request.value)
+      request.finish({ roomId: room.roomId, requestId, accepted: true, listening: request.value, player: local });
   }
 
   private setStatus(state: ConnectionStatus['state'], online = 0, capacity = MAX_PLAYERS, roomId = '', reason?: ConnectionStatus['reason']): void {
@@ -240,6 +248,8 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
   }
 
   private clearRemoteState(): void {
+    for (const request of this.galleryRequests.values()) request.reject(new Error('Multiplayer disconnected.'));
+    this.galleryRequests.clear();
     this.stationRequestId = undefined;
     this.stationSnapshot = null; for (const callback of this.stationStates) callback(null);
     this.latestSnapshot = {
@@ -276,9 +286,23 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
       this.room.send('station:command', command);
     }
   }
-  sendGalleryListening(listening: boolean): void {
-    if (this.roomType === LOBBY_NAME && this.currentStatus.state === 'connected' && this.room?.connection.isOpen)
-      this.room.send('gallery:listen', { listening });
+  sendGalleryListening(listening: boolean): Promise<boolean> {
+    const room = this.room;
+    if (this.roomType !== LOBBY_NAME || this.currentStatus.state !== 'connected' || !room?.connection.isOpen)
+      return Promise.reject(new Error('Multiplayer is reconnecting.'));
+    const requestId = crypto.randomUUID();
+    return new Promise((resolve, reject) => {
+      const cleanup = () => { window.clearTimeout(timeout); window.clearInterval(retry); this.galleryRequests.delete(requestId); };
+      const send = () => { if (this.room === room && room.connection.isOpen) room.send('gallery:listen', { listening, requestId }); };
+      const timeout = window.setTimeout(() => { cleanup(); reject(new Error('The headphones did not respond. Please try again.')); }, 4500);
+      const retry = window.setInterval(send, 900);
+      this.galleryRequests.set(requestId, { value: listening, finish: result => {
+        cleanup();
+        if (result.accepted) resolve(result.listening);
+        else { for (const callback of this.corrections) callback(result.player); reject(new Error(result.message || 'The headphones are unavailable.')); }
+      }, reject: error => { cleanup(); reject(error); } });
+      send();
+    });
   }
   subscribeToStation(callback: (state: StationSnapshot | null) => void): () => void { this.stationStates.add(callback); callback(this.stationSnapshot); return () => this.stationStates.delete(callback); }
   subscribeToStationSound(callback: (sound: StationSound) => void): () => void { this.stationSounds.add(callback); return () => this.stationSounds.delete(callback); }

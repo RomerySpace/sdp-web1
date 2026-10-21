@@ -11,8 +11,9 @@ export class GalleryFilm {
   readonly soundButton = document.createElement('button');
   readonly listenButton = document.createElement('button');
   listening = false;
-  private requestListening?: (listening: boolean) => void;
+  private requestListening?: (listening: boolean) => Promise<boolean>;
   private pending?: { value: boolean; at: number };
+  private failureUntil = 0;
   private readonly events = new AbortController();
   private context?: AudioContext;
   private source?: MediaElementAudioSourceNode;
@@ -48,24 +49,31 @@ export class GalleryFilm {
     }, { signal });
     this.video.addEventListener('error', () => { this.needsGesture = true; this.soundButton.title = 'Retry film playback'; }, { signal });
   }
-  attach(container: HTMLElement, request: (listening: boolean) => void): void { this.requestListening = request; container.append(this.soundButton, this.listenButton); }
+  attach(container: HTMLElement, request: (listening: boolean) => Promise<boolean>): void { this.requestListening = request; container.append(this.soundButton, this.listenButton); }
   toggleListening(): void {
     if (this.pending || this.listenButton.hidden) return;
     const value = !this.listening;
     if (value) { this.unlock(); this.needsGesture = false; this.video.muted = false; this.play(); }
     else this.setListening(false);
-    this.pending = { value, at: performance.now() }; this.requestListening?.(value);
+    const pending = this.pending = { value, at: performance.now() }; this.failureUntil = 0;
+    void this.requestListening?.(value).then(listening => {
+      if (this.pending !== pending) return;
+      this.pending = undefined; this.setListening(listening);
+    }).catch(() => {
+      if (this.pending !== pending) return;
+      this.pending = undefined; this.failureUntil = performance.now() + 3000;
+    });
   }
   setListening(listening: boolean): void {
     this.listening = listening;
     if (this.pending?.value === listening) this.pending = undefined;
   }
   interaction(active: boolean, focused: boolean, anotherInteraction: boolean): void {
-    if (this.pending && performance.now() - this.pending.at > 3000) this.pending = undefined;
+    if (this.pending && performance.now() - this.pending.at > 8000) { this.pending = undefined; this.failureUntil = performance.now() + 3000; }
     this.listenButton.hidden = !active || (!focused && (!this.listening || anotherInteraction));
     this.listenButton.disabled = !!this.pending;
     this.listenButton.classList.toggle('is-listening', this.listening);
-    this.listenButton.querySelector('span')!.textContent = this.pending ? 'CONNECTING...' : this.listening ? 'RETURN HEADPHONES' : 'LISTEN · KENOSIS';
+    this.listenButton.querySelector('span')!.textContent = this.pending ? 'CONNECTING...' : this.listening ? 'RETURN HEADPHONES' : performance.now() < this.failureUntil ? 'TRY AGAIN' : 'LISTEN · KENOSIS';
     this.listenButton.setAttribute('aria-label', this.listening ? 'Return gallery headphones' : 'Listen to Kenosis');
     this.listenButton.setAttribute('aria-pressed', String(this.listening));
   }

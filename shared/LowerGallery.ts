@@ -18,11 +18,16 @@ export function canKeepGalleryHeadphones(p: { x: number; y: number; z: number })
     && Math.hypot(p.x - galleryListening.x, p.z - galleryListening.z) <= galleryListening.hearingRadius;
 }
 export function canTakeGalleryHeadphones(p: { x: number; y: number; z: number }): boolean {
-  return canKeepGalleryHeadphones(p) && Math.hypot(p.x - galleryListening.x, p.y - galleryListening.y, p.z - galleryListening.z) <= galleryListening.interactionDistance;
+  return canKeepGalleryHeadphones(p) && Math.hypot(p.x - galleryListening.x, p.z - galleryListening.z) <= galleryListening.interactionDistance;
 }
-export function validGalleryListening(raw: unknown): raw is { listening: boolean } {
-  return !!raw && typeof raw === 'object' && !Array.isArray(raw) && Object.keys(raw).length === 1
-    && 'listening' in raw && typeof raw.listening === 'boolean';
+export interface GalleryListenResult {
+  roomId: string; requestId?: string; accepted: boolean; listening: boolean; message?: string;
+  player: import('./MultiplayerProtocol').NetworkPlayer;
+}
+export function validGalleryListening(raw: unknown): raw is { listening: boolean; requestId?: string } {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !('listening' in raw) || typeof raw.listening !== 'boolean') return false;
+  const keys = Object.keys(raw);
+  return keys.length === 1 || (keys.length === 2 && 'requestId' in raw && typeof raw.requestId === 'string' && /^[a-zA-Z0-9-]{1,64}$/.test(raw.requestId));
 }
 
 export function onGalleryStairs(x: number, z: number): boolean {

@@ -15,7 +15,7 @@ import { AmbientStationSession } from '../communication/AmbientStationSession';
 import { validStationCommand, type StationClaimResult } from '../../../shared/AmbientStation';
 import { RoomInactivity } from '../communication/RoomInactivity';
 import { sessionPolicy } from '../../../shared/SessionPolicy';
-import { canKeepGalleryHeadphones, canTakeGalleryHeadphones, validGalleryListening } from '../../../shared/LowerGallery';
+import { canKeepGalleryHeadphones, canTakeGalleryHeadphones, validGalleryListening, type GalleryListenResult } from '../../../shared/LowerGallery';
 
 interface VisitorInput { value: MovementInput; receivedAt: number; slot: number }
 const INPUT_TIMEOUT_MS = 250;
@@ -45,11 +45,15 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
     this.onMessage('gallery:listen', (client, raw: unknown) => {
       const player = this.state.players.get(client.sessionId);
       if (!player?.connected || !validGalleryListening(raw)) return;
-      if (raw.listening && !canTakeGalleryHeadphones(player)) {
+      const accepted = !raw.listening || canTakeGalleryHeadphones(player);
+      if (!accepted) {
         client.send('lobby:correction', { roomId: this.roomId, player: this.visitorPosition(client.sessionId) });
-        client.send('lobby:notice', 'Move closer to the headphones.'); return;
+        if (!raw.requestId) client.send('lobby:notice', 'Move closer to the headphones.');
+      } else {
+        player.listening = raw.listening; this.inactivity.touch(client.sessionId);
       }
-      player.listening = raw.listening; this.inactivity.touch(client.sessionId);
+      client.send('gallery:result', { roomId: this.roomId, requestId: raw.requestId, accepted, listening: player.listening,
+        player: this.visitorPosition(client.sessionId)!, message: accepted ? undefined : 'Move closer to the headphones.' } satisfies GalleryListenResult);
     });
     this.station = new AmbientStationSession(this.roomId, state => this.broadcast('station:state', state), sound => this.broadcast('station:sound', sound));
     this.onMessage('station:command', (client, raw: unknown) => {

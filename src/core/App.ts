@@ -49,6 +49,7 @@ export class App {
   private readonly visitorOptions: VisitorOptions;
   private focusedVisitor?: { id: string; name: string };
   private focusedSeat?: number;
+  private interactionPending = false;
   private readonly touchControls?: TouchControls;
   private microphone: VoiceState = 'idle';
   private voiceConnection: VoiceConnectionState = 'disconnected';
@@ -96,7 +97,10 @@ export class App {
       seat: () => this.interactSeat(),
     }, this.limited, this.network.displayName);
     this.audio.attach(this.ui.element);
-    this.scene.environment.gallery.film.attach(this.ui.element, listening => this.network.sendGalleryListening(listening));
+    this.scene.environment.gallery.film.attach(this.ui.element, async listening => {
+      try { return listening ? await this.synchronizeInteraction(() => this.network.sendGalleryListening(true)) : await this.network.sendGalleryListening(false); }
+      catch (error) { this.ui.notify(error instanceof Error ? error.message : 'The headphones are unavailable.'); throw error; }
+    });
     this.settingsMenu = new SettingsMenu(container, this.settings, () => this.closeSettings(), () => this.openVisitorOptions());
     this.visitorOptions = new VisitorOptions(container, this.visitorPreferences, () => {
       this.voiceTransport.setMutedVisitors(id => this.visitorPreferences.muted(id));
@@ -397,11 +401,26 @@ export class App {
     return this.interactionTarget.normalize().dot(this.interactionDirection) >= modeConfig.interactionFacingCosine;
   }
   private interact(): void { if (this.canInteract()) this.modes.interact(); }
+  private async synchronizeInteraction<T>(action: () => T | Promise<T>): Promise<T> {
+    if (this.interactionPending) throw new Error('Please wait for the current interaction.');
+    this.interactionPending = true; this.player.input.clear(); this.player.setEnabled(false);
+    try {
+      // Wait for the stop input to be processed, not merely sent over the socket.
+      const position = await this.inputs.synchronize();
+      if (this.disposed || this.modes.value !== 'LIMBO' || this.state.value !== 'EXPLORING') throw new Error('Interaction cancelled.');
+      this.player.correctAuthoritative(position);
+      return await action();
+    } finally {
+      this.interactionPending = false;
+      if (!this.disposed) this.player.setEnabled(this.modes.value === 'LIMBO' && this.state.value === 'EXPLORING' && !this.limited);
+    }
+  }
   private interactSeat(): void {
     if (this.modes.value !== 'LIMBO' || this.state.value !== 'EXPLORING' || this.settingsMenu.visible || this.visitorOptions.visible) return;
     const seat = this.player.seated ? -1 : this.focusedSeat;
     if (seat === undefined) return;
-    this.player.input.clear(); this.inputs.stop(); this.network.requestSeat(seat);
+    if (this.interactionPending) return;
+    void this.synchronizeInteraction(() => this.network.requestSeat(seat)).catch(error => this.ui.notify(error instanceof Error ? error.message : 'The seat is unavailable.'));
   }
 
   private inspectSculpture(): void {

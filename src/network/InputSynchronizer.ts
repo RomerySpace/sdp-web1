@@ -1,4 +1,4 @@
-import { SIMULATION_HZ, type MovementInput } from '../../shared/MultiplayerProtocol';
+import { SIMULATION_HZ, type MovementInput, type NetworkPlayer } from '../../shared/MultiplayerProtocol';
 import type { FirstPersonController } from '../player/FirstPersonController';
 import type { MultiplayerConnection } from './MultiplayerConnection';
 import { lobbyPrediction } from '../../shared/SessionPolicy';
@@ -12,7 +12,7 @@ export class InputSynchronizer {
     this.timer = window.setInterval(() => this.send(), 1000 / SIMULATION_HZ);
   }
 
-  private send(forceStopped = false): void {
+  private send(forceStopped = false): number | undefined {
     if (!this.enabled || this.network.status.state !== 'connected') return;
     const fresh = !!this.network.snapshot && performance.now() - this.network.snapshot.receivedAt <= lobbyPrediction.stateTimeoutMs;
     if (!fresh) this.player.setNetworkReady(false);
@@ -28,9 +28,23 @@ export class InputSynchronizer {
     this.input.c = active && this.player.input.crouching;
     this.player.recordInput(this.input.seq, active && !!(this.input.f || this.input.r || this.input.j));
     this.network.sendInput(this.input);
+    return this.input.seq;
   }
 
   stop(): void { this.send(true); }
+  async synchronize(): Promise<NetworkPlayer> {
+    const sequence = this.send(true), roomId = this.network.snapshot?.roomId;
+    if (sequence === undefined || !roomId) throw new Error('Multiplayer is reconnecting.');
+    const deadline = performance.now() + 2500;
+    while (performance.now() < deadline) {
+      const snapshot = this.network.snapshot;
+      if (this.network.status.state !== 'connected' || snapshot?.roomId !== roomId) throw new Error('Multiplayer is reconnecting.');
+      const player = snapshot.players.find(p => p.playerId === snapshot.localPlayerId);
+      if (player?.connected && player.lastProcessedInput >= sequence) return player;
+      await new Promise(resolve => window.setTimeout(resolve, 20));
+    }
+    throw new Error('Position confirmation timed out. Please try again.');
+  }
   setEnabled(enabled: boolean): void { if (!enabled) this.stop(); this.enabled = enabled; }
   dispose(): void { this.stop(); window.clearInterval(this.timer); }
 }

@@ -32,6 +32,18 @@ test('gallery headphones: keyboard and touch listen simultaneously, show remote 
     }
     const ids = await Promise.all([first, second].map(page => page.evaluate(() => ({ id: window.sdpUnified.network.snapshot!.localPlayerId, room: window.sdpUnified.network.snapshot!.roomId }))));
     const room = fixture.room(ids[0].room) as unknown as SDPLobby;
+    // Delay real gameplay frames in both directions after SDK room handshakes.
+    for (const client of room.clients) {
+      const send = client.raw.bind(client), socket = client.ref as typeof client.ref & { readyState: number }, emit = socket.emit.bind(socket);
+      client.raw = (data, options, callback) => {
+        const copy = Buffer.from(data);
+        setTimeout(() => { if (socket.readyState === 1) send(copy, options, callback); }, 150);
+      };
+      socket.emit = ((event: string | symbol, ...args: unknown[]) => {
+        if (event !== 'message') return emit(event, ...args);
+        setTimeout(() => { if (socket.readyState === 1) emit(event, ...args); }, 150); return true;
+      }) as typeof socket.emit;
+    }
     const place = (id: string, x: number, z: number, groundY: number = lowerGallery.floorY) => {
       const player = room.state.players.get(id)!; player.x = x; player.z = z; player.y = groundY + 1.8;
       (room as unknown as { simulation: MovementSimulation }).simulation.add(id, { x, z, groundY });
@@ -46,6 +58,14 @@ test('gallery headphones: keyboard and touch listen simultaneously, show remote 
         app.player.setSpawn({ ...p, yaw: Math.atan2(-(target.x - p.x), -(target.z - p.z)), pitch: Math.atan2(target.y + .1 - p.y, Math.hypot(target.x - p.x, target.z - p.z)) });
       }, galleryListening);
       const button = page.getByRole('button', { name: 'Listen to Kenosis', exact: true }); await expect(button).toBeVisible();
+      if (!index) {
+        const client = room.clients.find(c => c.sessionId === ids[index].id)!, send = client.send.bind(client);
+        let dropped = false;
+        client.send = ((type: string, ...args: unknown[]) => {
+          if (type === 'gallery:result' && !dropped) { dropped = true; return; }
+          return (send as (...args: unknown[]) => void)(type, ...args);
+        }) as typeof client.send;
+      }
       if (index) await button.tap(); else await page.keyboard.press('KeyE');
       await expect.poll(() => page.evaluate(() => window.sdpUnified.scene.environment.gallery.film.listening)).toBe(true);
       await expect.poll(() => page.evaluate(() => window.sdpUnified.scene.environment.gallery.film.diagnostics.level)).toBeGreaterThan(.00001);
@@ -62,6 +82,26 @@ test('gallery headphones: keyboard and touch listen simultaneously, show remote 
     await expect.poll(() => second.evaluate(() => window.sdpUnified.scene.environment.gallery.film.listening)).toBe(false);
     await expect.poll(() => second.evaluate(() => window.sdpUnified.scene.environment.gallery.film.diagnostics.level)).toBeLessThan(.00001);
     expect(room.state.players.get(ids[0].id)!.listening).toBe(true);
+    await first.bringToFront();
+    if (await first.locator('.resume-button').isVisible()) await first.locator('.resume-button').click();
+    await expect(first.getByRole('button', { name: 'Return gallery headphones', exact: true })).toBeVisible();
+    await first.keyboard.press('KeyE');
+    await expect.poll(() => first.evaluate(() => window.sdpUnified.scene.environment.gallery.film.listening)).toBe(false);
+    // The camera can be stale just before E. The interaction must settle the real
+    // position and terminate with an explicit denial, not endless CONNECTING.
+    place(ids[0].id, 0, -6);
+    await first.evaluate(target => {
+      const app = window.sdpUnified, s = app.network.snapshot!, p = s.players.find(p => p.playerId === s.localPlayerId)!;
+      app.player.reconcile = () => {};
+      app.player.setSpawn({ ...p, x: -9.5, y: -5.4, z: target.z, yaw: Math.PI / 2, pitch: -.5 });
+    }, galleryListening);
+    await expect(first.getByRole('button', { name: 'Listen to Kenosis', exact: true })).toBeVisible();
+    await expect(first.getByRole('button', { name: 'Listen to Kenosis', exact: true })).toBeEnabled();
+    await first.keyboard.press('KeyE');
+    await expect(first.locator('.ui-notice')).toContainText('Move closer');
+    await expect.poll(() => first.evaluate(() => window.sdpUnified.scene.camera.position.x)).toBeCloseTo(0, 1);
+    expect(room.state.players.get(ids[0].id)!.listening).toBe(false);
+    expect(await first.evaluate(() => ({ room: window.sdpUnified.network.snapshot!.roomId, id: window.sdpUnified.network.snapshot!.localPlayerId }))).toEqual(ids[0]);
     expect(errors).toEqual([]);
   } finally { await desktop.close(); await mobile.close(); }
 });
