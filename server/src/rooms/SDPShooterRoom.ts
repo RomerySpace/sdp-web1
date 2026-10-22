@@ -40,7 +40,12 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
   private inactivity!: RoomInactivity;
   async onCreate(): Promise<void> {
     if (!shooterEnabled) throw new ServerError(403, 'Shooter test is disabled.');
-    this.world = await ShooterWorld.create();
+    this.seatReservationTimeout = 60;
+    const started = performance.now();
+    console.log('[SDP] Shooter room loading', this.roomId, process.memoryUsage());
+    try { this.world = await ShooterWorld.create(); }
+    catch (error) { console.error('[SDP] Shooter room loading failed', this.roomId, error); throw error; }
+    console.log('[SDP] Shooter room ready', this.roomId, Math.round(performance.now() - started), process.memoryUsage());
     this.inactivity = new RoomInactivity(this);
     this.setPatchRate(1000 / SHOOTER_PATCH_HZ);
     this.onMessage('strike:request', (client, raw: unknown) => {

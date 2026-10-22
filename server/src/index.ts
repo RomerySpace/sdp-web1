@@ -10,6 +10,17 @@ import { liveKitURLs } from './config/LiveKitConfig';
 import { admission } from './communication/Admission';
 import { SDPAdmission } from './rooms/SDPAdmission';
 import { admissionConfig } from '../../shared/Admission';
+import { monitorEventLoopDelay } from 'node:perf_hooks';
+
+process.on('uncaughtExceptionMonitor', error => console.error('[SDP] Fatal process error', error));
+process.on('exit', code => console.error('[SDP] Process exit', code));
+const loopDelay = monitorEventLoopDelay({ resolution: 50 });
+loopDelay.enable();
+setInterval(() => {
+  console.log('[SDP] Runtime', { uptimeSeconds: Math.round(process.uptime()),
+    memory: process.memoryUsage(), eventLoopMaxMs: Math.round(loopDelay.max / 1e6) });
+  loopDelay.reset();
+}, 30000).unref();
 
 const port = Number(process.env.PORT || 2567);
 const host = process.env.HOST || '0.0.0.0';

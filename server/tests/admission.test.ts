@@ -34,6 +34,31 @@ test('waiting visitors retain order across disconnects; unused grants expire', (
   a.tick(now + 160002); assert.equal(a.status(third), undefined);
 });
 
+test('admission room survives immediate consecutive arrivals after becoming empty', { timeout: 15000 }, async () => {
+  const fixture = await airstrikeFixture(), client = new Client(`http://127.0.0.1:${fixture.port}`);
+  const rooms: Room[] = [];
+  let roomId = '';
+  try {
+    for (let i = 0; i < 4; i++) {
+      const room = await client.joinOrCreate('SDPAdmission'); rooms.push(room);
+      room.reconnection.enabled = false;
+      if (roomId) assert.equal(room.roomId, roomId);
+      roomId = room.roomId;
+      const status = await new Promise<AdmissionUpdate>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('No admission response')), 2000);
+        room.onMessage<AdmissionUpdate>('queue:status', value => { clearTimeout(timer); resolve(value); });
+        room.send('queue:sync');
+      });
+      assert.equal(status.ready, true);
+      await room.leave();
+    }
+  } finally {
+    for (const room of rooms) if (room.connection.isOpen) await room.leave();
+    await fixture.server.gracefullyShutdown(false);
+    admission.tick(Date.now() + 31000);
+  }
+});
+
 test('real sockets: a seven-second cut keeps the same player and blocks the queue until released', { timeout: 25000 }, async () => {
   const fixture = await airstrikeFixture(), client = new Client(`http://127.0.0.1:${fixture.port}`);
   admission.enabled = true; admission.capacity = 1;

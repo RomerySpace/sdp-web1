@@ -30,7 +30,16 @@ export class AdmissionClient {
       });
     } finally {
       this.cancel = undefined; this.waiting = undefined;
-      await room.leave().catch(() => {});
+      // A missing leave acknowledgement must not block an already granted entry.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([room.leave().catch(() => {}), new Promise<void>(resolve => {
+          timer = setTimeout(resolve, 1000);
+        })]);
+      } finally {
+        clearTimeout(timer);
+        if (room.connection.isOpen) room.connection.close();
+      }
     }
   }
   stop(): void { this.generation++; this.cancel?.(); if (this.waiting) void this.waiting.leave().catch(() => {}); }

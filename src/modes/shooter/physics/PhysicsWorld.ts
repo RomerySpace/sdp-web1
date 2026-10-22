@@ -3,6 +3,7 @@ import type { Vector3 } from 'three';
 import { gameConfig } from '../config/gameConfig';
 export { RAPIER };
 export const identityRotation = { x: 0, y: 0, z: 0, w: 1 };
+let initialization: Promise<void> | undefined;
 export class PhysicsWorld {
   readonly world: RAPIER.World;
   constructor() {
@@ -10,7 +11,11 @@ export class PhysicsWorld {
     this.world.timestep = gameConfig.physics.timestep;
     this.world.numSolverIterations = 6;
   }
-  static async initialize(): Promise<PhysicsWorld> { await RAPIER.init(); return new PhysicsWorld(); }
+  static async initialize(): Promise<PhysicsWorld> {
+    initialization ??= RAPIER.init().catch(error => { initialization = undefined; throw error; });
+    await initialization;
+    return new PhysicsWorld();
+  }
   step(): void { this.world.gravity.y = gameConfig.player.gravity; this.world.step(); }
   ray(origin: Vector3, direction: Vector3, distance: number, exclude?: RAPIER.Collider): RAPIER.RayColliderIntersection | null {
     return this.world.castRayAndGetNormal(new RAPIER.Ray(origin, direction), distance, true,

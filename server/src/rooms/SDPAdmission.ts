@@ -5,6 +5,7 @@ export class SDPAdmission extends Room {
   private readonly tickets = new Map<string, string>();
   private readonly previous = new Map<string, string>();
   onCreate(): void {
+    this.autoDispose = false;
     this.maxClients = 600; this.maxMessagesPerSecond = 2;
     this.onMessage('queue:sync', client => { this.previous.delete(client.sessionId); this.sendStatus(client); });
     this.setSimulationInterval(() => { admission.tick(); for (const client of this.clients) this.sendStatus(client); }, 1000);

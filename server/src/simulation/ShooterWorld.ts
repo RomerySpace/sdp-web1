@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
 import { deserialize } from 'node:v8';
+import { setImmediate as yieldToConnections } from 'node:timers/promises';
 import { PhysicsWorld, RAPIER } from '../../../src/modes/shooter/physics/PhysicsWorld';
 import { CharacterController } from '../../../src/modes/shooter/physics/CharacterController';
 import type { SpawnNavigationData } from './SpawnNavigation';
@@ -43,7 +44,10 @@ export class ShooterWorld {
     const data = await mapData;
     const physics = await PhysicsWorld.initialize();
     try {
-      for (const g of data.colliders) physics.world.createCollider(RAPIER.ColliderDesc.trimesh(g.vertices, g.indices).setFriction(0).setRestitution(0));
+      for (const g of data.colliders) {
+        physics.world.createCollider(RAPIER.ColliderDesc.trimesh(g.vertices, g.indices).setFriction(0).setRestitution(0));
+        await yieldToConnections();
+      }
       physics.world.updateSceneQueries();
       const world = new ShooterWorld(physics);
       for (const geometry of data.colliders) for (let i = 0; i < geometry.vertices.length; i += 3) {
