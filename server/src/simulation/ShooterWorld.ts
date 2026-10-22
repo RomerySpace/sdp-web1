@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
+import { deserialize } from 'node:v8';
 import { PhysicsWorld, RAPIER } from '../../../src/modes/shooter/physics/PhysicsWorld';
 import { CharacterController } from '../../../src/modes/shooter/physics/CharacterController';
 import type { SpawnNavigationData } from './SpawnNavigation';
@@ -8,7 +9,7 @@ import type { CharacterInput, ShooterInput } from '../../../shared/ShooterProtoc
 import { Vector3 } from 'three';
 import { airstrikeConfig } from '../../../shared/AirstrikeProtocol';
 
-interface Geometry { vertices: number[]; indices: number[] }
+interface Geometry { vertices: Float32Array; indices: Uint32Array }
 let mapData: Promise<{ colliders: Geometry[]; navigation: SpawnNavigationData }> | undefined;
 class ServerInput implements CharacterInput {
   readonly keys = new Set<string>();
@@ -34,12 +35,15 @@ export class ShooterWorld {
   private readonly bounds = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity };
   private constructor(readonly physics: PhysicsWorld) {}
   static async create(): Promise<ShooterWorld> {
-    mapData ??= readFile(new URL('../../assets/dust2-colliders.json.gz', import.meta.url))
-      .then(bytes => JSON.parse(gunzipSync(bytes).toString()) as { colliders: Geometry[]; navigation: SpawnNavigationData });
+    // Keep compact typed buffers cached, avoiding JSON strings and boxed numbers
+    // during room creation on memory-constrained hosts.
+    mapData ??= readFile(new URL('../../assets/dust2-colliders.bin.gz', import.meta.url))
+      .then(bytes => deserialize(gunzipSync(bytes)) as { colliders: Geometry[]; navigation: SpawnNavigationData })
+      .catch(error => { mapData = undefined; throw error; });
     const data = await mapData;
     const physics = await PhysicsWorld.initialize();
     try {
-      for (const g of data.colliders) physics.world.createCollider(RAPIER.ColliderDesc.trimesh(Float32Array.from(g.vertices), Uint32Array.from(g.indices)).setFriction(0).setRestitution(0));
+      for (const g of data.colliders) physics.world.createCollider(RAPIER.ColliderDesc.trimesh(g.vertices, g.indices).setFriction(0).setRestitution(0));
       physics.world.updateSceneQueries();
       const world = new ShooterWorld(physics);
       for (const geometry of data.colliders) for (let i = 0; i < geometry.vertices.length; i += 3) {

@@ -1,6 +1,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
+import { serialize } from 'node:v8';
 import { NodeIO } from '@gltf-transform/core';
 import { KHRDracoMeshCompression } from '@gltf-transform/extensions';
 import draco from 'draco3dgltf';
@@ -8,7 +9,7 @@ import { Matrix4, Vector3 } from 'three';
 import { tsImport } from 'tsx/esm/api';
 
 const source = new URL('../../public/shooter/MAP/dust2plainmap.glb', import.meta.url);
-const target = new URL('../assets/dust2-colliders.json.gz', import.meta.url);
+const target = new URL('../assets/dust2-colliders.bin.gz', import.meta.url);
 const sourceHash = createHash('sha256').update(await readFile(source)).digest('hex');
 const io = new NodeIO().registerExtensions([KHRDracoMeshCompression]).registerDependencies({
   'draco3d.decoder': await draco.createDecoderModule(),
@@ -79,7 +80,8 @@ await mkdir(new URL('../assets/', import.meta.url), { recursive: true });
 console.log('[SDP] Validating connected outdoor spawn routes');
 const { buildSpawnNavigation } = await tsImport('../src/simulation/SpawnNavigation.ts', import.meta.url);
 const navigation = await buildSpawnNavigation(colliders);
-const data = gzipSync(JSON.stringify({ version: 3, sourceHash, triangles, cellSize, colliders, navigation }));
+const data = gzipSync(serialize({ version: 3, sourceHash, triangles, cellSize,
+  colliders: colliders.map(g => ({ vertices: Float32Array.from(g.vertices), indices: Uint32Array.from(g.indices) })), navigation }));
 await writeFile(target, data);
 console.log(`[SDP] Dust 2: ${colliders.length} colliders, ${triangles} triangles, ${(data.length / 1048576).toFixed(2)} MiB. Source ${sourceHash}`);
 console.log(`[SDP] Spawns: ${navigation.points.length} outdoor points, ${navigation.connectedCells} connected cells, ${navigation.zoneCoverage} map zones. Hub ${navigation.hub}`);
