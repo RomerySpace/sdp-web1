@@ -14,7 +14,6 @@ import { LobbyRain } from './LobbyRain';
 import { TreeFireflies } from './TreeFireflies';
 import { treeNightTarget } from './TreeNight';
 import { lobbyAmbience } from '../core/LobbyAmbience';
-import { TemporaryCaptureStudio } from './TemporaryCaptureStudio';
 
 export class SceneManager {
   readonly scene = new Scene();
@@ -30,7 +29,6 @@ export class SceneManager {
   readonly remotePlayers: RemotePlayerManager;
   readonly rain: LobbyRain;
   readonly fireflies: TreeFireflies;
-  readonly captureStudio: TemporaryCaptureStudio;
   private treeNight = 0;
   get treeNightAmount(): number { return this.treeNight; }
 
@@ -51,8 +49,6 @@ export class SceneManager {
     this.sculpture = new Sculpture(this.scene, this.atmosphere);
     this.inspection = new SculptureInspection(this.renderer.domElement);
     this.graphics = new DigitalFragmentManager(this.scene, this.camera);
-    this.captureStudio = new TemporaryCaptureStudio(this.scene, this.graphics);
-    this.environment.occluders.push(...this.captureStudio.occluders);
     this.remotePlayers = new RemotePlayerManager(this.scene, this.atmosphere);
     this.rain = new LobbyRain(this.scene);
     this.fireflies = new TreeFireflies(this.scene);
@@ -83,15 +79,13 @@ export class SceneManager {
     this.remotePlayers.update(performance.now(), reveal);
     this.rain.update(dt, time, reveal, this.camera, limbo && !this.inspection.active);
     this.fireflies.update(time, reveal, limbo && !this.inspection.active);
-    this.captureStudio.update(time, reveal, limbo && !this.inspection.active);
-    if (this.captureStudio.contains(this.camera.position.x, this.camera.position.z) && this.camera.position.y > 0) this.rain.mesh.visible = false;
     if (this.inspection.active) this.inspection.render(this.renderer, this.scene, chatting ? 0 : dt);
     else this.renderer.render(this.scene, this.camera);
   }
 
   dispose(): void {
     this.garden.dispose();
-    this.captureStudio.dispose(); this.graphics.dispose();
+    this.graphics.dispose();
     this.remotePlayers.dispose();
     this.rain.dispose();
     this.fireflies.dispose();

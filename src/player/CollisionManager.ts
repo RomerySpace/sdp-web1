@@ -2,7 +2,6 @@ import { lobbyRetreat, lobbyBenches } from '../../shared/LobbyRetreat';
 import { ambientStation } from '../../shared/AmbientStation';
 import { lobbyGroundHeight, listeningGarden, listeningGardenBenches, listeningBenchDistance } from '../../shared/ListeningGarden';
 import { lowerGallery, galleryFloor, galleryBarrier } from '../../shared/LowerGallery';
-import { captureStudioBlocked } from '../../shared/TemporaryCaptureStudio';
 const separateBenches = lobbyBenches.filter(seat => !listeningGardenBenches.includes(seat) && !lowerGallery.benches.includes(seat));
 
 /** Circle vs. pedestal and seating, with axis-separated sliding and swept substeps.
@@ -15,7 +14,6 @@ export class CollisionManager {
   private blocked(x: number, z: number, referenceGround = 0): boolean {
     if (galleryBarrier(x, z, this.radius, referenceGround)) return true;
     if (referenceGround < lowerGallery.layerThreshold) return lowerGallery.benches.some(seat => this.benchBlocked(x, z, seat));
-    if (captureStudioBlocked(x, z, this.radius)) return true;
     const closestX = Math.max(-this.halfExtent, Math.min(this.halfExtent, x));
     const closestZ = Math.max(-this.halfExtent, Math.min(this.halfExtent, z));
     if ((x - closestX) ** 2 + (z - closestZ) ** 2 < this.radius ** 2) return true;
