@@ -192,7 +192,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
         this.rejectVoiceRequests();
         this.needsSpawn = true;
         this.saveReconnect(room);
-        this.setStatus('connecting');
+        this.setStatus('connecting', 0, MAX_PLAYERS, room.roomId, 'reconnecting');
         for (const callback of this.notices) callback('Connection interrupted. Your place is reserved for up to two minutes.');
         this.clearRemoteState();
       });
@@ -200,7 +200,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
         if (this.room === room && !this.disposed) { queueMicrotask(() => { if (this.room === room) this.saveReconnect(room); }); this.receive(room, room.state); if (this.roomType === LOBBY_NAME) room.send('station:command', { type: 'sync' }); }
       });
       room.onError(() => {
-        if (this.room === room && !this.disposed) this.setStatus('disconnected');
+        if (this.room === room && !this.disposed) this.setStatus('disconnected', 0, MAX_PLAYERS, room.roomId, room.reconnection.isReconnecting ? 'reconnecting' : undefined);
       });
       room.onLeave((code) => {
         if (this.room !== room) return;

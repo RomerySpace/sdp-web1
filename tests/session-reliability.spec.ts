@@ -23,6 +23,57 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => { await vite?.close(); await fixture?.server.gracefullyShutdown(false); });
 
+test('disconnect screen is opaque, centered and keyboard-modal in both modes on desktop and mobile', async ({ browser }) => {
+  for (const mobile of [false, true]) {
+    const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 }, isMobile: mobile, hasTouch: mobile });
+    const page = await context.newPage();
+    try {
+      await page.clock.install();
+      await page.route('**/session-overlay-fixture', route => route.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><link rel="stylesheet" href="/src/styles/main.css"><link rel="stylesheet" href="/src/styles/modes.css"><link rel="stylesheet" href="/src/styles/touch.css"></head><body><main id="app" data-input="${mobile ? 'touch' : 'mouse'}" style="background:#000;min-height:100vh"><button id="background-button">Background</button></main></body></html>` }));
+      await page.goto(`${url}/session-overlay-fixture`);
+      await page.evaluate(async () => {
+        const modulePath = '/src/network/SessionActivity.ts';
+        const { SessionActivity } = await import(modulePath);
+        const fixture = { status: { state: 'connected', online: 1, capacity: 25, roomId: 'fixture', reason: undefined as string | undefined }, listeners: [] as ((s: unknown) => void)[], interrupted: 0, inactive: 0, keys: 0,
+          subscribeToStatus(cb: (s: unknown) => void) { this.listeners.push(cb); cb(this.status); return () => {}; }, sendActivity() {},
+          emit(state: string, reason?: string) { this.status = { ...this.status, state, reason }; for (const cb of this.listeners) cb(this.status); } };
+        const activity = new SessionActivity(document.getElementById('app')!, fixture, () => fixture.inactive++, () => fixture.interrupted++);
+        window.addEventListener('keydown', () => fixture.keys++);
+        Object.assign(window, { disconnectFixture: fixture, disconnectActivity: activity });
+      });
+      for (const mode of ['LIMBO', 'SHOOTER']) {
+        await page.evaluate(mode => {
+          document.getElementById('app')!.dataset.mode = mode;
+          (window as any).disconnectFixture.emit('connecting', 'reconnecting');
+        }, mode);
+        const dialog = page.getByRole('alertdialog', { name: 'CONNECTION INTERRUPTED' });
+        await expect(dialog).toBeVisible();
+        await expect(dialog).toHaveCSS('background-color', 'rgb(248, 251, 253)');
+        await expect(dialog.locator('.session-reservation')).toContainText('2:00');
+        expect(await page.locator('#background-button').evaluate(element => (element as HTMLElement).inert)).toBe(true);
+        await page.keyboard.press('p');
+        expect(await page.evaluate(() => (window as any).disconnectFixture.keys)).toBe(0);
+        await page.keyboard.press('Tab'); await expect(dialog.getByRole('button', { name: 'RELOAD SESSION' })).toBeFocused();
+        await page.screenshot({ path: `/private/tmp/sdp-disconnected-${mode.toLowerCase()}-${mobile ? 'mobile' : 'desktop'}.png` });
+        await page.clock.fastForward(121000);
+        await expect(dialog.locator('.session-reservation')).toContainText('RESERVATION ENDED');
+        await expect(dialog.locator('.session-disconnect-message')).toContainText('expired');
+        await page.evaluate(() => (window as any).disconnectFixture.emit('connected'));
+        await expect(dialog).toBeHidden();
+        expect(await page.locator('#background-button').evaluate(element => (element as HTMLElement).inert)).toBe(false);
+      }
+      await page.evaluate(() => (window as any).disconnectFixture.emit('disconnected', 'inactive'));
+      const idle = page.getByRole('alertdialog', { name: 'SESSION DISCONNECTED' });
+      await expect(idle).toBeVisible(); await expect(idle).toContainText('5 minutes of inactivity');
+      await expect(idle.getByRole('button', { name: 'REJOIN' })).toBeFocused();
+      await expect(idle.locator('.session-reservation')).toBeHidden();
+      await page.screenshot({ path: `/private/tmp/sdp-inactive-${mobile ? 'mobile' : 'desktop'}.png` });
+      await page.evaluate(() => (window as any).disconnectFixture.emit('connected'));
+      await expect(idle).toBeVisible();
+    } finally { await context.close(); }
+  }
+});
+
 test('entry queue: loading bar, mobile waiting position, reload reservation and automatic admission', async ({ browser }) => {
   admission.enabled = true; admission.capacity = 1;
   const desktop = await browser.newContext(), mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });

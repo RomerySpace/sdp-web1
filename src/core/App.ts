@@ -137,6 +137,8 @@ export class App {
       this.scene.environment.gallery.update(this.scene.camera, false, 0);
       this.instrument.update(this.scene.camera, false, 0, false, 0);
       this.touchControls?.reset(); this.ui.element.inert = true; cancelAnimationFrame(this.frame);
+    }, () => {
+      this.pause(); this.modes.pause(); this.player.releaseLock(); this.voice.suspend(); this.touchControls?.reset();
     });
     this.unsubscribers.push(
       this.settings.subscribe(state => {
