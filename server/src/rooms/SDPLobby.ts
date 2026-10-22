@@ -178,7 +178,8 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
     this.simulation.stop(client.sessionId);
     const entry = this.inputs.get(client.sessionId);
     if (entry) entry.value.active = false;
-    this.allowReconnection(client, admissionConfig.reservationSeconds);
+    // Incomplete JOIN handshakes cannot reserve a reconnection seat.
+    void this.allowReconnection(client, admissionConfig.reservationSeconds).catch(() => {});
   }
 
   onReconnect(client: Client): void {

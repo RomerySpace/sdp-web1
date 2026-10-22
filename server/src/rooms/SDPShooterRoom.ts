@@ -167,7 +167,9 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     const player = this.state.players.get(client.sessionId), entry = this.entries.get(client.sessionId);
     if (player?.connected) { player.connected = false; this.state.online--; }
     if (entry) { entry.input.active = false; this.world.input(client.sessionId, entry.input); }
-    this.allowReconnection(client, admissionConfig.reservationSeconds);
+    // A socket can close before the JOIN handshake finishes. In that case
+    // Colyseus rejects immediately instead of creating a reservation.
+    void this.allowReconnection(client, admissionConfig.reservationSeconds).catch(() => {});
   }
   onReconnect(client: Client): void {
     this.inactivity.touch(client.sessionId);
