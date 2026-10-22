@@ -3,6 +3,7 @@ import { DigitalFragment, type FragmentPlacement } from './DigitalFragment';
 import { fragmentConfig, type FragmentConfig } from './FragmentConfig';
 import { FragmentLoader, type FragmentAsset } from './FragmentLoader';
 import { FragmentMaterial } from './FragmentMaterial';
+import { inCaptureStudio } from '../../../shared/TemporaryCaptureStudio';
 
 function hash(x: number, z: number, seed: number): number {
   let value = Math.imul(x ^ seed, 374761393) + Math.imul(z, 668265263);
@@ -41,6 +42,7 @@ export class DigitalFragmentManager {
   }
 
   get config(): Readonly<FragmentConfig> { return this.settings; }
+  get loadedAssets(): readonly FragmentAsset[] { return this.assets; }
 
   get stats() {
     let visible = 0, segments = 0, points = 0;
@@ -96,6 +98,7 @@ export class DigitalFragmentManager {
     const asset = this.assets[assetIndex];
     const scale = config.fragmentScale * (0.65 + random() * 0.6);
     const footprint = Math.hypot(asset.bounds[0], asset.bounds[1], asset.bounds[2] * config.depthStrength) * scale / 2 + 0.2;
+    if (inCaptureStudio(x, z, footprint)) return null;
     if (Math.hypot(x, z) - footprint < config.exclusionRadius) return null;
     // Preserve the introductory sightline from the existing starting position.
     if (z > -2 && z < 10 && Math.abs(x) < 2.8 + footprint) return null;
