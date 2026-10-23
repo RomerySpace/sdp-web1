@@ -5,7 +5,7 @@ import { regionalHit, type CombatPose } from '../src/simulation/CombatSimulation
 import { deriveSpawnNavigation } from '../src/simulation/SpawnNavigation';
 import { PhysicsWorld, RAPIER } from '../../src/modes/shooter/physics/PhysicsWorld';
 import { gameplayConfig } from '../../shared/GameplayConfig';
-import { validateDisplayName, roomDisplayName } from '../../shared/PlayerIdentity';
+import { validateDisplayName } from '../../shared/PlayerIdentity';
 import { shotRecoil } from '../../shared/WeaponRecoil';
 
 test('recovery waits seven seconds, heals progressively, resets on damage and never heals dead players', () => {
@@ -36,10 +36,9 @@ test('regional shapes distinguish head, torso, arms, legs and feet in the shared
   assert.deepEqual(gameplayConfig.combat.regionDamage, { arm: 25, leg: 25, torso: 50, head: 100, foot: 12 });
   assert.equal(regionalHit({ ...pose, height: 1.16 }, new RAPIER.Ray({ x: 0, y: 1.65, z: 0 }, { x: 0, y: 0, z: -1 }), 10), null);
 });
-test('names are bounded plain text, unique within a room, and recoil rises with automatic bursts', () => {
+test('names are bounded plain text and recoil rises with automatic bursts', () => {
   assert.equal(validateDisplayName('  Álvaro  SDP '), 'Álvaro SDP');
   for (const name of ['<script>x</script>', 'a', 'a'.repeat(21), 'name\u202e']) assert.equal(validateDisplayName(name), null);
-  assert.equal(roomDisplayName('Visitor', ['visitor'], 'Fallback'), 'Visitor #2');
   assert.ok(shotRecoil(10, true, false).pitch > shotRecoil(0, true, false).pitch);
   assert.ok(shotRecoil(0, true, true).pitch < shotRecoil(0, true, false).pitch);
 });

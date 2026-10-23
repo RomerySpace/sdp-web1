@@ -1,5 +1,7 @@
 import { Room, ServerError, type Client } from '@colyseus/core';
-import { roomDisplayName, validateDisplayName } from '../../../shared/PlayerIdentity';
+import { validateDisplayName } from '../../../shared/PlayerIdentity';
+import { socialDirectory } from '../communication/SocialDirectory';
+import { RoomSocial } from '../communication/RoomSocial';
 import { randomUUID } from 'node:crypto';
 import { validVoiceRequest, type RoomChatMessage } from '../../../shared/CommunicationProtocol';
 import { ChatPolicy } from '../communication/ChatPolicy';
@@ -26,6 +28,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
   static async onAuth(_token: string, options: { displayName?: unknown; admissionToken?: unknown } = {}): Promise<boolean> {
     if (options.displayName !== undefined && !validateDisplayName(options.displayName)) throw new ServerError(400, 'Invalid display name.');
     admission.validate(options.admissionToken);
+    socialDirectory.checkName(options.displayName, options.admissionToken);
     return true;
   }
   state = new LobbyState();
@@ -42,9 +45,11 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
   private station!: AmbientStationSession;
   private readonly stationSyncs = new Map<string, number>();
   private inactivity!: RoomInactivity;
+  private social!: RoomSocial;
 
   onCreate(): void {
     this.inactivity = new RoomInactivity(this);
+    this.social = new RoomSocial(this, 'LIMBO', id => !!this.state.players.get(id)?.connected, id => this.inactivity.touch(id));
     this.onMessage('gallery:listen', (client, raw: unknown) => {
       const player = this.state.players.get(client.sessionId);
       if (!player?.connected || !validGalleryListening(raw)) return;
@@ -109,6 +114,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
       if (!player?.connected) return;
       const message = this.chat.accept(client.sessionId, raw, this.clock.elapsedTime);
       if (!message) { client.send('chat:error', 'Message is empty, too long, or sent too quickly.'); return; }
+      if (this.social.command(client, message)) return;
       this.inactivity.touch(client.sessionId);
       const data: RoomChatMessage = {
         messageId: randomUUID(), senderId: client.sessionId, senderName: this.visitorName(client.sessionId),
@@ -149,6 +155,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
   }
 
   onJoin(client: Client, options: { displayName?: unknown; admissionToken?: unknown } = {}): void {
+    const displayName = this.social.join(client, options);
     admission.attach(options.admissionToken, client.sessionId);
     if (options.displayName !== undefined && !validateDisplayName(options.displayName)) throw new ServerError(400, 'Invalid display name.');
     const occupied = new Set(Array.from(this.inputs.values(), (entry) => entry.slot));
@@ -156,7 +163,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
     while (occupied.has(slot)) slot++;
     const spawn = spawnPosition(slot);
     const player = new VisitorState();
-    player.displayName = roomDisplayName(options.displayName, [...this.state.players.values()].map(p => p.displayName), `VISITOR ${String(slot + 1).padStart(2, '0')}`);
+    player.displayName = displayName;
     Object.assign(player, spawn);
     this.state.players.set(client.sessionId, player);
     this.state.online++;
@@ -170,6 +177,7 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
 
   onDrop(client: Client, code?: number): void {
     if (code === sessionPolicy.idleCloseCode) return;
+    this.social.drop(client);
     this.station.remove(client.sessionId, Date.now()); this.stationSyncs.delete(client.sessionId);
     this.stand(client.sessionId, true);
     void this.voice.remove(client.sessionId);
@@ -183,12 +191,14 @@ export class SDPLobby extends Room<{ state: LobbyState }> {
   }
 
   onReconnect(client: Client): void {
+    this.social.reconnect(client);
     this.inactivity.touch(client.sessionId);
     const player = this.state.players.get(client.sessionId);
     if (player && !player.connected) { player.connected = true; this.state.online++; }
   }
 
   onLeave(client: Client): void {
+    this.social.leave(client, this.inactivity.isExpired(client.sessionId));
     admission.release(client.sessionId, Date.now(), this.inactivity.isExpired(client.sessionId));
     this.inactivity.remove(client.sessionId);
     this.station.remove(client.sessionId, Date.now()); this.stationSyncs.delete(client.sessionId);

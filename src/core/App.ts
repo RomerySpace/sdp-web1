@@ -106,6 +106,7 @@ export class App {
       this.voiceTransport.setMutedVisitors(id => this.visitorPreferences.muted(id));
       this.chat.setHiddenSenders(id => this.visitorPreferences.hidden(id));
       this.ui.chat.removeSenders(id => this.visitorPreferences.hidden(id));
+      this.network.setBlockedVisitors(this.visitorPreferences.all.filter(visitor => visitor.blocked).map(visitor => visitor.id));
     }, () => this.closeVisitorOptions());
     this.modes = new GameModeManager(container, this.scene.renderer, this.network, {
       pauseLimbo: () => { this.pause(); this.player.setEnabled(false); },
@@ -117,6 +118,13 @@ export class App {
       changed: mode => { this.ui.element.inert = mode !== 'LIMBO' && mode !== 'SHOOTER'; if (mode !== 'LIMBO') this.ui.inspection.update(false, false); },
       inspect: () => this.inspectSculpture(),
     }, this.settings, this.touch);
+    this.ui.chat.configureInvitations(async invitation => {
+      this.pause();
+      await this.modes.acceptInvitation(invitation);
+    }, id => this.network.declineInvitation(id));
+    this.unsubscribers.push(this.network.subscribeToInvitation(invitation => {
+      if (!this.visitorPreferences.get(invitation.fromSessionId)?.blocked) this.ui.chat.invite(invitation);
+    }));
     if (this.touch) this.touchControls = new TouchControls(container, {
       move: (f, r) => {
         if (this.modes.value === 'SHOOTER') this.modes.shooter?.input.setTouchMovement(f, r);
@@ -157,8 +165,14 @@ export class App {
       this.chat.subscribe((message) => this.ui.chat.add(message)),
       this.voice.subscribe((state) => { this.microphone = state; this.ui.controls.setVoiceState(state); this.touchControls?.voice(state, this.voiceConnection); }),
       this.voiceTransport.subscribe((state) => { this.voiceConnection = state; this.ui.controls.setVoiceConnection(state); this.touchControls?.voice(this.microphone, state); }),
-      this.network.subscribeToNotice((message) => this.ui.notify(message)),
+      this.network.subscribeToNotice(message => {
+        if (this.entering && this.state.value === 'INTRO' && this.network.status.state === 'disconnected') {
+          this.entering = false; this.player.releaseLock(); this.ui.intro.connecting(false, message);
+        }
+        this.ui.notify(message);
+      }),
       this.network.subscribeToStatus((status) => {
+        if (status.state === 'connected') this.network.setBlockedVisitors(this.visitorPreferences.all.filter(visitor => visitor.blocked).map(visitor => visitor.id));
         this.ui.connection.update(status); this.player.setNetworkReady(status.state === 'connected' && this.network.roomType === LOBBY_NAME);
         if (this.entering && this.state.value === 'INTRO' && status.queuePosition !== undefined) {
           this.ui.intro.waiting(status.queuePosition);
@@ -371,8 +385,8 @@ export class App {
       if (this.disposed) return;
       if (this.network.status.state === 'disconnected') this.ui.intro.connecting(true, 'RECONNECTING TO THE EXHIBITION');
       else if (this.state.value === 'INTRO') this.state.set('ENTERING');
-    }).catch(() => {
-      this.entering = false; this.player.releaseLock(); this.ui.intro.connecting(false, 'Connection unavailable. Please try again.');
+    }).catch(error => {
+      this.entering = false; this.player.releaseLock(); this.ui.intro.connecting(false, error instanceof Error ? error.message : 'Connection unavailable. Please try again.');
     });
   }
 

@@ -11,7 +11,9 @@ import { shooterEnabled } from '../config/GameplayConfig';
 import { CombatSimulation, type CombatPose, type PlayerHit } from '../simulation/CombatSimulation';
 import { HealthRecovery } from '../simulation/HealthRecovery';
 import { ShooterMatch } from '../simulation/ShooterMatch';
-import { roomDisplayName, validateDisplayName } from '../../../shared/PlayerIdentity';
+import { validateDisplayName } from '../../../shared/PlayerIdentity';
+import { socialDirectory } from '../communication/SocialDirectory';
+import { RoomSocial } from '../communication/RoomSocial';
 import { shotRecoil } from '../../../shared/WeaponRecoil';
 import { advanceGait } from '../../../shared/AvatarAnimation';
 import { RoomInactivity } from '../communication/RoomInactivity';
@@ -25,6 +27,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     if (!shooterEnabled) throw new ServerError(403, 'Shooter test is disabled.');
     if (options.displayName !== undefined && !validateDisplayName(options.displayName)) throw new ServerError(400, 'Invalid display name.');
     admission.validate(options.admissionToken);
+    socialDirectory.checkName(options.displayName, options.admissionToken);
     return true;
   }
   state = new ShooterState(); maxClients = SHOOTER_MAX_PLAYERS; maxMessagesPerSecond = 100;
@@ -35,6 +38,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
   private readonly combat = new CombatSimulation();
   private readonly match = new ShooterMatch();
   private inactivity!: RoomInactivity;
+  private social!: RoomSocial;
   async onCreate(): Promise<void> {
     if (!shooterEnabled) throw new ServerError(403, 'Shooter test is disabled.');
     this.seatReservationTimeout = 60;
@@ -44,6 +48,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     catch (error) { console.error('[SDP] Shooter room loading failed', this.roomId, error); throw error; }
     console.log('[SDP] Shooter room ready', this.roomId, Math.round(performance.now() - started), process.memoryUsage());
     this.inactivity = new RoomInactivity(this);
+    this.social = new RoomSocial(this, 'SHOOTER', id => !!this.state.players.get(id)?.connected, id => this.inactivity.touch(id));
     this.setPatchRate(1000 / SHOOTER_PATCH_HZ);
     this.onMessage('shooter:input', (client, raw: unknown) => {
       const entry = this.entries.get(client.sessionId), input = validateShooterInput(raw);
@@ -101,6 +106,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
       if (!player?.connected) return;
       const message = this.chat.accept(client.sessionId, raw, this.clock.elapsedTime);
       if (!message) { client.send('chat:error', 'Message is empty, too long, or sent too quickly.'); return; }
+      if (this.social.command(client, message)) return;
       this.inactivity.touch(client.sessionId);
       const data: RoomChatMessage = { messageId: randomUUID(), senderId: client.sessionId,
         senderName: player.displayName,
@@ -117,13 +123,14 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     }, 1000 / SHOOTER_HZ);
   }
   onJoin(client: Client, options: { displayName?: unknown; admissionToken?: unknown } = {}): void {
+    const displayName = this.social.join(client, options);
     admission.attach(options.admissionToken, client.sessionId);
     if (!shooterEnabled) throw new ServerError(403, 'Shooter test is disabled.');
     if (options.displayName !== undefined && !validateDisplayName(options.displayName)) throw new ServerError(400, 'Invalid display name.');
     const used = new Set([...this.entries.values()].map(entry => entry.slot)); let slot = 0; while (used.has(slot)) slot++;
     const character = this.world.add(client.sessionId, slot);
     const player = new ShooterPlayer();
-    player.displayName = roomDisplayName(options.displayName, [...this.state.players.values()].map(p => p.displayName), `PLAYER ${String(slot + 1).padStart(2, '0')}`);
+    player.displayName = displayName;
     Object.assign(player, character.spawn, { yaw: gameConfig.player.spawn.yaw,
       spawnX: character.spawn.x, spawnY: character.spawn.y, spawnZ: character.spawn.z });
     player.bornAt = this.clock.elapsedTime; player.protectedUntil = player.bornAt + gameplayConfig.combat.spawnProtection * 1000;
@@ -137,6 +144,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
   }
   onDrop(client: Client, code?: number): void {
     if (code === sessionPolicy.idleCloseCode) return;
+    this.social.drop(client);
     const player = this.state.players.get(client.sessionId), entry = this.entries.get(client.sessionId);
     if (player?.connected) { player.connected = false; this.state.online--; }
     if (entry) { entry.input.active = false; this.world.input(client.sessionId, entry.input); }
@@ -145,12 +153,14 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     void this.allowReconnection(client, admissionConfig.reservationSeconds).catch(() => {});
   }
   onReconnect(client: Client): void {
+    this.social.reconnect(client);
     this.inactivity.touch(client.sessionId);
     const player = this.state.players.get(client.sessionId);
     if (player && !player.connected) { player.connected = true; this.state.online++; }
     if (this.match.phase === 'waiting') this.startMatch(this.clock.elapsedTime, true);
   }
   onLeave(client: Client): void {
+    this.social.leave(client, this.inactivity.isExpired(client.sessionId));
     admission.release(client.sessionId, Date.now(), this.inactivity.isExpired(client.sessionId));
     this.inactivity.remove(client.sessionId);
     const leaving = this.state.players.get(client.sessionId);

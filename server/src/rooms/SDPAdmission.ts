@@ -1,5 +1,6 @@
 import { Room, type Client } from '@colyseus/core';
 import { admission } from '../communication/Admission';
+import { socialDirectory } from '../communication/SocialDirectory';
 
 export class SDPAdmission extends Room {
   private readonly tickets = new Map<string, string>();
@@ -10,7 +11,8 @@ export class SDPAdmission extends Room {
     this.onMessage('queue:sync', client => { this.previous.delete(client.sessionId); this.sendStatus(client); });
     this.setSimulationInterval(() => { admission.tick(); for (const client of this.clients) this.sendStatus(client); }, 1000);
   }
-  onJoin(client: Client, options: { admissionToken?: unknown } = {}): void {
+  onJoin(client: Client, options: { admissionToken?: unknown; displayName?: unknown } = {}): void {
+    socialDirectory.checkName(options.displayName, options.admissionToken);
     this.tickets.set(client.sessionId, admission.request(options.admissionToken, client.sessionId));
     this.sendStatus(client);
   }

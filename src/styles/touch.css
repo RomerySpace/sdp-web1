@@ -106,3 +106,8 @@
   .touch-mode svg { width: 18px; height: 18px; }
 }
 @media (prefers-reduced-motion: reduce) { .touch-stick { transition: none; } }
+#app[data-input="touch"] .chat.has-invitations:not(.is-open) { display: block; width: min(300px, calc(100% - 36px)); }
+#app[data-input="touch"] .chat-invitations button { min-height: 44px; }
+@media (max-height: 500px) and (orientation: landscape) {
+  #app[data-input="touch"] .chat.has-invitations:not(.is-open) { top: max(18px, env(safe-area-inset-top)); bottom: auto; }
+}

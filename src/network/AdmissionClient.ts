@@ -9,9 +9,9 @@ export class AdmissionClient {
   constructor(private readonly client: Client) {
     try { this.token = sessionStorage.getItem('sdp:admission') || ''; } catch {}
   }
-  async enter(update: (position: number) => void): Promise<string> {
+  async enter(update: (position: number) => void, displayName?: string): Promise<string> {
     const generation = this.generation;
-    const room = await this.client.joinOrCreate(admissionConfig.room, { admissionToken: this.token || undefined });
+    const room = await this.client.joinOrCreate(admissionConfig.room, { admissionToken: this.token || undefined, displayName });
     if (generation !== this.generation) { await room.leave(); throw new Error('Entry cancelled.'); }
     this.waiting = room; room.reconnection.enabled = false;
     try {

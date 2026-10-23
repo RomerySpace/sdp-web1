@@ -150,6 +150,7 @@ kbd, .key-label { font: inherit; font-size: 9px; letter-spacing: 0.04em; }
 .show-history .chat-history { opacity: 1; }
 .chat.is-open .chat-history { pointer-events: auto; touch-action: pan-y; overscroll-behavior: contain; user-select: text; max-height: min(320px, 40dvh); mask-image: none; }
 .chat-message { flex-shrink: 0; }
+.chat-history:empty { display: none; }
 .chat-message { margin: 0; font-size: 11px; line-height: 1.6; color: #6c7a84; }
 .chat-sender { font-size: 9px; letter-spacing: 0.06em; color: #8c99a2; margin-right: 5px; }
 .chat-form { display: flex; align-items: center; gap: 12px; padding: 13px 12px; background: rgb(255 255 255 / 67%); border-bottom: 1px solid #d4dde2; border-radius: 3px 3px 0 0; pointer-events: auto; }
@@ -159,6 +160,19 @@ kbd, .key-label { font: inherit; font-size: 9px; letter-spacing: 0.04em; }
 .chat-input-hint { color: #929fa8; font-size: 13px; }
 .chat-note { margin: 10px 0 0; font-size: 9px; color: #95a1a9; }
 .chat-note span { margin: 0 5px; }
+.chat.has-invitations { opacity: 1; }
+.chat-invitations { padding: 14px; margin-bottom: 10px; background: rgb(248 251 253 / 95%); border: 1px solid #c4cfd5; border-radius: 4px; pointer-events: auto; color: #34424c; }
+.chat-invitations p { margin: 0 0 5px; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.chat-invitations > span { display: block; font-size: 10px; color: #657986; }
+.chat-invitation-key { float: right; margin-left: 12px; padding: 2px 4px; border: 1px solid #c4cfd5; border-radius: 2px; font: inherit; font-size: 9px; color: #657986; }
+.chat.is-open .chat-invitation-key, #app[data-input="touch"] .chat-invitation-key { display: none; }
+.chat-invitations > div { display: flex; gap: 8px; margin-top: 12px; }
+.chat-invitations button { min-height: 38px; padding: 8px 12px; border: 1px solid #c4cfd5; background: #fff; border-radius: 3px; color: #34424c; font: inherit; font-size: 10px; cursor: pointer; }
+.chat-invitations button:disabled { opacity: .55; cursor: wait; }
+.chat-invitations .chat-invitation-error { margin-top: 10px; font-size: 11px; }
+.chat-command { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 5px 12px; margin: 0; padding: 10px 12px; background: rgb(248 251 253 / 95%); color: #516977; font-size: 10px; }
+.chat-command code { font: inherit; color: #34424c; }
+.chat-command[hidden], .chat-invitations[hidden] { display: none; }
 
 .ui[data-state="EXPLORING"] .crosshair { opacity: 0.55; }
 .ui:is([data-state="EXPLORING"], [data-state="CHATTING"], [data-state="PAUSED"]) .controls-overlay { opacity: 1; visibility: visible; }

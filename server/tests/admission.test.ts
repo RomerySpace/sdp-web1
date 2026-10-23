@@ -6,6 +6,14 @@ import { shooterFixture } from './shooter-fixture';
 import type { AdmissionUpdate } from '../../shared/Admission';
 import type { SDPLobby } from '../src/rooms/SDPLobby';
 
+test('issued visits retain ownership and identity even without capacity enforcement', () => {
+  const a = new Admission(), now = Date.now(), token = a.request(null, 'watch', now);
+  a.unwatch(token, 'watch', now); a.attach(token, 'player');
+  a.tick(now + 180000); assert.equal(a.status(token)?.ready, true);
+  assert.throws(() => a.attach(token, 'another-player'), /already open/);
+  a.release('player', now + 180000, true); assert.equal(a.status(token), undefined);
+});
+
 test('FIFO admission enforces capacity, unique ownership and transition reservations', () => {
   const a = new Admission(); a.enabled = true; a.capacity = 1;
   const now = Date.now(), first = a.request(null, 'watch1', now), second = a.request(null, 'watch2', now);

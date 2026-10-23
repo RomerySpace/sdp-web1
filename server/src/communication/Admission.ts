@@ -37,9 +37,10 @@ export class Admission {
     if (typeof token !== 'string' || !this.places.get(token)?.admitted) throw new ServerError(403, 'Please enter through the waiting room.');
   }
   attach(token: unknown, owner: string): void {
-    if (!this.enabled) return;
     this.validate(token);
-    const p = this.places.get(token as string)!;
+    const p = this.places.get(token as string);
+    // A visit still owns its identity when capacity enforcement is disabled.
+    if (!p) return;
     if (p.owner && p.owner !== owner) throw new ServerError(409, 'This visit is already open.');
     p.owner = owner; p.expires = Infinity;
   }

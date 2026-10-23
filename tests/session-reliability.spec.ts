@@ -23,6 +23,117 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => { await vite?.close(); await fixture?.server.gracefullyShutdown(false); });
 
+test('invitation controls and slash completion fit desktop and mobile without loading Shooter', async ({ browser }) => {
+  for (const viewport of [{ width: 1200, height: 800 }, { width: 390, height: 844 }, { width: 844, height: 390 }]) {
+    const mobile = viewport.width < 900, context = await browser.newContext({ viewport, isMobile: mobile, hasTouch: mobile }), page = await context.newPage();
+    const shooter: string[] = []; page.on('request', request => { if (/shooter|ShooterMode/.test(request.url())) shooter.push(request.url()); });
+    try {
+      await page.route('**/social-ui-fixture', route => route.fulfill({ contentType: 'text/html', body: `<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/src/styles/main.css"><link rel="stylesheet" href="/src/styles/touch.css"><main id="app" data-mode="LIMBO" data-input="${mobile ? 'touch' : 'mouse'}"><div class="ui" data-state="CHATTING"></div></main>` }));
+      await page.goto(`${url}/social-ui-fixture`);
+      await page.evaluate(async () => {
+        const path = '/src/ui/ChatInterface.ts', { ChatInterface } = await import(path);
+        const chat = new ChatInterface(document.querySelector('.ui')!, () => {}, () => {});
+        Object.assign(window, { socialUI: chat, acceptedInvite: false });
+        chat.configureInvitations(async () => { (window as any).acceptedInvite = true; }, () => {}); chat.setOpen(true);
+        chat.invite({ id: 'test', fromId: 'a', fromSessionId: 'a', fromName: 'A Long Visitor Name', roomId: 'test-room', mode: 'SHOOTER', expiresAt: Date.now() + 45000 });
+      });
+      await page.getByRole('textbox', { name: 'Chat message' }).fill('/');
+      await expect(page.getByRole('textbox', { name: 'Chat message' })).toHaveValue('/invite ');
+      await expect(page.locator('.chat-command')).toBeVisible();
+      await page.evaluate(() => (window as any).socialUI.setOpen(false));
+      const tray = page.getByRole('region', { name: 'Room invitations' }); await expect(tray).toBeVisible();
+      const box = await tray.boundingBox(); expect(box!.x).toBeGreaterThanOrEqual(0); expect(box!.y).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width); expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+      expect(await tray.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+      await page.screenshot({ path: `/private/tmp/sdp-invitation-ui-${viewport.width}.png` });
+      await page.getByRole('button', { name: 'ACCEPT', exact: true }).click();
+      await expect(tray).toBeHidden(); expect(await page.evaluate(() => (window as any).acceptedInvite)).toBe(true); expect(shooter).toEqual([]);
+    } finally { await context.close(); }
+  }
+});
+
+test('duplicate global username stays on the name form and can be corrected without a reload', async ({ browser }) => {
+  const a = await browser.newContext(), b = await browser.newContext();
+  const first = await a.newPage(), second = await b.newPage();
+  try {
+    await first.goto(`${url}/?debugMode=limbo`); await enterExhibition(first, 'Unique Friend');
+    await second.goto(`${url}/?debugMode=limbo`); await submitName(second, 'unique FRIEND');
+    await expect(second.locator('.intro-name-message')).toContainText('already in use');
+    await expect(second.getByRole('textbox', { name: 'USERNAME', exact: true })).toBeEnabled();
+    let failOnce = true;
+    await second.route('**/matchmake/joinOrCreate/SDPAdmission', async route => {
+      if (failOnce) { failOnce = false; await route.abort(); } else await route.continue();
+    });
+    await second.getByRole('button', { name: 'ENTER', exact: true }).click();
+    await expect(second.locator('.intro-name-message')).toContainText('already in use');
+    await expect(second.getByRole('textbox', { name: 'USERNAME', exact: true })).toBeEnabled();
+    await second.getByRole('textbox', { name: 'USERNAME', exact: true }).fill('Another Friend');
+    await second.getByRole('button', { name: 'ENTER', exact: true }).click();
+    await expect(second.locator('.connection-indicator')).toHaveAttribute('data-connection', 'connected');
+    await expect(second.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
+  } finally {
+    for (const page of [first, second]) await page.evaluate(() => window.sdpUnified?.network.disconnect()).catch(() => {});
+    await a.close(); await b.close(); admission.tick(Date.now() + 121000);
+  }
+});
+
+test('two browsers accept chat invitations across all four Limbo and Shooter routes', async ({ browser }) => {
+  test.setTimeout(300000);
+  const a = await browser.newContext({ viewport: { width: 960, height: 640 } }), b = await browser.newContext({ viewport: { width: 960, height: 640 } }), first = await a.newPage(), second = await b.newPage(), errors: string[] = [];
+  const openChat = async (page: typeof first) => {
+    await page.bringToFront();
+    if (await page.locator('#app').getAttribute('data-mode') === 'LIMBO') {
+      if (await page.locator('.resume-button').isVisible()) await page.locator('.resume-button').click();
+      await expect(page.locator('.ui')).toHaveAttribute('data-state', 'EXPLORING');
+    } else {
+      const resume = page.getByRole('button', { name: /^(RESUME|ENTER SIMULATION)$/ });
+      if (await resume.isVisible()) await resume.click();
+      await expect(page.locator('.mode-overlay')).toBeHidden();
+    }
+    await page.keyboard.press('Enter'); await expect(page.getByRole('textbox', { name: 'Chat message' })).toBeVisible();
+  };
+  const invite = async (sender: typeof first, recipient: typeof first, name: string, label: string) => {
+    console.info('Invitation route:', label);
+    await openChat(sender);
+    const input = sender.getByRole('textbox', { name: 'Chat message' });
+    await input.fill('/'); await expect(input).toHaveValue('/invite ');
+    await expect(sender.locator('.chat-command')).toBeVisible();
+    await input.fill(`/invite ${name}`); await input.press('Enter');
+    await expect(recipient.getByRole('region', { name: 'Room invitations' })).toBeVisible();
+    await openChat(recipient);
+    await recipient.getByRole('button', { name: 'ACCEPT', exact: true }).click();
+    await expect(recipient.locator('.chat-invitations')).toBeHidden({ timeout: 90000 });
+    const target = await sender.evaluate(() => window.sdpUnified.network.snapshot!.roomId);
+    await expect.poll(() => recipient.evaluate(() => window.sdpUnified.network.snapshot!.roomId)).toBe(target);
+    await expect(recipient.locator('.connection-indicator')).toHaveAttribute('data-connection', 'connected');
+    await recipient.screenshot({ path: `/private/tmp/sdp-invite-${label}.png` });
+    console.info('Invitation route passed:', label);
+  };
+  try {
+    for (const page of [first, second]) page.on('pageerror', error => errors.push(error.message));
+    await first.goto(`${url}/?debugMode=limbo`); await enterExhibition(first, 'Invite Alice');
+    const lobby = fixture.room(await first.evaluate(() => window.sdpUnified.network.snapshot!.roomId)); await lobby.lock();
+    await second.goto(`${url}/?debugMode=limbo`); await enterExhibition(second, 'Invite Bob');
+    await lobby.unlock();
+    await invite(first, second, 'Invite Bob', 'limbo-limbo');
+    await first.bringToFront();
+    await first.evaluate(() => window.sdpUnified.modes.joinShooter());
+    await expect(first.locator('#app')).toHaveAttribute('data-mode', 'SHOOTER', { timeout: 90000 });
+    await invite(first, second, 'Invite Bob', 'limbo-shooter');
+    const shooter = fixture.room(await first.evaluate(() => window.sdpUnified.network.snapshot!.roomId)); await shooter.lock();
+    await second.evaluate(() => window.sdpUnified.network.switchRoom('SDPShooterRoom')); await shooter.unlock();
+    await invite(second, first, 'Invite Alice', 'shooter-shooter');
+    await first.evaluate(() => window.sdpUnified.modes.returnToLimbo());
+    await expect(first.locator('#app')).toHaveAttribute('data-mode', 'LIMBO');
+    await invite(first, second, 'Invite Bob', 'shooter-limbo');
+    expect(errors).toEqual([]);
+    for (const page of [first, second]) await expect(page.locator('canvas.scene-canvas')).toHaveCount(1);
+  } finally {
+    for (const page of [first, second]) await page.evaluate(() => window.sdpUnified?.network.disconnect()).catch(() => {});
+    await a.close(); await b.close(); admission.tick(Date.now() + 121000);
+  }
+});
+
 test('expired and malformed reconnect reservations fall back to admission without losing the visit', async ({ browser }) => {
   admission.enabled = true; admission.capacity = 1;
   const context = await browser.newContext({ permissions: ['local-network-access'] }), page = await context.newPage();

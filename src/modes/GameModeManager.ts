@@ -6,6 +6,7 @@ import type { ShooterMode } from './shooter/ShooterMode';
 import { ModeInterface } from '../ui/ModeInterface';
 import { ENABLE_SHOOTER_TEST, gameplayConfig } from '../../shared/GameplayConfig';
 import { PlayerSettings } from '../core/PlayerSettings';
+import type { RoomInvitation } from '../../shared/SocialProtocol';
 export type GameMode = 'LIMBO' | 'SHOOTER_LOADING' | 'SHOOTER' | 'RETURNING_TO_LIMBO';
 interface Hooks {
   pauseLimbo(): void; restoreLimbo(): void; suspendCommunication(): void; restoreCommunication(): void;
@@ -33,13 +34,13 @@ export class GameModeManager {
   }
   setInspection(inspecting: boolean): void { this.ui.inspection(inspecting && ENABLE_SHOOTER_TEST && this.network.snapshot?.shooterEnabled !== false); }
   private set(mode: GameMode): void { this.value = mode; this.container.dataset.mode = mode; this.hooks.changed(mode); }
-  async joinShooter(): Promise<void> {
+  async joinShooter(invitationId?: string): Promise<void> {
     if (!ENABLE_SHOOTER_TEST || this.network.snapshot?.shooterEnabled === false) return;
     if (this.disposed || this.returning || this.value === 'SHOOTER' || this.operation) return;
-    const operation = this.loadShooter(); this.operation = operation;
+    const operation = this.loadShooter(invitationId); this.operation = operation;
     try { await operation; } finally { if (this.operation === operation) this.operation = undefined; }
   }
-  private async loadShooter(): Promise<void> {
+  private async loadShooter(invitationId?: string): Promise<void> {
     const generation = ++this.generation;
     const abort = this.abort = new AbortController();
     this.set('SHOOTER_LOADING'); this.ui.loading('Loading simulation module');
@@ -55,7 +56,8 @@ export class GameModeManager {
       await candidate.initialize(text => { if (generation === this.generation) this.ui.loading(text); }, abort.signal);
       abort.signal.throwIfAborted();
       this.ui.loading('Joining Shooter room');
-      await this.network.switchRoom(SHOOTER_ROOM);
+      if (invitationId) await this.network.acceptInvitation(invitationId);
+      else await this.network.switchRoom(SHOOTER_ROOM);
       abort.signal.throwIfAborted();
       this.hooks.resetChat(); this.shooter = candidate; this.set('SHOOTER');
       candidate.enter(); this.ui.attachSession(candidate.menu.element);
@@ -63,11 +65,26 @@ export class GameModeManager {
     } catch (error) {
       candidate?.dispose();
       if (generation !== this.generation || this.disposed) return;
+      if (invitationId && this.network.roomType === LOBBY_NAME && this.network.status.state === 'connected') {
+        this.set('LIMBO'); this.ui.hide(); this.hooks.restoreCommunication(); this.hooks.restoreLimbo(); throw error;
+      }
       try { if (this.network.roomType !== LOBBY_NAME || this.network.status.state !== 'connected') await this.network.switchRoom(LOBBY_NAME); }
       catch { /* Error screen still allows retrying or returning to Limbo offline. */ }
       this.hooks.restoreCommunication();
       this.ui.error(error instanceof Error ? error.message : 'Simulation could not load.');
     }
+  }
+  async acceptInvitation(invitation: RoomInvitation): Promise<void> {
+    if (this.operation || this.returning || this.disposed || !['LIMBO', 'SHOOTER'].includes(this.value)) throw new Error('Finish the current transition before accepting.');
+    if (invitation.mode === 'SHOOTER' && (!ENABLE_SHOOTER_TEST || this.network.snapshot?.shooterEnabled === false)) throw new Error('Shooter access is disabled.');
+    await this.network.holdInvitation(invitation.id);
+    if (this.value === 'LIMBO' && invitation.mode === 'SHOOTER') { await this.joinShooter(invitation.id); return; }
+    await this.network.acceptInvitation(invitation.id);
+    this.hooks.resetChat();
+    if (invitation.mode === 'LIMBO') {
+      if (this.value === 'SHOOTER') await this.returnToLimbo();
+      else this.hooks.restoreLimbo();
+    } else { this.shooter?.pause(true); this.ui.pause(); }
   }
   async returnToLimbo(): Promise<void> {
     if (this.disposed || this.returning || this.value === 'LIMBO') return;
@@ -83,7 +100,7 @@ export class GameModeManager {
       if (this.network.roomType !== LOBBY_NAME || this.network.status.state !== 'connected') await this.network.switchRoom(LOBBY_NAME);
     } catch (error) {
       console.warn('[SDP] Limbo reconnect:', error);
-      if (this.network.roomType === LOBBY_NAME) void this.network.connect();
+      if (this.network.roomType === LOBBY_NAME) void this.network.connect().catch(error => console.warn('[SDP] Limbo rejoin:', error));
     } finally {
       this.returning = false;
       if (!this.disposed) {

@@ -70,6 +70,45 @@ En Limbo, mantener SHIFT al moverse aumenta la velocidad a 1.5 veces, con aceler
 Mantener una tercera ventana en Limbo permite comprobar que no recibe chat ni voz del Shooter.
 Cerrar una ventana elimina su avatar. Volver a Limbo reconecta su voz correspondiente.
 
+## Nombres e invitaciones entre salas
+
+El nombre se valida en el servidor y es unico entre las salas de Limbo y Shooter
+del mismo proceso, sin distinguir mayusculas y normalizando espacios. Si ya existe,
+el formulario permite corregirlo sin recargar. La identidad se conserva al cambiar
+de modo y durante la reserva de reconexion; no equivale a una cuenta permanente.
+
+ENTER abre el chat. El campo indica `Message or /invite username`; escribir `/`
+completa `/invite ` y muestra la sugerencia. Se admite el nombre completo con
+espacios. El comando no se publica como mensaje en la sala. El destinatario recibe
+una invitacion privada con ACCEPT / DECLINE y el modo de destino. ENTER libera el
+cursor al abrir el chat para responder en escritorio; en movil puede tocarla.
+
+Las invitaciones duran 45 segundos. Al aceptar se conceden, una sola vez, hasta
+3 minutos para cargar el Shooter si hace falta. Ni el codigo ni los assets del
+Shooter se cargan por recibir la invitacion. Justo antes del traslado, Colyseus
+reserva una plaza real: una sala llena o un anfitrion que ya se ha marchado no
+provocan que el visitante abandone su sala actual. La reserva no aumenta los
+limites de 25 en Limbo y 15 en Shooter, ni evita la admision global.
+
+Hay un intervalo de 5 segundos entre envios, un maximo de 8 invitaciones pendientes
+por destinatario, comprobacion de destinatario, consumo unico y respeto de bloqueos
+durante la visita. Los nombres y las invitaciones son privados al proceso del
+servidor. Cada backend mantiene un directorio independiente: los nombres pueden
+repetirse entre regiones, pero no entre salas del mismo servidor. Las invitaciones
+solo buscan personas conectadas a ese servidor, en cualquier sala de Limbo o
+Shooter. Para jugar entre regiones, ambos visitantes deberan elegir antes el mismo
+servidor; no se necesita compartir el directorio entre Frankfurt y Virginia.
+La prueba actual sigue usando solo Frankfurt, sin provisionar USA ni cambiar el
+plan de Render. Un reinicio del backend borra este registro temporal.
+
+Pruebas: `server/tests/social.test.ts`, `server/tests/admission.test.ts` y
+`npm run test:session -- --grep 'invitation controls|duplicate global|all four Limbo'`.
+Las pruebas multicliente comprueban los cuatro recorridos entre modos y distintas
+salas. La interfaz se comprueba en escritorio y movil vertical/apaisado.
+
+Para publicarlo, desplegar primero el backend compatible y despues el frontend.
+Publicar solo Vercel contra un backend anterior no permite estos comandos.
+
 ## Shooter sin recompensas
 
 El Shooter no incluye rachas, mapa tactico, ataques aereos ni atajos 1/2/3.
