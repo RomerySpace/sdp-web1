@@ -318,7 +318,6 @@ export class App {
       return; // Form owns all input, including Enter; movement and voice are disabled.
     }
     if (this.modes.value === 'SHOOTER') {
-      if(!typing&&this.modes.shooter?.handleAirstrikeKey(event))return;
       if (event.repeat) return;
       if (event.target instanceof HTMLElement && event.target.closest('input[type="text"],textarea,[contenteditable]')) return;
       if (event.code === 'KeyP') { event.preventDefault(); this.modes.toggleMenu(); }
@@ -516,7 +515,7 @@ export class App {
   private updateTouchControls(): void {
     if (!this.touchControls) return;
     const shooter = this.modes.shooter;
-    if (this.contextLost || this.settingsMenu.visible || this.visitorOptions.visible || (this.modes.value === 'SHOOTER' && (this.state.value === 'CHATTING' || !shooter || shooter.paused || shooter.roundComplete || shooter.targeting.blocking))) {
+    if (this.contextLost || this.settingsMenu.visible || this.visitorOptions.visible || (this.modes.value === 'SHOOTER' && (this.state.value === 'CHATTING' || !shooter || shooter.paused || shooter.roundComplete))) {
       this.touchControls.update('hidden', '');
     } else if (this.modes.value === 'SHOOTER' && shooter) {
       this.touchControls.update(shooter.dead ? 'dead' : 'shooter', String(shooter.life), shooter.weapon.automatic, !shooter.dead && shooter.flashlightEnabled);

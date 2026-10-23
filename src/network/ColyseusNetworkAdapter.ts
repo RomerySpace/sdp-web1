@@ -9,7 +9,6 @@ import { SHOOTER_MAX_PLAYERS, SHOOTER_ROOM } from '../../shared/ShooterProtocol'
 import { validateChatText, type RoomChatMessage, type VoiceAccess } from '../../shared/CommunicationProtocol';
 import { validateDisplayName } from '../../shared/PlayerIdentity';
 import type { KillRecord, RoundScore, ShooterMatchSnapshot } from '../../shared/ShooterProtocol';
-import type { AirstrikeFlight, AirstrikeRequest, AirstrikeResult } from '../../shared/AirstrikeProtocol';
 import type { StationClaimResult, StationCommand, StationSnapshot, StationSound } from '../../shared/AmbientStation';
 import { sessionPolicy } from '../../shared/SessionPolicy';
 import type { GalleryListenResult } from '../../shared/LowerGallery';
@@ -30,7 +29,6 @@ function serverEndpoint(): string {
 interface DecodedLobby {
   interactionVersion?: number;
   killFeed?: Iterable<KillRecord>;
-  airstrikes?: Iterable<AirstrikeFlight>;
   players: { forEach(callback: (player: Omit<NetworkPlayer, 'playerId'>, id: string) => void): void };
   online: number;
   capacity: number;
@@ -64,7 +62,6 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
   private get expectedCapacity(): number { return this.roomType === SHOOTER_ROOM ? SHOOTER_MAX_PLAYERS : MAX_PLAYERS; }
   private readonly weapons = new Set<(event: WeaponEvent) => void>();
   private readonly combatEvents = new Set<(event: CombatEvent) => void>();
-  private readonly strikeResults = new Set<(result: AirstrikeResult) => void>();
   private readonly stationStates = new Set<(state: StationSnapshot | null) => void>();
   private readonly stationSounds = new Set<(sound: StationSound) => void>();
   private stationSnapshot: StationSnapshot | null = null;
@@ -177,9 +174,6 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
         for (const callback of this.combatEvents) callback(event);
       });
       room.onMessage<string>('combat:ping', nonce => { if (this.room === room && room.connection.isOpen) room.send('combat:pong', nonce); });
-      room.onMessage<AirstrikeResult>('strike:result', result => {
-        if (this.room === room && result.roomId === room.roomId) for (const callback of this.strikeResults) callback(result);
-      });
       room.onMessage<VoiceAccess>('voice:access', (access) => {
         const pending = this.accessRequests.get(access.requestId);
         if (!pending) return;
@@ -232,7 +226,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
     if (Date.now() - this.lastReservationSave > 5000) this.saveReconnect(room);
     const players: NetworkPlayer[] = [];
     state.players.forEach((player, id) => players.push({
-      displayName: player.displayName, automatic: player.automatic, kills: player.kills, deaths: player.deaths, streak: player.streak, strikes: player.strikes, lastDamageAt: player.lastDamageAt,
+      displayName: player.displayName, automatic: player.automatic, kills: player.kills, deaths: player.deaths, lastDamageAt: player.lastDamageAt,
       playerId: id, x: player.x, y: player.y, z: player.z,
       listening: player.listening,
       yaw: player.yaw, pitch: player.pitch, connected: player.connected,
@@ -255,11 +249,8 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
       roomId: room.roomId, localPlayerId: room.sessionId,
       tick: state.tick, receivedAt: performance.now(), players,
       wallTime: state.wallTime, serverTime: state.serverTime, shooterEnabled: state.shooterEnabled,
-      airstrikes: Array.from(state.airstrikes ?? [], strike => ({ id: strike.id, ownerId: strike.ownerId, ownerName: strike.ownerName,
-        life: strike.life, round: strike.round, x: strike.x, y: strike.y, z: strike.z, heading: strike.heading,
-        startedAt: strike.startedAt, releasedAt: strike.releasedAt, impactAt: strike.impactAt, finishedAt: strike.finishedAt })),
       match: state.match ? { lighting: state.lighting, phase: state.match, round: state.round ?? 0, endsAt: state.matchEndsAt ?? 0, nextRoundAt: state.nextRoundAt ?? 0,
-        results: Array.from(state.results ?? [], score => ({ playerId: score.playerId, displayName: score.displayName, kills: score.kills, deaths: score.deaths, streak: score.streak })) } : undefined,
+        results: Array.from(state.results ?? [], score => ({ playerId: score.playerId, displayName: score.displayName, kills: score.kills, deaths: score.deaths })) } : undefined,
       killFeed: Array.from(state.killFeed ?? [], entry => ({ id: entry.id, attackerId: entry.attackerId, victimId: entry.victimId,
         attackerName: entry.attackerName, victimName: entry.victimName, region: entry.region, timestamp: entry.timestamp })),
     };
@@ -341,10 +332,6 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
   }
   subscribeToWeapons(callback: (event: WeaponEvent) => void): () => void { this.weapons.add(callback); return () => this.weapons.delete(callback); }
   subscribeToCombat(callback: (event: CombatEvent) => void): () => void { this.combatEvents.add(callback); return () => this.combatEvents.delete(callback); }
-  sendAirstrike(request: AirstrikeRequest): void {
-    if (this.currentStatus.state === 'connected' && this.room?.connection.isOpen) this.room.send('strike:request', request);
-  }
-  subscribeToStrikes(callback: (result: AirstrikeResult) => void): () => void { this.strikeResults.add(callback); return () => this.strikeResults.delete(callback); }
   async ping(): Promise<number> {
     const room = this.room; if (!room?.connection.isOpen) return 0;
     return new Promise(resolve => {
@@ -455,7 +442,6 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
     this.messages.clear(); this.notices.clear();
     this.weapons.clear();
     this.combatEvents.clear();
-    this.strikeResults.clear();
     this.corrections.clear(); this.stationClaims.clear();
   }
 

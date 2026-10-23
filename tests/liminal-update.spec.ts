@@ -54,7 +54,7 @@ test('music title/artist and shared position persist from lobby to shooter',asyn
  } finally {await context.close();await secondContext.close();}
 });
 
-test('server snapshot drives 3/7/12 announcements without replaying old kills',async({page})=> {
+test('eliminations keep the score and feed without streak rewards or large announcements',async({page})=> {
  await page.goto('/?debugMode=shooter');await expect(page.locator('#app')).toHaveAttribute('data-mode','SHOOTER');
  await page.getByRole('button',{name:'ENTER SIMULATION'}).click();
  // Isolated HUD fixture: actual combat/respawn is also covered by the two-client server suite.
@@ -62,19 +62,21 @@ test('server snapshot drives 3/7/12 announcements without replaying old kills',a
   const {ShooterHUD}=await import(/* @vite-ignore */ '/src/modes/shooter/ui/' + 'ShooterHUD.ts');
   const hud=new ShooterHUD(document.body,()=>{});hud.element.hidden=false;hud.element.id='hud-fixture';
   Object.assign(window,{testHud:hud});
-  const player={playerId:'a',x:0,y:0,z:0,yaw:0,pitch:0,connected:true,lastProcessedInput:0,kills:0,deaths:0,streak:0};
+  const player={playerId:'a',x:0,y:0,z:0,yaw:0,pitch:0,connected:true,lastProcessedInput:0,kills:0,deaths:0};
   const snapshot={roomId:'fixture',localPlayerId:'a',tick:0,receivedAt:0,serverTime:0,players:[player],killFeed:[],match:{phase:'playing' as const,round:1,endsAt:300000,nextRoundAt:0,results:[]}};
   Object.assign(window,{testSnapshot:snapshot});hud.receive(snapshot);
  });
  for(const tier of [3,7,12]) {
   await page.evaluate((tier)=> {
    const fixture=window as unknown as {testHud:import('../src/modes/shooter/ui/ShooterHUD').ShooterHUD;testSnapshot:import('../shared/MultiplayerProtocol').LobbySnapshot};
-   const snapshot={...fixture.testSnapshot,players:[{...fixture.testSnapshot.players[0],streak:tier,kills:tier}],killFeed:[{id:String(tier),attackerId:'a',victimId:'b',attackerName:'Player A',victimName:'Player B',region:'torso' as const,timestamp:tier}]};
+   const snapshot={...fixture.testSnapshot,players:[{...fixture.testSnapshot.players[0],kills:tier}],killFeed:[{id:String(tier),attackerId:'a',victimId:'b',attackerName:'Player A',victimName:'Player B',region:'torso' as const,timestamp:tier}]};
    fixture.testHud.receive(snapshot);const game=window.sdpUnified.modes.shooter!;fixture.testHud.update(game.player!,game.weapon,100,false);
   },tier);
-  await expect(page.locator('#hud-fixture .kill-announcement')).toContainText(`STREAK ${tier} ACHIEVED`);
+  await expect(page.locator('#hud-fixture .shooter-record')).toContainText(`${tier} K / 0 D`);
+  await expect(page.locator('#hud-fixture .shooter-kill-feed')).toContainText(/Player A.*KILLED.*Player B/);
+  await expect(page.locator('#hud-fixture .kill-announcement, #hud-fixture .streak-meter')).toHaveCount(0);
  }
- await page.screenshot({path:'test-results/liminal-streak.png'});
+ await page.screenshot({path:'test-results/clean-shooter-score.png'});
  await page.evaluate(()=>{const fixture=window as unknown as {testHud:import('../src/modes/shooter/ui/ShooterHUD').ShooterHUD};fixture.testHud.dispose();});
 });
 

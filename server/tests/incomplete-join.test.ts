@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Client } from '@colyseus/sdk';
 import type { Client as ServerClient } from '@colyseus/core';
-import { airstrikeFixture } from './airstrike-fixture';
+import { shooterFixture } from './shooter-fixture';
 import type { SDPLobby } from '../src/rooms/SDPLobby';
 
 test('disconnecting an incomplete JOIN does not crash Limbo or Shooter', { timeout: 15000 }, async () => {
-  const fixture = await airstrikeFixture(), sdk = new Client(`http://127.0.0.1:${fixture.port}`);
+  const fixture = await shooterFixture(), sdk = new Client(`http://127.0.0.1:${fixture.port}`);
   try {
     for (const type of ['SDPLimboRoom', 'SDPShooterRoom']) {
       const client = await sdk.joinOrCreate(type);

@@ -78,7 +78,7 @@ async function touchVolume(page:Page, maximum:boolean, name='Game volume'):Promi
   await page.touchscreen.tap(maximum?rect.x+rect.width-1:rect.x+1,rect.y+rect.height/2);
   await expect(slider).toHaveValue(maximum?'1':'0');
 }
-test('actual mobile menus fullscreen in both worlds; real shot, reload, footsteps and strike audio survive interruption', async ({ page },info) => {
+test('actual mobile menus fullscreen in both worlds; real shot, reload and footsteps survive interruption', async ({ page },info) => {
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
   await page.addInitScript(() => {
     localStorage.setItem('sdp:musicVolume','0');localStorage.setItem('sdp:volume','1');localStorage.setItem('sdp:muted','false');
@@ -105,11 +105,6 @@ test('actual mobile menus fullscreen in both worlds; real shot, reload, footstep
   const driver=await touchDriver(page),pad=(await page.locator('.touch-stick').boundingBox())!,x=pad.x+pad.width/2,y=pad.y+pad.height/2;
   await driver.down(1,x,y);await driver.move(1,x,y-pad.width*.35);
   try {await audible(page);}finally{await driver.up(1);}
-  for(const phase of ['flyover','impact'] as const){
-    await page.waitForTimeout(1700);await resetProbe(page);
-    await page.evaluate(phase=>{const s=window.sdpUnified.modes.shooter!;s.audio.airstrike(phase,s.camera.camera.getWorldPosition(s.camera.aimDirection.clone()),s.camera.camera);},phase);
-    await audible(page);
-  }
   await page.waitForTimeout(1700);await resetProbe(page);await page.evaluate(()=>window.sfxProbe!.context.suspend());
   await holdFire(page);await expect.poll(()=>page.evaluate(()=>window.sfxProbe!.context.state)).toBe('running');await audible(page);
   expect(await page.evaluate(()=>window.audioContexts)).toBe(1);
@@ -134,7 +129,7 @@ test('actual mobile menus fullscreen in both worlds; real shot, reload, footstep
   });
   await page.getByRole('button',{name:'Open game menu',exact:true}).tap();await page.getByRole('button',{name:'RETURN TO LIMBO',exact:true}).tap();
   await expect(page.locator('#app')).toHaveAttribute('data-mode','LIMBO');
-  expect(await page.evaluate(()=>{const audio=window.retiredShooter!.audio as unknown as {strikeSources:Set<AudioScheduledSourceNode>};return audio.strikeSources.size;})).toBe(0);
+  expect(await page.evaluate(()=>{const audio=window.retiredShooter!.audio as unknown as {sources:Set<AudioScheduledSourceNode>};return audio.sources.size;})).toBe(0);
   expect(errors).toEqual([]);
 });
 test('mobile music mixer really silences and restores a supplied stream without adding public music', async ({ page }) => {

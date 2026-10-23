@@ -5,7 +5,7 @@ import type { ShooterState } from '../src/state/ShooterState';
 import type { WeaponEvent } from '../../shared/ShooterProtocol';
 import { validateShooterInput } from '../../shared/ShooterProtocol';
 import { gameplayConfig } from '../../shared/GameplayConfig';
-import { airstrikeFixture } from './airstrike-fixture';
+import { shooterFixture } from './shooter-fixture';
 import { Vector3 } from 'three';
 import { PhysicsWorld, RAPIER } from '../../src/modes/shooter/physics/PhysicsWorld';
 import { CharacterController } from '../../src/modes/shooter/physics/CharacterController';
@@ -33,7 +33,7 @@ test('shooter jump has a short grounded flight and preserves the configured clea
   } finally { player.dispose(); physics.dispose(); }
 });
 test('real server caps an automatic magazine, preserves infinite reserve, traces walls and isolates flashlight state', { timeout: 20000 }, async () => {
-  const fixture = await airstrikeFixture(), client = new Client(`http://127.0.0.1:${fixture.port}`);
+  const fixture = await shooterFixture(), client = new Client(`http://127.0.0.1:${fixture.port}`);
   const a = await client.joinOrCreate<ShooterState>('SDPShooterRoom'), b = await client.joinById<ShooterState>(a.roomId);
   const shots: WeaponEvent[] = [];
   let timer: ReturnType<typeof setInterval> | undefined, seq = 0, action = 0, light = true;

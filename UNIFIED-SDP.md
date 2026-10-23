@@ -52,7 +52,7 @@ SDP_WEB_PORT=5375 PORT=2589 LIVEKIT_PORT=7984 LIVEKIT_RTC_TCP_PORT=7985 LIVEKIT_
 6. En Shooter: WASD, raton, SPACE, SHIFT, CTRL, R, boton izquierdo y boton derecho conservan su comportamiento original. B alterna SEMI-AUTO / AUTO; mantener boton izquierdo en AUTO dispara una rafaga con elevacion progresiva de mira, compensable con el raton.
 7. P abre/cierra el menu de sesion; su indicacion esta siempre visible durante la partida. ESC sigue abriendo la pausa. El mismo menu contiene clasificacion, sensibilidad, volumen, silenciar y RETURN TO LIMBO. RESUME o P recuperan el control; volver a Limbo no recarga la pagina.
 
-La clasificacion muestra puesto, nombre, kills, deaths y STRIKE de los jugadores conectados de la sala actual. Ordena por kills descendentes y deaths ascendentes; los empates restantes son estables por identificador. Los datos vienen del servidor, no son contadores locales inventados. La partida sigue para los demas mientras el menu libera el raton y detiene tus controles.
+La clasificacion muestra puesto, nombre, kills y deaths de los jugadores conectados de la sala actual. Ordena por kills descendentes y deaths ascendentes; los empates restantes son estables por identificador. Los datos vienen del servidor, no son contadores locales inventados. La partida sigue para los demas mientras el menu libera el raton y detiene tus controles.
 La sensibilidad (0.25x-2.50x, valor inicial 1x), volumen y silencio se guardan localmente. La sensibilidad se comparte con Limbo; el volumen controla los efectos del Shooter y la ambientacion de Limbo, sin cambiar el sistema de voz. B / CHANGE junto al modo de disparo indica la tecla para alternar AUTO y SEMI-AUTO.
 
 Un fallo de carga ofrece RETRY o regreso a Limbo. Tambien puede cancelarse durante la carga.
@@ -63,24 +63,23 @@ La inspeccion tactil sigue disponible. El FPS requiere escritorio, raton y point
 Abrir dos ventanas en la misma URL. ONLINE muestra la poblacion real de la sala.
 En Limbo comprobar desplazamiento y ENTER para texto. Autorizar el microfono al mantener V; soltar V deshabilita inmediatamente la pista y silencia LiveKit, no solo el indicador. La voz se atenua con la distancia.
 Entrar al Shooter en ambas ventanas. CTRL baja cabeza, torso y arma de los avatares; SHIFT corre. El servidor determina la region alcanzada: cabeza 100, torso 50, brazos/piernas 25 y pies 12 HP. Dos impactos al torso eliminan a un jugador con 100 HP; uno en la cabeza tambien. Los danos activan bordes digitales blancos y una reaccion discreta de camara.
-Tras 7 segundos sin dano, se recuperan 10 HP por segundo hasta 100. Cualquier nuevo impacto interrumpe la recuperacion y reinicia los 7 segundos. STRIKE cuenta bajas consecutivas y se reinicia al morir; K/D muestra el total de esta sesion de sala. El historial superior izquierdo muestra los nombres de atacante y victima durante 8 segundos, con un maximo de 6 entradas.
-TARGET DESYNCHRONIZED confirma la baja; el otro avatar pierde geometria, emite fragmentos blancos/azules y se disuelve en 1.35 segundos. El eliminado ve DESYNCHRONIZED y no puede moverse, apuntar, disparar ni recargar.
+Tras 7 segundos sin dano, se recuperan 10 HP por segundo hasta 100. Cualquier nuevo impacto interrumpe la recuperacion y reinicia los 7 segundos. K/D muestra el total de esta sesion de sala. El historial superior izquierdo muestra los nombres de atacante y victima durante 8 segundos, con un maximo de 6 entradas.
+El historial confirma la baja; el otro avatar pierde geometria, emite fragmentos blancos/azules y se disuelve en 1.35 segundos. El eliminado ve DESYNCHRONIZED y no puede moverse, apuntar, disparar ni recargar.
 El servidor lo reconstruye aproximadamente a los 3 segundos en otro punto seguro, con 100 HP, municion y retroceso reiniciados. La proteccion inicial dura 1.25 segundos y termina si dispara. Las paredes reales bloquean los impactos.
 En Limbo, mantener SHIFT al moverse aumenta la velocidad a 1.5 veces, con aceleracion suave y solo 2 grados de FOV adicionales. El servidor utiliza la misma simulacion limitada.
 Mantener una tercera ventana en Limbo permite comprobar que no recibe chat ni voz del Shooter.
 Cerrar una ventana elimina su avatar. Volver a Limbo reconecta su voz correspondiente.
 
-## Ataque aereo de prueba
+## Shooter sin recompensas
 
-En Shooter, las rachas de 3, 7 y 12 bajas desbloquean los slots **1, 2 y 3**. Por ahora los tres usan el mismo ataque aereo de prueba. Pulsar la tecla y hacer un solo clic/toque en una superficie valida del plano real de Dust 2: al soltar se lanza y se guarda el mapa inmediatamente, sin confirmacion adicional. Arrastrar muestra la marca antes de soltar; cancelar el gesto no lanza nada. ESC, X o la misma tecla guardan el plano sin consumir la carga. En movil, tocar el slot desbloqueado. El arma baja y no puede disparar mientras se selecciona el objetivo. El cierre dura 170ms; el movimiento se recupera desde el inicio del cierre y el arma vuelve a su transformacion original. Con teclado, las flechas mueven el objetivo y ENTER lo lanza.
+El Shooter no incluye rachas, mapa tactico, ataques aereos ni atajos 1/2/3.
+Se conservan el combate autoritativo, K/D, puntos por baja, historial, ranking y
+rondas de siete minutos. Las antiguas solicitudes de misil no tienen manejador
+en el servidor. No se crean aviones, misiles, marcadores ni efectos de explosion,
+y no se prepara una proyeccion del mapa durante la carga.
 
-El avion se genera en Three.js, sin descargar otro modelo. El mapa tambien se proyecta desde la geometria existente. Todo pertenece al modulo lazy del Shooter: abrir Limbo o inspeccionar la escultura no lo carga.
-
-El servidor valida sala, vida, racha, secuencia, intervalo, capacidad y superficie. Solo consume la recompensa al aceptar un objetivo valido. A los 5.35 segundos aplica el impacto una sola vez: radio 10m, hasta 120 HP en el nucleo de 3m y dano decreciente fuera de el. Las paredes y techos bloquean el dano; el misil impacta en la primera superficie desde arriba. Puede danar a quien lo lanza. La proteccion de respawn sigue vigente para otros jugadores y termina al desplegar el propio ataque. Las cargas no utilizadas se pierden al morir; un mismo umbral no puede reutilizarse en esa vida.
-
-Vuelo, misil, anillo blanco, fragmentos instanciados y sonido sintetizado de prueba se sincronizan por el reloj de la sala. El sonido respeta volumen y silencio del menu. Maximo 4 ataques activos por sala. Salir de la sala o terminar la ronda cancela sus ataques pendientes.
-
-Parametros de autoridad: `shared/AirstrikeProtocol.ts`; tiempos de apertura/cierre, posicion del arma y escalas visuales: `src/modes/shooter/strikes/StrikePresentation.ts`; silueta del avion: `src/modes/shooter/strikes/Aircraft.ts`. El avion mide aproximadamente 5.7m de largo y el misil 1.75m. Pruebas: `npm run test:server` y `npm run test:airstrike`. Las ayudas que generan rachas pertenecen exclusivamente al proceso de pruebas, no a un mensaje o endpoint del servidor publico.
+Regresion: `server/tests/shooter-clean.test.ts` comprueba doce bajas sin premios;
+`tests/shooter-clean.spec.ts` comprueba interfaz, teclas, disparo y regreso al lobby.
 
 ## Desarrollo directo
 

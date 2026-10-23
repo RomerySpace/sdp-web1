@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Client, type Room } from '@colyseus/sdk';
 import { Admission, admission } from '../src/communication/Admission';
-import { airstrikeFixture } from './airstrike-fixture';
+import { shooterFixture } from './shooter-fixture';
 import type { AdmissionUpdate } from '../../shared/Admission';
 import type { SDPLobby } from '../src/rooms/SDPLobby';
 
@@ -35,7 +35,7 @@ test('waiting visitors retain order across disconnects; unused grants expire', (
 });
 
 test('admission room survives immediate consecutive arrivals after becoming empty', { timeout: 15000 }, async () => {
-  const fixture = await airstrikeFixture(), client = new Client(`http://127.0.0.1:${fixture.port}`);
+  const fixture = await shooterFixture(), client = new Client(`http://127.0.0.1:${fixture.port}`);
   const rooms: Room[] = [];
   let roomId = '';
   try {
@@ -60,7 +60,7 @@ test('admission room survives immediate consecutive arrivals after becoming empt
 });
 
 test('real sockets: a seven-second cut keeps the same player and blocks the queue until released', { timeout: 25000 }, async () => {
-  const fixture = await airstrikeFixture(), client = new Client(`http://127.0.0.1:${fixture.port}`);
+  const fixture = await shooterFixture(), client = new Client(`http://127.0.0.1:${fixture.port}`);
   admission.enabled = true; admission.capacity = 1;
   const rooms: Room[] = [];
   const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));

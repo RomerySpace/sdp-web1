@@ -78,7 +78,7 @@ test('real server controls fire rate, health, dead input, respawn and stale-life
     assert.equal(events.filter(e => e.type === 'death').length, 1); assert.equal(events.filter(e => e.type === 'respawn').length, 1);
   } finally { if (timer) clearInterval(timer); await a.leave(); await b.leave(); await server.close(); }
 });
-test('real sessions synchronize chosen names, regional damage, interrupted regeneration, streaks and automatic fire', { timeout: 35000 }, async () => {
+test('real sessions synchronize chosen names, regional damage, interrupted regeneration, kills and automatic fire', { timeout: 35000 }, async () => {
   const server = await host(true), client = new Client(server.url);
   const a = await client.joinOrCreate<ShooterState>(SHOOTER_ROOM, { ...await admissionOptions(client), displayName: 'Burst One' });
   const b = await client.joinOrCreate<ShooterState>(SHOOTER_ROOM, { ...await admissionOptions(client), displayName: 'Target Two' });
@@ -114,7 +114,8 @@ test('real sessions synchronize chosen names, regional damage, interrupted regen
     head = true; await new Promise(r => setTimeout(r, 160)); fire();
     await waitFor(() => target().dead);
     assert.equal(events.filter(e => e.type === 'damage').at(-1)?.region, 'head');
-    assert.equal(own().kills, 1); assert.equal(own().streak, 1); assert.equal(target().deaths, 1); assert.equal(target().streak, 0);
+    assert.equal(own().kills, 1); assert.equal(target().deaths, 1);
+    assert.equal('streak' in own(), false); assert.equal('strikes' in own(), false);
     assert.equal(a.state.killFeed[0].attackerName, 'Burst One'); assert.equal(a.state.killFeed[0].victimName, 'Target Two');
     await waitFor(() => target().life === 2); assert.equal(target().health, 100);
     clearInterval(timer); timer = undefined;

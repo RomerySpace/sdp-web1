@@ -107,18 +107,13 @@ export class Weapon {
   muzzlePosition(target: Vector3): Vector3 { this.root.updateWorldMatrix(true, true); return this.muzzleFlash.getWorldPosition(target); }
   onJump(): void { this.springs.y.kick(-0.16); }
   setAspect(aspect: number): void { this.aspect = MathUtils.clamp(aspect, .3, 1); }
-  setHolster(amount: number, lowering: number, tilt: number): void {
-    const blend = MathUtils.clamp(amount, 0, 1);
-    this.root.position.set(0, -lowering * blend, 0);
-    this.root.rotation.set(-tilt * blend, 0, 0);
-  }
   reset(ammo = gameConfig.weapon.magazineSize, reserve = gameConfig.weapon.reserveAmmo, automatic = false): void {
     this.automatic = automatic; this.burstShots = 0; this.recoil = { pitch: 0, yaw: 0 };
     this.ammo = ammo; this.reserve = reserve; this.reloading = false; this.reloadConfirmed = false; this.reloadElapsed = 0;
     this.ads = this.obstruction = this.phase = this.sprintAmount = this.crouchAmount = this.obstructionAmount = 0;
     this.lastShot = -100; Object.values(this.springs).forEach(s => s.reset());
     this.flashRemaining = 0; this.muzzleFlash.visible = false; this.flashLight.intensity = 0;
-    this.recoilPivot.position.set(0, 0, 0); this.setHolster(0, 0, 0); this.root.visible = true;
+    this.recoilPivot.position.set(0, 0, 0); this.root.visible = true;
   }
   update(dt: number, player: CharacterController, input: InputManager): void {
     const w = gameConfig.weapon;

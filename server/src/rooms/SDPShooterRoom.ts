@@ -2,8 +2,7 @@ import { Room, ServerError, type Client } from '@colyseus/core';
 import { randomUUID } from 'node:crypto';
 import { SHOOTER_HZ, SHOOTER_PATCH_HZ, SHOOTER_MAX_PLAYERS, shooterNetworkConfig, validateShooterInput, validateWeaponAction, type ShooterInput } from '../../../shared/ShooterProtocol';
 import type { RoomChatMessage } from '../../../shared/CommunicationProtocol';
-import { ShooterState, ShooterPlayer, KillState, RoundScoreState, AirstrikeState } from '../state/ShooterState';
-import { airstrikeConfig, blastDamage, earnedStrikeMask, strikeBit, validateAirstrikeRequest, type AirstrikeResult } from '../../../shared/AirstrikeProtocol';
+import { ShooterState, ShooterPlayer, KillState, RoundScoreState } from '../state/ShooterState';
 import { ShooterWorld } from '../simulation/ShooterWorld';
 import { ChatPolicy } from '../communication/ChatPolicy';
 import { gameConfig } from '../../../src/modes/shooter/config/gameConfig';
@@ -20,7 +19,7 @@ import { sessionPolicy } from '../../../shared/SessionPolicy';
 import { admission } from '../communication/Admission';
 import { admissionConfig } from '../../../shared/Admission';
 interface Entry { input: ShooterInput; received: number; slot: number; lastAction: number; lastShot: number; nextShotAt: number; reloadUntil: number;
-  probe: string; probeAt: number; rtt: number; recovery: HealthRecovery; burstShots: number; awardedStrikes: number; strikeSequence: number; lastStrike: number }
+  probe: string; probeAt: number; rtt: number; recovery: HealthRecovery; burstShots: number }
 export class SDPShooterRoom extends Room<{ state: ShooterState }> {
   static async onAuth(_token: string, options: { displayName?: unknown; admissionToken?: unknown } = {}): Promise<boolean> {
     if (!shooterEnabled) throw new ServerError(403, 'Shooter test is disabled.');
@@ -35,7 +34,6 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
   private accumulator = 0;
   private readonly combat = new CombatSimulation();
   private readonly match = new ShooterMatch();
-  private readonly impacted = new Set<string>();
   private inactivity!: RoomInactivity;
   async onCreate(): Promise<void> {
     if (!shooterEnabled) throw new ServerError(403, 'Shooter test is disabled.');
@@ -47,30 +45,6 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     console.log('[SDP] Shooter room ready', this.roomId, Math.round(performance.now() - started), process.memoryUsage());
     this.inactivity = new RoomInactivity(this);
     this.setPatchRate(1000 / SHOOTER_PATCH_HZ);
-    this.onMessage('strike:request', (client, raw: unknown) => {
-      const request = validateAirstrikeRequest(raw), entry = this.entries.get(client.sessionId), player = this.state.players.get(client.sessionId);
-      if (!request || !entry || !player) return;
-      const now = this.clock.elapsedTime;
-      const reply = (accepted: boolean, message: string) => client.send('strike:result', { seq: request.seq, roomId: this.roomId, accepted, message } satisfies AirstrikeResult);
-      if (!this.match.active(now) || !player.connected || player.dead || request.life !== player.life || request.seq <= entry.strikeSequence) { reply(false, 'PROTOCOL UNAVAILABLE'); return; }
-      entry.strikeSequence = request.seq;
-      if (now - entry.lastStrike < airstrikeConfig.requestInterval) { reply(false, 'PLEASE WAIT'); return; }
-      entry.lastStrike = now;
-      if (!(player.strikes & strikeBit(request.slot))) { reply(false, 'STREAK UNAVAILABLE'); return; }
-      if (this.state.airstrikes.length >= airstrikeConfig.maxActive) { reply(false, 'AIRSPACE BUSY'); return; }
-      if (now + (airstrikeConfig.approach + airstrikeConfig.fall) * 1000 >= this.match.endsAt) { reply(false, 'ROUND ENDING'); return; }
-      const target = this.world.strikeTarget(request.x, request.z);
-      if (!target) { reply(false, 'TARGET UNAVAILABLE'); return; }
-      const strike = Object.assign(new AirstrikeState(), target, { id: randomUUID(), ownerId: client.sessionId, ownerName: player.displayName,
-        life: player.life, round: this.match.round, heading: Math.random() * Math.PI * 2,
-        startedAt: now, releasedAt: now + airstrikeConfig.approach * 1000,
-        impactAt: now + (airstrikeConfig.approach + airstrikeConfig.fall) * 1000,
-        finishedAt: now + (airstrikeConfig.approach + airstrikeConfig.fall + airstrikeConfig.departure) * 1000 });
-      player.strikes &= ~strikeBit(request.slot);
-      player.protectedUntil = Math.min(player.protectedUntil, now);
-      this.state.airstrikes.push(strike); reply(true, 'AIRSTRIKE INBOUND');
-      this.inactivity.touch(client.sessionId);
-    });
     this.onMessage('shooter:input', (client, raw: unknown) => {
       const entry = this.entries.get(client.sessionId), input = validateShooterInput(raw);
       const player = this.state.players.get(client.sessionId);
@@ -155,7 +129,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     player.bornAt = this.clock.elapsedTime; player.protectedUntil = player.bornAt + gameplayConfig.combat.spawnProtection * 1000;
     this.state.players.set(client.sessionId, player); this.state.online++;
     this.inactivity.join(client.sessionId);
-    this.entries.set(client.sessionId, { slot, received: this.clock.elapsedTime, lastAction: -1, lastShot: -1000, nextShotAt: -1000, reloadUntil: 0, probe: '', probeAt: 0, rtt: 0, recovery: new HealthRecovery(), burstShots: 0, awardedStrikes: 0, strikeSequence: -1, lastStrike: -1000,
+    this.entries.set(client.sessionId, { slot, received: this.clock.elapsedTime, lastAction: -1, lastShot: -1000, nextShotAt: -1000, reloadUntil: 0, probe: '', probeAt: 0, rtt: 0, recovery: new HealthRecovery(), burstShots: 0,
       input: { seq: -1, life: player.life, f: 0, r: 0, y: player.yaw, p: 0, s: false, c: false, j: false, a: false, active: false } });
     this.combat.record(this.poses(this.clock.elapsedTime));
     if (this.match.phase === 'waiting') this.startMatch(this.clock.elapsedTime, false);
@@ -179,11 +153,8 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
   onLeave(client: Client): void {
     admission.release(client.sessionId, Date.now(), this.inactivity.isExpired(client.sessionId));
     this.inactivity.remove(client.sessionId);
-    for (let i = this.state.airstrikes.length - 1; i >= 0; i--) if (this.state.airstrikes[i].ownerId === client.sessionId) {
-      this.impacted.delete(this.state.airstrikes[i].id); this.state.airstrikes.splice(i, 1);
-    }
     const leaving = this.state.players.get(client.sessionId);
-    if (leaving) this.match.leave({ playerId: client.sessionId, displayName: leaving.displayName, kills: leaving.kills, deaths: leaving.deaths, streak: leaving.streak });
+    if (leaving) this.match.leave({ playerId: client.sessionId, displayName: leaving.displayName, kills: leaving.kills, deaths: leaving.deaths });
     if (this.state.players.get(client.sessionId)?.connected) this.state.online--;
     this.world.remove(client.sessionId); this.state.players.delete(client.sessionId); this.entries.delete(client.sessionId); this.chat.remove(client.sessionId);
   }
@@ -226,24 +197,6 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     }
     while (this.state.killFeed.length && now - this.state.killFeed[0].timestamp > gameplayConfig.combat.killFeedDuration * 1000) this.state.killFeed.shift();
     this.combat.record(this.poses(now));
-    this.updateAirstrikes(now);
-  }
-  private updateAirstrikes(now: number): void {
-    for (let i = this.state.airstrikes.length - 1; i >= 0; i--) {
-      const strike = this.state.airstrikes[i];
-      // Resolve a due impact before expiry, even after a stalled simulation tick.
-      if (now >= strike.impactAt && !this.impacted.has(strike.id) && this.state.players.has(strike.ownerId)) {
-        this.impacted.add(strike.id);
-        const origin = { x: strike.x, y: strike.y + .16, z: strike.z };
-        for (const [id, player] of this.state.players) {
-          if (player.dead || !player.connected || now < player.protectedUntil) continue;
-          const distance = Math.hypot(player.x - strike.x, player.y + player.height * .5 - strike.y, player.z - strike.z);
-          const amount = blastDamage(distance);
-          if (amount && this.world.blastVisible(origin, player)) this.applyDamage(id, strike.ownerId, amount, 'blast', now, strike.life);
-        }
-      }
-      if (now >= strike.finishedAt) { this.impacted.delete(strike.id); this.state.airstrikes.splice(i, 1); }
-    }
   }
   private syncMatch(): void {
     this.state.lighting = this.match.lighting;
@@ -251,18 +204,16 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     this.state.matchEndsAt = this.match.endsAt; this.state.nextRoundAt = this.match.nextRoundAt;
   }
   private startMatch(now: number, reset: boolean): void {
-    this.state.airstrikes.clear(); this.impacted.clear();
     this.match.start(now); this.state.results.clear(); this.state.killFeed.clear(); this.combat.clear();
     if (reset) for (const [id, player] of this.state.players) {
-      player.kills = player.deaths = player.streak = 0;
+      player.kills = player.deaths = 0;
       // Failed safe spawn searches leave the player frozen and retry through normal respawn handling.
       player.dead = true; player.respawnAt = now; this.respawn(id, now);
     }
     this.syncMatch(); this.combat.record(this.poses(now));
   }
   private finishMatch(now: number): void {
-    this.state.airstrikes.clear(); this.impacted.clear();
-    const scores = this.match.finish(now, [...this.state.players].map(([id, p]) => ({ playerId: id, displayName: p.displayName, kills: p.kills, deaths: p.deaths, streak: p.streak })));
+    const scores = this.match.finish(now, [...this.state.players].map(([id, p]) => ({ playerId: id, displayName: p.displayName, kills: p.kills, deaths: p.deaths })));
     this.state.results.clear(); for (const score of scores) this.state.results.push(Object.assign(new RoundScoreState(), score));
     for (const [id, entry] of this.entries) {
       entry.input.active = false; entry.reloadUntil = 0; entry.recovery.interrupt();
@@ -281,9 +232,9 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
   }
   private poses(time: number): CombatPose[] { return [...this.state.players.keys()].map(id => this.pose(id, time)); }
   private damage(hit: PlayerHit, attackerId: string, now: number): void {
-    this.applyDamage(hit.playerId, attackerId, gameplayConfig.combat.regionDamage[hit.region], hit.region, now, this.state.players.get(attackerId)!.life);
+    this.applyDamage(hit.playerId, attackerId, gameplayConfig.combat.regionDamage[hit.region], hit.region, now);
   }
-  private applyDamage(id: string, attackerId: string, amount: number, region: import('../../../shared/ShooterProtocol').HitRegion | 'blast', now: number, attackerLife: number): void {
+  private applyDamage(id: string, attackerId: string, amount: number, region: import('../../../shared/ShooterProtocol').HitRegion, now: number): void {
     const player = this.state.players.get(id)!;
     if (player.dead || !player.connected || now < player.protectedUntil) return;
     const damage = Math.min(player.health, amount);
@@ -293,17 +244,9 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     if (!player.health) {
       player.dead = true; player.diedAt = now; player.respawnAt = now + gameplayConfig.combat.respawnDelay * 1000;
       player.reloading = false; player.sprinting = false;
-      player.deaths++; player.streak = 0;
-      player.strikes = 0;
+      player.deaths++;
       const attacker = this.state.players.get(attackerId)!;
-      if (attackerId !== id) {
-        attacker.kills++;
-        if (!attacker.dead && attacker.life === attackerLife) {
-          attacker.streak++;
-          const earned = earnedStrikeMask(attacker.streak), owner = this.entries.get(attackerId)!;
-          attacker.strikes |= earned & ~owner.awardedStrikes; owner.awardedStrikes |= earned;
-        }
-      }
+      if (attackerId !== id) attacker.kills++;
       const record = new KillState();
       Object.assign(record, { id: randomUUID(), attackerId, victimId: id, attackerName: attacker.displayName,
         victimName: player.displayName, region, timestamp: now });
@@ -324,12 +267,11 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
       dead: false, life: p.life + 1, diedAt: 0, respawnAt: 0, bornAt: now,
       protectedUntil: now + gameplayConfig.combat.spawnProtection * 1000,
       health: gameplayConfig.combat.maxHealth, lastDamageAt: now, ammo: gameConfig.weapon.magazineSize, reserve: gameConfig.weapon.reserveAmmo,
-      strikes: 0,
       reloading: false, crouching: false, sprinting: false, grounded: false, flashlight: false, height: gameConfig.player.height, lean: 0,
       gaitPhase: 0, gaitX: 0, gaitZ: 0 });
     entry.input = { ...entry.input, life: p.life, f: 0, r: 0, s: false, c: false, j: false, a: false, t: false, active: false, y: p.yaw, p: 0 };
-    entry.received = now; entry.lastShot = entry.nextShotAt = -1000; entry.reloadUntil = 0; entry.burstShots = 0; entry.awardedStrikes = 0; entry.recovery.interrupt();
+    entry.received = now; entry.lastShot = entry.nextShotAt = -1000; entry.reloadUntil = 0; entry.burstShots = 0; entry.recovery.interrupt();
     this.broadcast('combat:event', { type: 'respawn', playerId: id, health: p.health, life: p.life, roomId: this.roomId, timestamp: now });
   }
-  onDispose(): void { this.world?.dispose(); this.entries.clear(); this.chat.clear(); this.combat.clear(); this.state.airstrikes.clear(); this.impacted.clear(); }
+  onDispose(): void { this.world?.dispose(); this.entries.clear(); this.chat.clear(); this.combat.clear(); }
 }

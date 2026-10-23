@@ -1,5 +1,6 @@
 export const SHOOTER_ROOM = 'SDPShooterRoom';
 export const SHOOTER_MAX_PLAYERS = 15;
+export const ELIMINATION_POINTS = 100;
 export const SHOOTER_HZ = 60;
 export const SHOOTER_PATCH_HZ = 30;
 export const shooterNetworkConfig = {
@@ -17,8 +18,8 @@ export interface CharacterInput {
   yaw: number; aiming: boolean; consume(code: string): boolean; clear(): void;
 }
 export type HitRegion = 'arm' | 'leg' | 'torso' | 'head' | 'foot';
-export interface KillRecord { id: string; attackerId: string; victimId: string; attackerName: string; victimName: string; region: HitRegion | 'blast'; timestamp: number }
-export interface RoundScore { playerId: string; displayName: string; kills: number; deaths: number; streak: number }
+export interface KillRecord { id: string; attackerId: string; victimId: string; attackerName: string; victimName: string; region: HitRegion; timestamp: number }
+export interface RoundScore { playerId: string; displayName: string; kills: number; deaths: number }
 export interface ShooterMatchSnapshot {
   lighting?: 'day' | 'night';
   phase: 'waiting' | 'playing' | 'results'; round: number; endsAt: number; nextRoundAt: number; results: readonly RoundScore[];
@@ -33,7 +34,7 @@ export function roundWinners(scores: readonly RoundScore[]): RoundScore[] {
 export interface WeaponAction { seq: number; life: number; action: 'fire' | 'reload' | 'mode' }
 export interface WeaponEvent extends WeaponAction { playerId: string; roomId: string; timestamp: number; origin?: number[]; target?: number[] }
 export interface CombatEvent { type: 'damage' | 'death' | 'respawn'; roomId: string; playerId: string;
-  life: number; timestamp: number; health: number; damage?: number; attackerId?: string; region?: HitRegion | 'blast' }
+  life: number; timestamp: number; health: number; damage?: number; attackerId?: string; region?: HitRegion }
 export function validateShooterInput(raw: unknown): ShooterInput | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const v = raw as Record<string, unknown>;

@@ -733,7 +733,7 @@ test('two actual browsers: authoritative hits, crouch, digital death and server 
     await expect.poll(() => first.evaluate(() => window.sdpUnified.modes.shooter!.input.enabled && window.sdpUnified.modes.shooter!.input.locked)).toBe(true);
     await expect.poll(() => second.evaluate(() => { const s = window.sdpUnified.network.snapshot!, p = s.players.find(p => p.playerId === s.localPlayerId)!; return s.serverTime! - p.protectedUntil!; })).toBeGreaterThan(200);
     await first.evaluate(() => {
-      const app = window.sdpUnified, s = app.network.snapshot!, own = s.players.find(p => p.playerId === s.localPlayerId)!, other = s.players.find(p => p.playerId !== s.localPlayerId)!;
+      const app = window.sdpUnified, s = app.network.snapshot!, own = s.players.find(p => p.playerId === s.localPlayerId)!, other = s.players.find(p => p.connected && p.playerId !== s.localPlayerId)!;
       const game = app.modes.shooter!, dx = other.x - own.x, dz = other.z - own.z;
       game.input.yaw = Math.atan2(-dx, -dz); game.input.pitch = Math.atan2(other.y + 1.14 - (own.y + own.height! - .1), Math.hypot(dx, dz));
     });
@@ -742,7 +742,7 @@ test('two actual browsers: authoritative hits, crouch, digital death and server 
       const game = window.sdpUnified.modes.shooter!, emit = game.shooting!.trails.emit.bind(game.shooting!.trails);
       game.shooting!.trails.emit = (origin, target) => {
         const remote = game.remotes.group.children[0], snapshot = window.sdpUnified.network.snapshot!;
-        const other = snapshot.players.find(p => p.playerId !== snapshot.localPlayerId)!;
+        const other = snapshot.players.find(p => p.connected && p.playerId !== snapshot.localPlayerId)!;
         const muzzle = game.remotes.muzzlePosition(other.playerId, origin.clone())!;
         window.remoteTrailProbe = { origin: origin.toArray(), muzzle: muzzle.toArray(), headDistance: Math.hypot(origin.x - remote.position.x, origin.y - remote.position.y - (other.height! - .1), origin.z - remote.position.z) };
         emit(origin, target);
@@ -757,7 +757,7 @@ test('two actual browsers: authoritative hits, crouch, digital death and server 
     await expect.poll(() => second.locator('.damage-vignette').evaluate(node => Number(getComputedStyle(node).opacity))).toBeGreaterThan(0);
     await second.screenshot({ path: info.outputPath('white-digital-damage.png') });
     await first.evaluate(() => {
-      const app = window.sdpUnified, s = app.network.snapshot!, own = s.players.find(p => p.playerId === s.localPlayerId)!, other = s.players.find(p => p.playerId !== s.localPlayerId)!;
+      const app = window.sdpUnified, s = app.network.snapshot!, own = s.players.find(p => p.playerId === s.localPlayerId)!, other = s.players.find(p => p.connected && p.playerId !== s.localPlayerId)!;
       const game = app.modes.shooter!, dx = other.x - own.x, dz = other.z - own.z;
       game.input.yaw = Math.atan2(-dx, -dz); game.input.pitch = Math.atan2(other.y + 1.14 - (own.y + own.height! - .1), Math.hypot(dx, dz));
     });
@@ -765,8 +765,9 @@ test('two actual browsers: authoritative hits, crouch, digital death and server 
     await first.mouse.down(); await first.mouse.up();
     await expect.poll(async () => (await targetState()).dead).toBe(true);
     const dead = await targetState(); const steps = await second.evaluate(() => window.sdpUnified.modes.shooter!.fixedSteps);
-    await expect(second.locator('.desynchronization-state')).toBeVisible(); await expect(first.locator('.kill-announcement')).toBeVisible();
-    await expect(first.locator('.shooter-strike')).toContainText('STREAK 01');
+    await expect(second.locator('.desynchronization-state')).toBeVisible(); await expect(first.locator('.kill-announcement')).toHaveCount(0);
+    await expect(first.locator('.shooter-record')).toContainText('1 K / 0 D');
+    await expect(first.locator('.shooter-strike, .streak-meter, .targeting-map')).toHaveCount(0);
     await expect(first.locator('.shooter-kill-feed .kill-player')).toHaveText(['SDP Tester', 'SDP Tester #2']);
     await expect.poll(() => first.evaluate(() => window.sdpUnified.modes.shooter!.remotes.group.children[0].userData.coherence)).toBeLessThan(.95);
     await first.screenshot({ path: info.outputPath('avatar-desynchronizing.png') });
@@ -791,8 +792,8 @@ test('two actual browsers: authoritative hits, crouch, digital death and server 
     await first.bringToFront(); await first.keyboard.press('KeyP');
     await expect(first.getByRole('table', { name: 'Room scores' })).toBeVisible();
     await expect(first.locator('.session-ranking tbody tr')).toHaveCount(2);
-    await expect(first.locator('.session-ranking tbody tr').first().locator('td')).toHaveText(['1', 'SDP Tester', '1', '0', '1']);
-    await expect(first.locator('.session-ranking tbody tr').nth(1).locator('td')).toHaveText(['2', 'SDP Tester #2', '0', '1', '0']);
+    await expect(first.locator('.session-ranking tbody tr').first().locator('td')).toHaveText(['1', 'SDP Tester', '1', '0']);
+    await expect(first.locator('.session-ranking tbody tr').nth(1).locator('td')).toHaveText(['2', 'SDP Tester #2', '0', '1']);
     await first.screenshot({ path: info.outputPath('ranked-live-session.png') });
     expect(errors).toEqual([]);
   } finally { await a.close(); await b.close(); }

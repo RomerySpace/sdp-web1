@@ -10,7 +10,7 @@ import { gameplayConfig } from '../../shared/GameplayConfig';
 import { rankRound, roundWinners, type RoundScore } from '../../shared/ShooterProtocol';
 import type { RoomInactivity } from '../src/communication/RoomInactivity';
 
-const score = (playerId: string, kills: number, deaths = 0): RoundScore => ({ playerId, displayName: playerId, kills, deaths, streak: 0 });
+const score = (playerId: string, kills: number, deaths = 0): RoundScore => ({ playerId, displayName: playerId, kills, deaths });
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function waitFor(predicate: () => boolean): Promise<void> {
   const end = Date.now() + 5000;
@@ -82,7 +82,7 @@ test('two real WebSocket clients receive authoritative results, blocked inputs a
     assert.equal(a.state.lighting, b.state.lighting); assert.equal(a.state.lighting, c.state.lighting);
     assert.equal(a.state.match, 'playing'); assert.equal(a.state.results.length, 0); assert.equal(a.state.killFeed.length, 0);
     for (const p of a.state.players.values()) {
-      assert.equal(p.kills, 0); assert.equal(p.deaths, 0); assert.equal(p.streak, 0); assert.equal(p.health, 100);
+      assert.equal(p.kills, 0); assert.equal(p.deaths, 0); assert.equal(p.health, 100);
       assert.equal(p.ammo, 30); assert.equal(p.reserve, 120); assert.equal(p.dead, false); assert.equal(p.life, 2);
       assert.ok(p.protectedUntil > a.state.serverTime);
     }

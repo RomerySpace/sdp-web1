@@ -7,7 +7,6 @@ import { decodeCollisionAsset, type CollisionAsset } from '../../../shared/Shoot
 import { gameConfig } from '../../../src/modes/shooter/config/gameConfig';
 import type { CharacterInput, ShooterInput } from '../../../shared/ShooterProtocol';
 import { Vector3 } from 'three';
-import { airstrikeConfig } from '../../../shared/AirstrikeProtocol';
 
 let mapData: Promise<CollisionAsset> | undefined;
 class ServerInput implements CharacterInput {
@@ -106,23 +105,6 @@ export class ShooterWorld {
     return (candidates.includes(preferred) ? preferred : candidates[0]).clone();
   }
   player(id: string): CharacterController | undefined { return this.entries.get(id)?.player; }
-  strikeTarget(x: number, z: number): { x: number; y: number; z: number } | null {
-    if (x < this.bounds.minX || x > this.bounds.maxX || z < this.bounds.minZ || z > this.bounds.maxZ) return null;
-    const origin = { x, y: airstrikeConfig.maxTargetHeight, z };
-    const hit = this.physics.world.castRayAndGetNormal(new RAPIER.Ray(origin, { x: 0, y: -1, z: 0 }),
-      airstrikeConfig.maxTargetHeight + 5, false, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS,
-      undefined, undefined, undefined, collider => !collider.parent() || collider.parent()!.isFixed());
-    return hit && hit.normal.y > .55 ? { x, y: origin.y - hit.toi, z } : null;
-  }
-  blastVisible(origin: { x: number; y: number; z: number }, target: { x: number; y: number; z: number; height: number }): boolean {
-    for (const height of [.2, target.height * .5, target.height - .12]) {
-      const direction = new Vector3(target.x - origin.x, target.y + height - origin.y, target.z - origin.z), distance = direction.length();
-      if (distance < .15) return true;
-      direction.divideScalar(distance);
-      if (this.wallDistance(new RAPIER.Ray(origin, direction), distance) >= distance - .025) return true;
-    }
-    return false;
-  }
   remove(id: string): void { this.entries.get(id)?.player.dispose(); this.entries.delete(id); }
   dispose(): void { this.entries.clear(); this.physics.dispose(); }
 }

@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { Client, type Room } from '@colyseus/sdk';
 import { MAX_PLAYERS } from '../../shared/MultiplayerProtocol';
 import { SHOOTER_MAX_PLAYERS } from '../../shared/ShooterProtocol';
-import { airstrikeFixture } from './airstrike-fixture';
+import { shooterFixture } from './shooter-fixture';
 
 test('Shooter rooms admit 15, allocate visitor 16 elsewhere and reserve reconnections; Limbo stays at 25', { timeout: 20000 }, async () => {
-  const fixture = await airstrikeFixture(), sdk = new Client(`http://127.0.0.1:${fixture.port}`), clients: Room[] = [];
+  const fixture = await shooterFixture(), sdk = new Client(`http://127.0.0.1:${fixture.port}`), clients: Room[] = [];
   const until = async (predicate: () => boolean) => {
     const deadline = Date.now() + 5000;
     while (!predicate()) { if (Date.now() > deadline) throw new Error('Capacity synchronization timed out.'); await new Promise(resolve => setTimeout(resolve, 10)); }

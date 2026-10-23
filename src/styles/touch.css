@@ -82,31 +82,21 @@
 #app[data-input="touch"] .shooter-hud header span:last-child { display: none; }
 #app[data-input="touch"] .shooter-round { top: var(--touch-top); left: calc(var(--touch-left) + 42px); transform: none; font-size: 11px; line-height: 16px; letter-spacing: 0; }
 #app[data-input="touch"] .shooter-score { top: calc(var(--touch-top) + 25px); left: var(--touch-left); gap: 0; max-width: calc(100% - 2 * var(--touch-left)); font-size: 8px; line-height: 14px; }
-#app[data-input="touch"] :is(.shooter-strike, .kill-announcement, .shooter-movement, .shooter-fire-control) { display: none; }
-#app[data-input="touch"] .shooter-hud .streak-meter { top: calc(var(--touch-top) + 112px); left: var(--touch-left); width: auto; gap: 6px; justify-content: flex-start; padding: 0; border: 0; }
-#app[data-input="touch"] .streak-meter::after { display: none; }
-#app[data-input="touch"] .streak-meter[data-ready="false"], #app[data-input="touch"] .streak-meter button:not([data-ready="true"]) { display: none; }
-#app[data-input="touch"] .streak-meter button { width: 44px; height: 44px; border: 1px solid #dce8ed55; border-radius: 3px; background: #23364124; }
-#app[data-input="touch"] .streak-meter button kbd { display: none; }
-#app[data-input="touch"] .streak-meter button svg { display: block; width: 18px; height: 18px; stroke-width: 1.4; }
-#app[data-input="touch"] .streak-meter button span { font-size: 8px; }
+#app[data-input="touch"] :is(.shooter-movement, .shooter-fire-control) { display: none; }
 #app[data-input="touch"] .shooter-hud .shooter-kill-feed { top: calc(var(--touch-top) + 56px); left: var(--touch-left); width: min(200px, calc(100% - var(--touch-left) - var(--touch-edge) - 160px)); }
 #app[data-input="touch"] .shooter-kill-feed li { display: flex; min-height: 18px; gap: 4px; font-size: 8px; color: #d4e1e9; }
 #app[data-input="touch"] .shooter-kill-feed li:nth-last-child(n+3) { display: none; }
 #app[data-input="touch"] .kill-action { font-size: 7px; color: #aebfc9; }
 #app[data-input="touch"] .shooter-health { left: var(--touch-left); bottom: max(20px, calc(env(safe-area-inset-bottom) + 12px)); font-size: 10px; }
 #app[data-input="touch"] .shooter-ammo { right: var(--touch-edge); bottom: max(18px, calc(env(safe-area-inset-bottom) + 12px)); }
-#app[data-input="touch"] .strike-status { top: calc(var(--touch-top) + 162px); left: var(--touch-left); max-width: min(210px, calc(100% - 2 * var(--touch-left))); margin: 0; font-size: 8px; line-height: 1.4; }
 #app[data-input="touch"] .now-playing { max-width: min(220px, 48%); }
 #app[data-input="touch"] .chat:not(.is-open) { bottom: max(274px, calc(env(safe-area-inset-bottom) + 254px)); width: min(230px, calc(100% - 184px)); }
 #app[data-input="touch"] .chat-message { color: #e0e9ee; }
 #app[data-input="touch"] .chat-sender { color: #bbcdd6; }
 @media (max-height: 500px) and (orientation: landscape) {
   #app[data-input="touch"] .touch-tools { top: calc(var(--touch-top) + 36px); }
-  #app[data-input="touch"] .shooter-hud .streak-meter { left: calc(var(--touch-left) + 130px); top: var(--touch-top); }
   #app[data-input="touch"] .shooter-score, #app[data-input="touch"] .shooter-hud .shooter-kill-feed { display: none; }
   #app[data-input="touch"] .chat:not(.is-open) { display: none; }
-  #app[data-input="touch"] .strike-status { top: calc(var(--touch-top) + 50px); max-width: 190px; }
 }
 @media (max-height: 340px) and (orientation: landscape) {
   .touch-fire { width: 64px; height: 64px; bottom: max(118px, calc(env(safe-area-inset-bottom) + 108px)); }

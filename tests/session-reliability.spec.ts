@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { createServer, type ViteDevServer } from 'vite';
 import { createServer as netServer } from 'node:net';
-import { airstrikeFixture } from '../server/tests/airstrike-fixture';
+import { shooterFixture } from '../server/tests/shooter-fixture';
 import type { SDPLobby } from '../server/src/rooms/SDPLobby';
 import type { MovementSimulation } from '../server/src/simulation/MovementSimulation';
 import type { RoomInactivity } from '../server/src/communication/RoomInactivity';
@@ -12,9 +12,9 @@ import { admission } from '../server/src/communication/Admission';
 import { ambientStation } from '../shared/AmbientStation';
 import { lowerGallery, galleryListening } from '../shared/LowerGallery';
 
-let fixture: Awaited<ReturnType<typeof airstrikeFixture>>, vite: ViteDevServer, url: string;
+let fixture: Awaited<ReturnType<typeof shooterFixture>>, vite: ViteDevServer, url: string;
 test.beforeAll(async () => {
-  fixture = await airstrikeFixture();
+  fixture = await shooterFixture();
   const server = netServer(); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const port = (server.address() as { port: number }).port; await new Promise<void>(resolve => server.close(() => resolve()));
   Object.assign(process.env, { SDP_BACKEND_PORT: String(fixture.port), SDP_WEB_PORT: String(port), VITE_SDP_SERVER_URL: '/multiplayer' });

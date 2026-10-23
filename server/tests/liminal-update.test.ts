@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Vector3 } from 'three';
 import { musicPosition, MUSIC_EPOCH, validMusicTracks } from '../../shared/MusicTimeline';
-import { streakProgress } from '../../shared/Streaks';
 import { simulateMovement, type MotionState } from '../../shared/Movement';
 import { CollisionManager } from '../../src/player/CollisionManager';
 import { PhysicsWorld, RAPIER } from '../../src/modes/shooter/physics/PhysicsWorld';
@@ -14,9 +13,6 @@ test('broadcast late join, track boundaries, wrap and malformed entries',()=> {
  assert.deepEqual(musicPosition(tracks,MUSIC_EPOCH+30500),{track:tracks[0],offset:.5});
  assert.equal(musicPosition([],MUSIC_EPOCH),undefined);
  assert.equal(validMusicTracks([...tracks,{...tracks[0],url:'javascript:alert(1)'},{...tracks[0],duration:0}]).length,2);
-});
-test('3/7/12 streak progression resets on death and saturates above twelve',()=> {
- assert.equal(streakProgress(0).next,3);assert.equal(streakProgress(3).next,7);assert.equal(streakProgress(7).next,12);assert.equal(streakProgress(12).progress,1);assert.equal(streakProgress(25).next,undefined);
 });
 test('lobby jump lands without auto-bunnyhop and crouch caps sprint',()=> {
  const state:MotionState={x:10,z:10,velocityX:0,velocityZ:0},world=new CollisionManager();
