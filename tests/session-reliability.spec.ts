@@ -348,6 +348,39 @@ test('two browsers recover divergent lobby positions, reserve a real seat, then 
   } finally { await a.close(); await b.close(); }
 });
 
+test('three Shooter round trips preserve the waiting lobby, release empty rooms and keep one renderer', async ({ browser }) => {
+  const visitor = await browser.newContext(), waiting = await browser.newContext();
+  const first = await visitor.newPage(), second = await waiting.newPage(), errors: string[] = [];
+  try {
+    for (const [page, name] of [[first, 'Travelling visitor'], [second, 'Waiting visitor']] as const) {
+      page.on('pageerror', error => errors.push(error.message));
+      await page.goto(`${url}/?debugMode=limbo`); await enterExhibition(page, name);
+    }
+    const lobbyId = await second.evaluate(() => window.sdpUnified.network.snapshot!.roomId);
+    for (let cycle = 0; cycle < 3; cycle++) {
+      await first.evaluate(() => window.sdpUnified.modes.joinShooter());
+      await expect(first.locator('#app')).toHaveAttribute('data-mode', 'SHOOTER');
+      const shooterId = await first.evaluate(() => window.sdpUnified.network.snapshot!.roomId);
+      expect(shooterId).not.toBe(lobbyId);
+      await expect.poll(() => second.evaluate(() => window.sdpUnified.network.snapshot!.players.filter(p => p.connected).length)).toBe(1);
+      await expect(first.locator('canvas.scene-canvas')).toHaveCount(1);
+      await first.getByRole('button', { name: 'ENTER SIMULATION' }).click();
+      await expect(first.locator('.mode-overlay')).toBeHidden();
+      await first.evaluate(() => window.sdpUnified.modes.returnToLimbo());
+      await expect(first.locator('#app')).toHaveAttribute('data-mode', 'LIMBO');
+      await expect(first.locator('.connection-indicator')).toHaveAttribute('data-connection', 'connected');
+      expect(await first.evaluate(() => window.sdpUnified.network.snapshot!.roomId)).toBe(lobbyId);
+      await expect.poll(() => second.evaluate(() => window.sdpUnified.network.snapshot!.players.filter(p => p.connected).length)).toBe(2);
+      await expect.poll(() => Boolean(fixture.room(shooterId))).toBe(false);
+      await expect(first.locator('canvas.scene-canvas')).toHaveCount(1);
+    }
+    expect(errors).toEqual([]);
+  } finally {
+    for (const page of [first, second]) await page.evaluate(() => window.sdpUnified?.network.disconnect()).catch(() => {});
+    await visitor.close(); await waiting.close();
+  }
+});
+
 test('next round countdown is prominent on desktop and mobile and a real server round restarts', async ({ browser }) => {
   const context = await browser.newContext(), page = await context.newPage();
   try {

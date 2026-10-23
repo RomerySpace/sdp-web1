@@ -70,8 +70,14 @@ test('two real clients receive server-owned seating, occupancy, look, chat, stan
     const standing = b.state.players.get(b.sessionId)!; assert.ok(new CollisionManager().canOccupy(standing.x, standing.z));
     approach(b.sessionId); await sleep(270); b.send('lobby:seat', { seat: 1 });
     await waitFor(() => b.state.players.get(b.sessionId)?.seatIndex === 1);
-    room.onDrop(room.clients.find(c => c.sessionId === b.sessionId)!);
+    b.reconnection.enabled = false;
+    b.connection.close(4010);
+    await waitFor(() => room.state.players.get(b.sessionId)?.connected === false);
     assert.equal(room.state.players.get(b.sessionId)?.seatIndex, -1);
     assert.equal(room.state.players.get(b.sessionId)?.connected, false);
+    const restored = await client.reconnect<LobbyState>(b.reconnectionToken); rooms.push(restored);
+    await waitFor(() => room.state.players.get(restored.sessionId)?.connected === true);
+    assert.equal(restored.sessionId, b.sessionId);
+    assert.equal(room.state.players.get(restored.sessionId)?.seatIndex, -1);
   } finally { await Promise.all(rooms.filter(room => room.connection.isOpen).map(room => room.leave().catch(() => {}))); await server.gracefullyShutdown(false); }
 });

@@ -2,9 +2,9 @@ import { Vector3 } from 'three';
 import { PhysicsWorld, RAPIER, identityRotation } from '../../../src/modes/shooter/physics/PhysicsWorld';
 import { gameConfig } from '../../../src/modes/shooter/config/gameConfig';
 
-export interface MapColliderData { vertices: number[]; indices: number[] }
-export interface SpawnNavigationData { version: number; cellSize: number; connectedCells: number; zoneCoverage: number;
-  hub: number[]; points: number[][]; components: { cells: number; outdoor: number; zones: number }[] }
+export interface MapColliderData { vertices: ArrayLike<number>; indices: ArrayLike<number> }
+import type { SpawnNavigationData } from '../../../shared/ShooterCollisionAsset';
+export type { SpawnNavigationData } from '../../../shared/ShooterCollisionAsset';
 interface Cell { id: number; ix: number; iz: number; point: Vector3; outdoor: boolean }
 const down = new Vector3(0, -1, 0), up = new Vector3(0, 1, 0);
 

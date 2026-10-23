@@ -5,10 +5,12 @@ import { monitorEventLoopDelay, performance } from 'node:perf_hooks';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { LOBBY_NAME, MAX_PLAYERS, SIMULATION_HZ } from '../shared/MultiplayerProtocol.ts';
+import { admissionConfig } from '../shared/Admission.ts';
 import { renderMetrics, statistics } from './load-test-metrics.mjs';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const iso = () => new Date().toISOString();
+export const phaseCooldownSeconds = (requested) => Math.max(requested, Math.ceil(admissionConfig.ticketMs / 1000) + 1);
 
 export function configuration(args) {
   const { values } = parseArgs({ args, options: {
@@ -258,7 +260,11 @@ export async function main(args = process.argv.slice(2)) {
       console.log(`[LOAD] RESULT ${JSON.stringify(result, (key, value) => key === 'raw' ? undefined : value)}`);
       await writeFile(output, `${JSON.stringify(report, null, 2)}\n`);
       if (result.status !== 'completed' || !result.cleanup.confirmed) { process.exitCode = 1; break; }
-      if (count !== config.clients.at(-1)) { console.log(`[LOAD] Cooldown: ${config.cooldown}s.`); await sleep(config.cooldown * 1000); }
+      if (count !== config.clients.at(-1)) {
+        const cooldown = phaseCooldownSeconds(config.cooldown);
+        console.log(`[LOAD] Cooldown: ${cooldown}s (includes admission handover reservation expiry).`);
+        await sleep(cooldown * 1000);
+      }
     }
   } finally {
     report.finishedAt = iso();

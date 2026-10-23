@@ -5,6 +5,7 @@ import {
 } from '../../shared/MultiplayerProtocol';
 import type { MultiplayerConnection } from './MultiplayerConnection';
 import type { ShooterInput, WeaponAction, WeaponEvent, CombatEvent } from '../../shared/ShooterProtocol';
+import { SHOOTER_MAX_PLAYERS, SHOOTER_ROOM } from '../../shared/ShooterProtocol';
 import { validateChatText, type RoomChatMessage, type VoiceAccess } from '../../shared/CommunicationProtocol';
 import { validateDisplayName } from '../../shared/PlayerIdentity';
 import type { KillRecord, RoundScore, ShooterMatchSnapshot } from '../../shared/ShooterProtocol';
@@ -60,6 +61,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
   private retryEnabled = true;
   private inactive = false;
   roomType = LOBBY_NAME;
+  private get expectedCapacity(): number { return this.roomType === SHOOTER_ROOM ? SHOOTER_MAX_PLAYERS : MAX_PLAYERS; }
   private readonly weapons = new Set<(event: WeaponEvent) => void>();
   private readonly combatEvents = new Set<(event: CombatEvent) => void>();
   private readonly strikeResults = new Set<(result: AirstrikeResult) => void>();
@@ -120,7 +122,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
         }
       }
       if (!room) {
-        const admissionToken = await this.admission.enter(position => this.setStatus('connecting', 0, MAX_PLAYERS, '', undefined, position));
+        const admissionToken = await this.admission.enter(position => this.setStatus('connecting', 0, this.expectedCapacity, '', undefined, position));
         if (this.disposed || generation !== this.generation) return;
         const options = { displayName: this.profileName || undefined, admissionToken };
         room = preferredRoom ? await this.client.joinById<LobbyRoomType>(preferredRoom, options)
@@ -192,7 +194,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
         this.rejectVoiceRequests();
         this.needsSpawn = true;
         this.saveReconnect(room);
-        this.setStatus('connecting', 0, MAX_PLAYERS, room.roomId, 'reconnecting');
+        this.setStatus('connecting', 0, this.expectedCapacity, room.roomId, 'reconnecting');
         for (const callback of this.notices) callback('Connection interrupted. Your place is reserved for up to two minutes.');
         this.clearRemoteState();
       });
@@ -200,7 +202,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
         if (this.room === room && !this.disposed) { queueMicrotask(() => { if (this.room === room) this.saveReconnect(room); }); this.receive(room, room.state); if (this.roomType === LOBBY_NAME) room.send('station:command', { type: 'sync' }); }
       });
       room.onError(() => {
-        if (this.room === room && !this.disposed) this.setStatus('disconnected', 0, MAX_PLAYERS, room.roomId, room.reconnection.isReconnecting ? 'reconnecting' : undefined);
+        if (this.room === room && !this.disposed) this.setStatus('disconnected', 0, this.expectedCapacity, room.roomId, room.reconnection.isReconnecting ? 'reconnecting' : undefined);
       });
       room.onLeave((code) => {
         if (this.room !== room) return;
@@ -214,7 +216,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
         }
         this.rejectVoiceRequests();
         this.room = undefined;
-        this.setStatus('disconnected', 0, MAX_PLAYERS, '', inactive ? 'inactive' : undefined);
+        this.setStatus('disconnected', 0, this.expectedCapacity, '', inactive ? 'inactive' : undefined);
         this.clearRemoteState();
         this.scheduleRetry();
       });
@@ -267,7 +269,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
       request.finish({ roomId: room.roomId, requestId, accepted: true, listening: request.value, player: local });
   }
 
-  private setStatus(state: ConnectionStatus['state'], online = 0, capacity = MAX_PLAYERS, roomId = '', reason?: ConnectionStatus['reason'], queuePosition?: number): void {
+  private setStatus(state: ConnectionStatus['state'], online = 0, capacity = this.expectedCapacity, roomId = '', reason?: ConnectionStatus['reason'], queuePosition?: number): void {
     if (this.disposed || (this.currentStatus.state === state && this.currentStatus.online === online && this.currentStatus.roomId === roomId && this.currentStatus.reason === reason && this.currentStatus.queuePosition === queuePosition)) return;
     this.currentStatus = { state, online, capacity, roomId, reason, queuePosition };
     for (const callback of this.statuses) callback(this.currentStatus);

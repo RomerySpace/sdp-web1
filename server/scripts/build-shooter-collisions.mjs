@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
-import { serialize } from 'node:v8';
+import { optimizeCollider } from './optimize-collider.mjs';
 import { NodeIO } from '@gltf-transform/core';
 import { KHRDracoMeshCompression } from '@gltf-transform/extensions';
 import draco from 'draco3dgltf';
@@ -9,7 +9,8 @@ import { Matrix4, Vector3 } from 'three';
 import { tsImport } from 'tsx/esm/api';
 
 const source = new URL('../../public/shooter/MAP/dust2plainmap.glb', import.meta.url);
-const target = new URL('../assets/dust2-colliders.bin.gz', import.meta.url);
+const target = new URL('../assets/dust2-colliders-v4.bin.gz', import.meta.url);
+const publicTarget = new URL('../../public/shooter/physics/dust2-colliders-v4.bin.gz', import.meta.url);
 const sourceHash = createHash('sha256').update(await readFile(source)).digest('hex');
 const io = new NodeIO().registerExtensions([KHRDracoMeshCompression]).registerDependencies({
   'draco3d.decoder': await draco.createDecoderModule(),
@@ -54,8 +55,7 @@ for (const node of document.getRoot().listNodes()) {
     buckets.get(key).push({ vertices, indices });
   }
 }
-// Nearby map geometry shares fixed trimeshes, as on the client. No triangles
-// are simplified or removed beyond the existing zero-area rejection.
+// Keep spatial partitions and real openings intact before simplifying interiors.
 for (const geometries of buckets.values()) {
   let v = [], idx = [];
   const flush = () => {
@@ -77,11 +77,31 @@ for (const geometries of buckets.values()) {
   flush();
 }
 await mkdir(new URL('../assets/', import.meta.url), { recursive: true });
+await mkdir(new URL('../../public/shooter/physics/', import.meta.url), { recursive: true });
+const { encodeCollisionAsset, shooterCollisionFormat, colliderOptimization } = await tsImport('../../shared/ShooterCollisionAsset.ts', import.meta.url);
+const { surfaceValidator } = await tsImport('./validate-colliders.ts', import.meta.url);
+const validator = await surfaceValidator(colliderOptimization.validationTolerance);
+const optimized = [];
+let sourceBytes = 0, optimizedBytes = 0, fallbackCount = 0, maxError = 0;
+try {
+  for (const g of colliders) {
+    const sourceGeometry = { vertices: Float32Array.from(g.vertices), indices: Uint32Array.from(g.indices) };
+    sourceBytes += sourceGeometry.vertices.byteLength + sourceGeometry.indices.byteLength;
+    let reduced = await optimizeCollider(sourceGeometry, colliderOptimization);
+    if (!validator.accepts(sourceGeometry, reduced)) { reduced = { ...sourceGeometry, error: 0 }; fallbackCount++; }
+    optimized.push({ vertices: reduced.vertices, indices: reduced.indices });
+    optimizedBytes += reduced.vertices.byteLength + reduced.indices.byteLength; maxError = Math.max(maxError, reduced.error);
+  }
+} finally { validator.dispose(); }
 console.log('[SDP] Validating connected outdoor spawn routes');
 const { buildSpawnNavigation } = await tsImport('../src/simulation/SpawnNavigation.ts', import.meta.url);
-const navigation = await buildSpawnNavigation(colliders);
-const data = gzipSync(serialize({ version: 3, sourceHash, triangles, cellSize,
-  colliders: colliders.map(g => ({ vertices: Float32Array.from(g.vertices), indices: Uint32Array.from(g.indices) })), navigation }));
+const navigation = await buildSpawnNavigation(optimized);
+const sourceTriangles = triangles;
+triangles = optimized.reduce((sum, g) => sum + g.indices.length / 3, 0);
+const data = gzipSync(encodeCollisionAsset({ version: shooterCollisionFormat, sourceHash, triangles, sourceTriangles,
+  colliders: optimized, navigation }));
+await writeFile(publicTarget, data);
 await writeFile(target, data);
 console.log(`[SDP] Dust 2: ${colliders.length} colliders, ${triangles} triangles, ${(data.length / 1048576).toFixed(2)} MiB. Source ${sourceHash}`);
+console.log(`[SDP] Physics: ${sourceTriangles} -> ${triangles} triangles; ${sourceBytes} -> ${optimizedBytes} bytes; ${validator.probes} surface probes, ${fallbackCount} conservative fallbacks; maximum simplification error ${maxError}m.`);
 console.log(`[SDP] Spawns: ${navigation.points.length} outdoor points, ${navigation.connectedCells} connected cells, ${navigation.zoneCoverage} map zones. Hub ${navigation.hub}`);

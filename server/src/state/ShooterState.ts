@@ -1,5 +1,5 @@
 import { ArraySchema, MapSchema, Schema, defineTypes } from '@colyseus/schema';
-import { MAX_PLAYERS } from '../../../shared/MultiplayerProtocol';
+import { SHOOTER_MAX_PLAYERS } from '../../../shared/ShooterProtocol';
 import { gameplayConfig } from '../../../shared/GameplayConfig';
 import { shooterEnabled } from '../config/GameplayConfig';
 export class ShooterPlayer extends Schema {
@@ -36,7 +36,7 @@ export class ShooterState extends Schema {
   wallTime = Date.now();
   killFeed = new ArraySchema<KillState>();
   airstrikes = new ArraySchema<AirstrikeState>();
-  players = new MapSchema<ShooterPlayer>(); online = 0; capacity = MAX_PLAYERS; tick = 0;
+  players = new MapSchema<ShooterPlayer>(); online = 0; capacity = SHOOTER_MAX_PLAYERS; tick = 0;
   lighting = 'day';
   match = 'waiting'; round = 0; matchEndsAt = 0; nextRoundAt = 0; results = new ArraySchema<RoundScoreState>();
   serverTime = 0; shooterEnabled = shooterEnabled;

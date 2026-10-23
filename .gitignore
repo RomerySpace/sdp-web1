@@ -17,3 +17,4 @@ server/.env
 *.log
 /server/assets/dust2-colliders.json.gz
 /server/assets/dust2-colliders.bin.gz
+/server/assets/dust2-colliders-v4.bin.gz

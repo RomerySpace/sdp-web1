@@ -33,8 +33,17 @@ async function enterLimbo(page: Page): Promise<void> {
   await enterExhibition(page);
 }
 async function openProtocol(page: Page): Promise<void> {
-  await page.evaluate(() => { const camera = window.sdpUnified.player.camera; camera.position.set(0, 1.7, 2.7); camera.rotation.set(0, 0, 0); });
-  await expect(page.getByRole('button', { name: 'Interact with sculpture' })).toBeVisible();
+  await page.bringToFront();
+  if (await page.locator('.resume-button').isVisible()) {
+    try { await page.locator('.resume-button').click({ timeout: 1500 }); }
+    catch (error) {
+      // A previous resume gesture can finish pointer lock while this click waits.
+      if (!await page.evaluate(() => window.sdpUnified.player.controlling)) throw error;
+    }
+  }
+  await page.keyboard.down('KeyW');
+  try { await expect(page.getByRole('button', { name: 'Interact with sculpture' })).toBeVisible(); }
+  finally { await page.keyboard.up('KeyW'); }
   await page.keyboard.press('KeyE');
   await expect(page.locator('.ui')).toHaveAttribute('data-state', 'INSPECTING');
   await expect(page.locator('.mode-overlay')).toBeHidden();
@@ -1018,6 +1027,9 @@ test('actual requests stay lazy; both scenes render; controls and repeated retur
       && material.roughness === weapon.roughness && material.metalness === weapon.metalness);
   })).toBe(true);
   expect(requests.some(url => url.includes('dust2plainmap.glb'))).toBe(true);
+  expect(requests.filter(url => url.includes('dust2-colliders-v4.bin.gz'))).toHaveLength(1);
+  expect(await page.evaluate(() => window.sdpUnified.network.status.capacity)).toBe(15);
+  expect(await page.evaluate(() => window.sdpUnified.modes.shooter!.colliderCount)).toBe(76);
   await expect(page.locator('canvas.scene-canvas')).toHaveCount(1);
   await expect.poll(() => page.evaluate(() => window.sdpUnified.modes.shooter?.player?.grounded)).toBe(true);
   expect(await visiblePixels(page)).toBeGreaterThan(10000);
@@ -1063,6 +1075,7 @@ test('actual requests stay lazy; both scenes render; controls and repeated retur
   expect(secondReturnMemory.geometries).toBeLessThanOrEqual(firstReturnMemory.geometries + 1);
   expect(secondReturnMemory.textures).toBeLessThanOrEqual(firstReturnMemory.textures + 1);
   expect(requests.filter(url => url.includes('dust2plainmap.glb'))).toHaveLength(1);
+  expect(requests.filter(url => url.includes('dust2-colliders-v4.bin.gz'))).toHaveLength(1);
   await page.screenshot({ path: info.outputPath('returned-limbo.png') });
   expect(errors).toEqual([]);
 });

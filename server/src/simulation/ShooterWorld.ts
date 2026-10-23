@@ -1,17 +1,15 @@
 import { readFile } from 'node:fs/promises';
 import { gunzipSync } from 'node:zlib';
-import { deserialize } from 'node:v8';
 import { setImmediate as yieldToConnections } from 'node:timers/promises';
 import { PhysicsWorld, RAPIER } from '../../../src/modes/shooter/physics/PhysicsWorld';
 import { CharacterController } from '../../../src/modes/shooter/physics/CharacterController';
-import type { SpawnNavigationData } from './SpawnNavigation';
+import { decodeCollisionAsset, type CollisionAsset } from '../../../shared/ShooterCollisionAsset';
 import { gameConfig } from '../../../src/modes/shooter/config/gameConfig';
 import type { CharacterInput, ShooterInput } from '../../../shared/ShooterProtocol';
 import { Vector3 } from 'three';
 import { airstrikeConfig } from '../../../shared/AirstrikeProtocol';
 
-interface Geometry { vertices: Float32Array; indices: Uint32Array }
-let mapData: Promise<{ colliders: Geometry[]; navigation: SpawnNavigationData }> | undefined;
+let mapData: Promise<CollisionAsset> | undefined;
 class ServerInput implements CharacterInput {
   readonly keys = new Set<string>();
   yaw = 0; aiming = false; forward = 0; sideways = 0;
@@ -38,8 +36,11 @@ export class ShooterWorld {
   static async create(): Promise<ShooterWorld> {
     // Keep compact typed buffers cached, avoiding JSON strings and boxed numbers
     // during room creation on memory-constrained hosts.
-    mapData ??= readFile(new URL('../../assets/dust2-colliders.bin.gz', import.meta.url))
-      .then(bytes => deserialize(gunzipSync(bytes)) as { colliders: Geometry[]; navigation: SpawnNavigationData })
+    mapData ??= readFile(new URL('../../assets/dust2-colliders-v4.bin.gz', import.meta.url))
+      .then(bytes => {
+        const raw = gunzipSync(bytes);
+        return decodeCollisionAsset(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength));
+      })
       .catch(error => { mapData = undefined; throw error; });
     const data = await mapData;
     const physics = await PhysicsWorld.initialize();

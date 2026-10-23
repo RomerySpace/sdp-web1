@@ -1,7 +1,6 @@
 import { Room, ServerError, type Client } from '@colyseus/core';
 import { randomUUID } from 'node:crypto';
-import { MAX_PLAYERS } from '../../../shared/MultiplayerProtocol';
-import { SHOOTER_HZ, SHOOTER_PATCH_HZ, shooterNetworkConfig, validateShooterInput, validateWeaponAction, type ShooterInput } from '../../../shared/ShooterProtocol';
+import { SHOOTER_HZ, SHOOTER_PATCH_HZ, SHOOTER_MAX_PLAYERS, shooterNetworkConfig, validateShooterInput, validateWeaponAction, type ShooterInput } from '../../../shared/ShooterProtocol';
 import type { RoomChatMessage } from '../../../shared/CommunicationProtocol';
 import { ShooterState, ShooterPlayer, KillState, RoundScoreState, AirstrikeState } from '../state/ShooterState';
 import { airstrikeConfig, blastDamage, earnedStrikeMask, strikeBit, validateAirstrikeRequest, type AirstrikeResult } from '../../../shared/AirstrikeProtocol';
@@ -29,7 +28,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     admission.validate(options.admissionToken);
     return true;
   }
-  state = new ShooterState(); maxClients = MAX_PLAYERS; maxMessagesPerSecond = 100;
+  state = new ShooterState(); maxClients = SHOOTER_MAX_PLAYERS; maxMessagesPerSecond = 100;
   private world!: ShooterWorld;
   private readonly entries = new Map<string, Entry>();
   private readonly chat = new ChatPolicy();

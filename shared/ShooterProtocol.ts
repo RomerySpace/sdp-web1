@@ -1,4 +1,5 @@
 export const SHOOTER_ROOM = 'SDPShooterRoom';
+export const SHOOTER_MAX_PLAYERS = 15;
 export const SHOOTER_HZ = 60;
 export const SHOOTER_PATCH_HZ = 30;
 export const shooterNetworkConfig = {

@@ -135,7 +135,7 @@ export class ShooterMode {
     await this.media.load(this.map).catch(error => { if (!signal.aborted) console.warn('[SDP] Media slots unavailable', error); }); signal.throwIfAborted();
     progress('Loading SDP weapon'); await this.weapon.load(); signal.throwIfAborted();
     progress('Loading environment light'); await this.environment.load(); signal.throwIfAborted();
-    this.colliderCount = await buildMapColliders(this.physics, this.map.geometries, progress); signal.throwIfAborted();
+    this.colliderCount = await buildMapColliders(this.physics, progress); signal.throwIfAborted();
     this.player = new CharacterController(this.physics, this.input, findSpawn(this.physics));
     for (let i = 0; i < 20; i++) { this.player.beforeStep(gameConfig.physics.timestep, false); this.physics.step(); this.player.afterStep(); }
     this.camera.update(0, this.player, 1, 0); this.weapon.update(0, this.player, this.input);

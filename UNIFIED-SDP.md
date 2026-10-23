@@ -193,5 +193,7 @@ Pruebas especificas: `npm run test:unified -- --grep 'fullscreen|WebKit|actual m
 
 Vercel conserva npm run build y dist. El endpoint de Colyseus sigue configurado mediante VITE_SDP_SERVER_URL, con HTTPS/WSS en publico.
 Render conserva su estructura y variables privadas. El build instala las dependencias de raiz y servidor porque la fisica se reutiliza desde el mismo modulo de WEB2, y genera el archivo de colisiones antes de arrancar.
-server/assets/dust2-colliders.json.gz es un recurso derivado, ignorado por Git y regenerable con npm run prepare:shooter. No procede de datos de un cliente.
+Shooter admite 15 jugadores por sala; Limbo conserva 25. La capacidad total de visitantes sigue siendo independiente y no se aumenta automaticamente.
+`npm run prepare:shooter` genera `server/assets/dust2-colliders-v4.bin.gz` (ignorado por Git) y una copia identica en `public/shooter/physics/dust2-colliders-v4.bin.gz` (se incluye en Git para Vercel). Ambos modos de fisica Shooter usan esa misma superficie. Al modificar el mapa, regenerar e incluir tambien el recurso publico derivado. El modelo visual original no se simplifica.
+El navegador descarga la fisica solo despues de JOIN SHOOTER y la reutiliza en siguientes entradas. La simplificacion conserva bordes, tiene un error geometrico configurado de 5 mm y valida superficies mediante rayos; ante diferencias conserva el bloque original. Ver `docs/SHOOTER-PHYSICS.md` para resultados y limites de las mediciones.
 Cada publicacion debe coordinar frontend y backend: los cambios en esquemas, dano, regeneracion y navegacion necesitan ambos despliegues. Autorizar expresamente cualquier push/merge/cambio de produccion.

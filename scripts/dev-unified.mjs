@@ -35,7 +35,7 @@ async function waitFor(url) {
 }
 try {
   await available(webPort); await available(backendPort);
-  if (!existsSync(resolve(projectRoot, 'server/assets/dust2-colliders.bin.gz'))) execFileSync(process.execPath,
+  if (!existsSync(resolve(projectRoot, 'server/assets/dust2-colliders-v4.bin.gz'))) execFileSync(process.execPath,
     ['scripts/build-shooter-collisions.mjs'], { cwd: resolve(projectRoot, 'server'), stdio: 'inherit' });
   const env = { ...process.env, HOST: '0.0.0.0', PORT: String(backendPort) };
   let voiceStatus = 'UNCONFIGURED';

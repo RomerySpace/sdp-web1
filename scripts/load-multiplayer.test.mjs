@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { configuration } from './load-multiplayer.mjs';
+import { configuration, phaseCooldownSeconds } from './load-multiplayer.mjs';
 import { statistics, summarizeResourceMetrics } from './load-test-metrics.mjs';
 
 test('load tests require permission for remote origins and enforce bounded increasing stages', () => {
@@ -17,6 +17,12 @@ test('latency statistics preserve input samples and distinguish empty data', () 
   assert.deepEqual(statistics(samples), { samples: 4, mean: 40, p50: 20, p95: 100, max: 100 });
   assert.deepEqual(samples, [100, 10, 20, 30]);
   assert.equal(statistics([]).p95, null);
+});
+
+test('load phases wait for handover reservations before admitting the next batch', () => {
+  assert.equal(phaseCooldownSeconds(0), 31);
+  assert.equal(phaseCooldownSeconds(15), 31);
+  assert.equal(phaseCooldownSeconds(45), 45);
 });
 
 test('Render utilization uses observed resource limits instead of guessed plan specs', () => {
