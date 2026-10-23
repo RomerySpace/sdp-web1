@@ -1,4 +1,4 @@
-import { Client, type Room } from '@colyseus/sdk';
+import { Client, ErrorCode, type Room } from '@colyseus/sdk';
 import {
   LOBBY_NAME, MAX_PLAYERS, type ConnectionStatus, type LobbySnapshot,
   type MovementInput, type NetworkPlayer,
@@ -114,7 +114,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
           if (saved.type === this.roomType) room = previous;
           else { previous.reconnection.enabled = false; await previous.leave(); this.clearReconnect(); }
         } catch (error) {
-          if ((error as { code?: number }).code === 522) this.clearReconnect();
+          if (this.isExpiredReservation((error as { code?: number }).code)) this.clearReconnect();
           else throw error;
         }
       }
@@ -195,8 +195,18 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
       room.onReconnect(() => {
         if (this.room === room && !this.disposed) { queueMicrotask(() => { if (this.room === room) this.saveReconnect(room); }); this.receive(room, room.state); if (this.roomType === LOBBY_NAME) room.send('station:command', { type: 'sync' }); }
       });
-      room.onError(() => {
-        if (this.room === room && !this.disposed) this.setStatus('disconnected', 0, this.expectedCapacity, room.roomId, room.reconnection.isReconnecting ? 'reconnecting' : undefined);
+      room.onError(code => {
+        if (this.room !== room || this.disposed) return;
+        if (this.isExpiredReservation(code)) {
+          // The SDK emits an error without leaving when a reconnect handshake
+          // is rejected. Retire that room so it cannot block fresh admission.
+          this.clearReconnect();
+          room.reconnection.enabled = false; room.reconnection.maxRetries = 0;
+          this.room = undefined; room.connection.close();
+          this.rejectVoiceRequests(); this.clearRemoteState();
+          this.setStatus('connecting', 0, this.expectedCapacity, '', 'reconnecting');
+          this.scheduleRetry();
+        } else this.setStatus('disconnected', 0, this.expectedCapacity, room.roomId, room.reconnection.isReconnecting ? 'reconnecting' : undefined);
       });
       room.onLeave((code) => {
         if (this.room !== room) return;
@@ -452,9 +462,13 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
   private savedReconnect(): { token: string; type: string } | undefined {
     try {
       const saved = JSON.parse(sessionStorage.getItem('sdp:reconnect') || 'null');
-      if (typeof saved?.type === 'string' && typeof saved.token === 'string' && saved.expires > Date.now()) return saved;
+      if ((saved?.type === LOBBY_NAME || saved?.type === SHOOTER_ROOM) && typeof saved.token === 'string' &&
+        /^[^:\s]+:[^:\s]+$/.test(saved.token) && Number.isFinite(saved.expires) && saved.expires > Date.now()) return saved;
     } catch {}
     this.clearReconnect(); return;
+  }
+  private isExpiredReservation(code: number | undefined): boolean {
+    return code === ErrorCode.MATCHMAKE_INVALID_ROOM_ID || code === ErrorCode.MATCHMAKE_EXPIRED;
   }
   private clearReconnect(): void { try { sessionStorage.removeItem('sdp:reconnect'); } catch {} }
 }

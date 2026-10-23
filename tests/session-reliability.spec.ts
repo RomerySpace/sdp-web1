@@ -23,6 +23,125 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => { await vite?.close(); await fixture?.server.gracefullyShutdown(false); });
 
+test('expired and malformed reconnect reservations fall back to admission without losing the visit', async ({ browser }) => {
+  admission.enabled = true; admission.capacity = 1;
+  const context = await browser.newContext({ permissions: ['local-network-access'] }), page = await context.newPage();
+  try {
+    await page.route('**/reconnect-fixture', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Reconnect test</title>' }));
+    await page.goto(`${url}/reconnect-fixture`);
+    await page.evaluate(async () => {
+      const path = '/src/network/ColyseusNetworkAdapter.ts';
+      const { ColyseusNetworkAdapter } = await import(path);
+      (window as any).reconnectTest = new ColyseusNetworkAdapter();
+      await (window as any).reconnectTest.connect();
+    });
+    await expect.poll(() => page.evaluate(() => (window as any).reconnectTest.status.state)).toBe('connected');
+    const original = await page.evaluate(() => ({ room: (window as any).reconnectTest.snapshot.roomId, visit: sessionStorage.getItem('sdp:admission') }));
+    const room = fixture.room(original.room) as unknown as SDPLobby;
+    room.autoDispose = false;
+    try {
+      for (const token of [`${original.room}:expired-test-token`, 'malformed-token', 'missing-room:expired-test-token']) {
+        await page.evaluate(async token => {
+          const network = (window as any).reconnectTest;
+          await network.leaveRoom();
+          sessionStorage.setItem('sdp:reconnect', JSON.stringify({ token, type: network.roomType, expires: Date.now() + 120000 }));
+          await network.connect();
+        }, token);
+        await expect.poll(() => page.evaluate(() => (window as any).reconnectTest.status.state), { timeout: 6000 }).toBe('connected');
+        expect(await page.evaluate(() => sessionStorage.getItem('sdp:admission'))).toBe(original.visit);
+        expect(await page.evaluate(() => (window as any).reconnectTest.snapshot.players.filter((p: any) => p.connected).length)).toBe(1);
+      }
+    } finally {
+      await page.evaluate(() => (window as any).reconnectTest.leaveRoom()).catch(() => {});
+      await expect.poll(() => room.state.online).toBe(0);
+      room.autoDispose = true;
+    }
+  } finally {
+    await page.evaluate(async () => { const network = (window as any).reconnectTest; if (network) { await network.leaveRoom(); network.disconnect(); } }).catch(() => {});
+    await context.close(); admission.tick(Date.now() + 121000); admission.enabled = false; admission.capacity = 25;
+  }
+});
+
+test('REJOIN after real idle eviction reloads and reconnects in Limbo and Shooter', async ({ browser }) => {
+  for (const mode of ['limbo', 'shooter']) {
+    const context = await browser.newContext(), page = await context.newPage();
+    try {
+      await page.goto(`${url}/?debugMode=${mode}`, { waitUntil: 'domcontentloaded' });
+      if (mode === 'limbo') {
+        await submitName(page, 'Idle visitor');
+        await expect(page.locator('.ui')).toHaveAttribute('data-state', /^(EXPLORING|PAUSED)$/);
+        await expect(page.locator('.connection-indicator')).toHaveAttribute('data-connection', 'connected');
+      }
+      else {
+        await expect(page.locator('#app')).toHaveAttribute('data-mode', 'SHOOTER', { timeout: 90000 });
+        await page.getByRole('button', { name: 'ENTER SIMULATION' }).click();
+      }
+      const identity = await page.evaluate(() => ({ room: window.sdpUnified.network.snapshot!.roomId, id: window.sdpUnified.network.snapshot!.localPlayerId }));
+      const room = fixture.room(identity.room);
+      (room as unknown as { inactivity: RoomInactivity }).inactivity.check(room.clock.elapsedTime + sessionPolicy.idleMs + 1000);
+      await expect(page.getByRole('alertdialog', { name: 'SESSION DISCONNECTED' })).toBeVisible();
+      await expect.poll(() => room.state.players.has(identity.id)).toBe(false);
+      await page.getByRole('button', { name: 'REJOIN', exact: true }).click();
+      if (mode === 'limbo') {
+        await submitName(page, 'Idle visitor');
+        await expect(page.locator('.ui')).toHaveAttribute('data-state', /^(EXPLORING|PAUSED)$/);
+      }
+      else {
+        await expect(page.locator('#app')).toHaveAttribute('data-mode', 'SHOOTER', { timeout: 90000 });
+        await page.getByRole('button', { name: 'ENTER SIMULATION' }).click();
+      }
+      await expect(page.locator('.connection-indicator')).toHaveAttribute('data-connection', 'connected');
+      await expect(page.locator('.session-idle-overlay')).toBeHidden();
+      expect(await page.evaluate(() => window.sdpUnified.network.snapshot!.localPlayerId)).not.toBe(identity.id);
+    } finally {
+      await page.evaluate(() => window.sdpUnified?.network.disconnect()).catch(() => {});
+      await context.close(); admission.tick(Date.now() + 121000);
+    }
+  }
+});
+
+test('Limbo and Shooter recover connection cuts and automatically replace expired live reservations', async ({ browser }) => {
+  for (const type of ['SDPLimboRoom', 'SDPShooterRoom']) {
+    const context = await browser.newContext({ permissions: ['local-network-access'] }), page = await context.newPage();
+    let room: ReturnType<typeof fixture.room> | undefined;
+    try {
+      await page.route('**/connection-cut-fixture', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Connection cut test</title>' }));
+      await page.goto(`${url}/connection-cut-fixture`);
+      await page.evaluate(async type => {
+        const path = '/src/network/ColyseusNetworkAdapter.ts';
+        const { ColyseusNetworkAdapter } = await import(path);
+        const network = (window as any).reconnectTest = new ColyseusNetworkAdapter();
+        network.roomType = type; await network.connect();
+      }, type);
+      await expect.poll(() => page.evaluate(() => (window as any).reconnectTest.status.state)).toBe('connected');
+      const original = await page.evaluate(() => ({ room: (window as any).reconnectTest.snapshot.roomId, id: (window as any).reconnectTest.snapshot.localPlayerId }));
+      room = fixture.room(original.room); room.autoDispose = false;
+      for (const expire of [false, true]) {
+        await context.setOffline(true);
+        // Close the actual transport to reproduce a network loss deterministically.
+        (room.clients.find(client => client.sessionId === original.id)!.ref as unknown as { close(code: number, reason: string): void }).close(4010, 'Connection test');
+        await expect.poll(() => page.evaluate(() => (window as any).reconnectTest.status.reason)).toBe('reconnecting');
+        if (expire) {
+          const pending = (room as unknown as { _reconnections: Record<string, [string, { reject(error: Error): void }]> })._reconnections;
+          await expect.poll(() => Object.values(pending).some(([id]) => id === original.id)).toBe(true);
+          Object.values(pending).find(([id]) => id === original.id)![1].reject(new Error('Test reservation expired'));
+          await expect.poll(() => room!.state.players.has(original.id)).toBe(false);
+        }
+        await context.setOffline(false);
+        await expect.poll(() => page.evaluate(() => (window as any).reconnectTest.status.state)).toBe('connected');
+        const current = await page.evaluate(() => (window as any).reconnectTest.snapshot.localPlayerId);
+        if (expire) expect(current).not.toBe(original.id); else expect(current).toBe(original.id);
+      }
+    } finally {
+      await context.setOffline(false);
+      await page.evaluate(async () => { const network = (window as any).reconnectTest; if (network) { await network.leaveRoom(); network.disconnect(); } }).catch(() => {});
+      if (room) await expect.poll(() => room!.state.online).toBe(0);
+      if (room) room.autoDispose = true;
+      await context.close(); admission.tick(Date.now() + 121000);
+    }
+  }
+});
+
 test('disconnect screen is opaque, centered and keyboard-modal in both modes on desktop and mobile', async ({ browser }) => {
   for (const mobile of [false, true]) {
     const context = await browser.newContext({ viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 }, isMobile: mobile, hasTouch: mobile });
