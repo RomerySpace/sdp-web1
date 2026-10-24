@@ -8,6 +8,7 @@ export class SessionActivity {
   private readonly unsubscribe: () => void;
   private sentAt = -Infinity;
   private reservationUntil = 0;
+  private queuePosition: number | undefined;
   private expired = false;
   private readonly timer: number;
   private readonly inert = new Map<HTMLElement, boolean>();
@@ -34,11 +35,12 @@ export class SessionActivity {
         this.expired = true; this.reservationUntil = 0;
         onInactive(); title.textContent = 'SESSION DISCONNECTED';
         message.textContent = 'You were disconnected after 5 minutes of inactivity. Rejoin to return to SDP.';
+        this.overlay.querySelector<HTMLElement>('.session-reservation')!.hidden = true;
         button.textContent = 'REJOIN'; this.show(container, button); this.updateTimer(); return;
       }
       if (this.expired) return;
       if (status.state === 'connected') {
-        this.reservationUntil = 0; this.overlay.hidden = true;
+        this.reservationUntil = 0; this.queuePosition = undefined; this.overlay.hidden = true;
         for (const [element, value] of this.inert) element.inert = value;
         this.inert.clear(); return;
       }
@@ -47,15 +49,16 @@ export class SessionActivity {
         onInterrupted(); button.textContent = 'RELOAD SESSION'; this.show(container, button);
       }
       if (!this.overlay.hidden) {
+        this.queuePosition = status.queuePosition;
         title.textContent = status.queuePosition ? 'WAITING FOR A PLACE' : 'CONNECTION INTERRUPTED';
-        message.textContent = status.queuePosition ? `Your previous reservation ended. You are ${status.queuePosition} in the queue. Entry is automatic.`
-          : 'Reconnecting automatically. Your place is reserved for up to 2 minutes. You do not need to reload.';
         if (status.queuePosition) this.reservationUntil = 0;
         this.updateTimer();
       }
     });
     this.timer = window.setInterval(() => this.updateTimer(), 500);
     document.addEventListener('visibilitychange', () => this.updateTimer(), { signal });
+    window.addEventListener('online', () => this.updateTimer(), { signal });
+    window.addEventListener('offline', () => this.updateTimer(), { signal });
   }
   private show(container: HTMLElement, button: HTMLButtonElement): void {
     for (const element of container.children) if (element instanceof HTMLElement && element !== this.overlay && !this.inert.has(element)) {
@@ -64,12 +67,18 @@ export class SessionActivity {
     this.overlay.hidden = false; button.focus({ preventScroll: true });
   }
   private updateTimer(): void {
+    if (this.overlay.hidden || this.expired) return;
+    const message = this.overlay.querySelector('.session-disconnect-message')!;
+    const seconds = Math.max(0, Math.ceil((this.reservationUntil - Date.now()) / 1000));
+    if (!navigator.onLine) message.textContent = 'You are offline. Reconnection will continue automatically when your connection returns.';
+    else if (this.queuePosition) message.textContent = `Your previous reservation ended. You are ${this.queuePosition} in the queue. Entry is automatic.`;
+    else if (this.queuePosition === 0) message.textContent = 'Your place is ready. Entering the simulation.';
+    else if (seconds) message.textContent = 'Reconnecting automatically. Your place is reserved for up to 2 minutes. You do not need to reload.';
+    else message.textContent = 'Your reserved place has expired. Reconnecting when a place is available.';
     const timer = this.overlay.querySelector<HTMLElement>('.session-reservation')!;
     timer.hidden = !this.reservationUntil || this.overlay.hidden;
     if (timer.hidden) return;
-    const seconds = Math.max(0, Math.ceil((this.reservationUntil - Date.now()) / 1000));
     timer.textContent = seconds ? `PLACE RESERVED · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` : 'RESERVATION ENDED · RECONNECTING';
-    if (!seconds) this.overlay.querySelector('.session-disconnect-message')!.textContent = 'Your reserved place has expired. Reconnecting when a place is available.';
   }
   mark(): void {
     const now = performance.now();

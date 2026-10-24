@@ -10,6 +10,13 @@ export class Admission {
   private sequence = 0;
   private readonly places = new Map<string, Place>();
 
+  diagnostics(now = Date.now()) {
+    const places = [...this.places.values()].filter(place => place.expires > now);
+    return { capacity: this.capacity, admitted: places.filter(place => place.admitted).length,
+      waiting: places.filter(place => !place.admitted && place.watcher).length,
+      reservedWaiting: places.filter(place => !place.admitted && !place.watcher).length };
+  }
+
   request(raw: unknown, watcher: string, now = Date.now()): string {
     this.tick(now);
     const existing = typeof raw === 'string' ? this.places.get(raw) : undefined;

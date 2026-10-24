@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Client, type Room } from '@colyseus/sdk';
 import { Admission, admission } from '../src/communication/Admission';
 import { shooterFixture } from './shooter-fixture';
-import type { AdmissionUpdate } from '../../shared/Admission';
+import { admissionConfig, type AdmissionUpdate } from '../../shared/Admission';
 import type { SDPLobby } from '../src/rooms/SDPLobby';
 
 test('issued visits retain ownership and identity even without capacity enforcement', () => {
@@ -75,10 +75,10 @@ test('real sockets: a seven-second cut keeps the same player and blocks the queu
   const until = async (fn: () => boolean) => { const deadline = Date.now() + 5000; while (!fn()) { if (Date.now() > deadline) throw new Error('Admission timeout'); await sleep(20); } };
   const queue = async () => {
     const room = await client.joinOrCreate('SDPAdmission'); rooms.push(room);
-    let latest: AdmissionUpdate | undefined;
-    room.onMessage<AdmissionUpdate>('queue:status', status => { latest = status; }); room.send('queue:sync');
+    let latest: AdmissionUpdate | undefined, updates = 0;
+    room.onMessage<AdmissionUpdate>('queue:status', status => { latest = status; updates++; }); room.send('queue:sync');
     await until(() => !!latest);
-    return { room, get state() { return latest!; } };
+    return { room, get state() { return latest!; }, get updates() { return updates; } };
   };
   try {
     await assert.rejects(client.joinOrCreate('SDPLimboRoom'), /waiting room/i);
@@ -86,6 +86,7 @@ test('real sockets: a seven-second cut keeps the same player and blocks the queu
     const first = await client.joinOrCreate('SDPLimboRoom', { admissionToken: q1.state.token, displayName: 'Reserved visitor' }); rooms.push(first);
     first.onMessage('station:state', () => {}); await q1.room.leave();
     const q2 = await queue(); assert.equal(q2.state.position, 1);
+    const beforeHeartbeat = q2.updates;
     await until(() => !!first.state.players?.get(first.sessionId));
     const local = fixture.room(first.roomId) as unknown as SDPLobby;
     const x = local.state.players.get(first.sessionId)!.x, token = first.reconnectionToken;
@@ -93,6 +94,7 @@ test('real sockets: a seven-second cut keeps the same player and blocks the queu
     await until(() => !local.state.players.get(first.sessionId)!.connected);
     await sleep(7000);
     assert.equal(q2.state.ready, false);
+    assert.ok(q2.updates > beforeHeartbeat, `An unchanged queue must send a heartbeat every ${admissionConfig.heartbeatMs}ms`);
     const restored = await client.reconnect(token); rooms.push(restored); restored.onMessage('station:state', () => {});
     await until(() => !!restored.state.players?.get(restored.sessionId)?.connected);
     assert.equal(restored.sessionId, first.sessionId); assert.equal(restored.roomId, first.roomId);

@@ -183,6 +183,8 @@ export class App {
           this.ui.intro.waiting(status.queuePosition);
           if (status.queuePosition > 0) this.player.releaseLock();
         }
+        if (this.entering && this.state.value === 'INTRO' && status.state === 'connecting' && status.queuePosition === undefined)
+          this.ui.intro.connecting(true, navigator.onLine ? 'CONNECTING TO SERVER' : 'OFFLINE · WAITING FOR CONNECTION');
         if (this.entering && this.state.value === 'INTRO' && status.state === 'connected') this.state.set('ENTERING');
       }),
       this.network.subscribeToSpawn((player) => { if (this.network.roomType === LOBBY_NAME) this.player.setSpawn(player); }),

@@ -226,6 +226,9 @@ SDP_PRODUCTION_URL=http://127.0.0.1:5384 npm run test:unified
 
 ## Vercel y Render
 
+Diagnostico agregado, comprobacion de revision/regiones y lista de despliegue:
+[OPERATIONS.md](docs/OPERATIONS.md). `/health` no certifica capacidad ni disponibilidad de LiveKit.
+
 Pantalla completa movil: los menus de Limbo y Shooter usan la API estandar o la variante WebKit, siempre desde el toque original. Si el navegador la bloquea, el boton responde con un estado legible, no queda desactivado sin explicacion. `public/manifest.webmanifest` y los metadatos Apple permiten abrir SDP como web app desde la pantalla de inicio. En Safari: Compartir > Anadir a pantalla de inicio > abrir el icono SDP. No se instala un service worker ni se guardan modelos o versiones antiguas en una cache offline. Sigue haciendo falta conexion para el multijugador.
 
 La parte superior del monolito refleja el perfil organico de la base y comparte su acabado blanco satinado. Comienza a 2.85m para mantener libre el hueco de la escultura; no cambia el collider del pedestal.

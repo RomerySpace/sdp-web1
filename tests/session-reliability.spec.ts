@@ -322,12 +322,17 @@ test('disconnect screen is opaque, centered and keyboard-modal in both modes on 
       for (const mode of ['LIMBO', 'SHOOTER']) {
         await page.evaluate(mode => {
           document.getElementById('app')!.dataset.mode = mode;
+          (window as any).disconnectFixture.status.queuePosition = undefined;
           (window as any).disconnectFixture.emit('connecting', 'reconnecting');
         }, mode);
         const dialog = page.getByRole('alertdialog', { name: 'CONNECTION INTERRUPTED' });
         await expect(dialog).toBeVisible();
         await expect(dialog).toHaveCSS('background-color', 'rgb(248, 251, 253)');
         await expect(dialog.locator('.session-reservation')).toContainText('2:00');
+        await context.setOffline(true);
+        await expect(dialog.locator('.session-disconnect-message')).toContainText('You are offline');
+        await context.setOffline(false);
+        await expect(dialog.locator('.session-disconnect-message')).toContainText('Reconnecting automatically');
         expect(await page.locator('#background-button').evaluate(element => (element as HTMLElement).inert)).toBe(true);
         await page.keyboard.press('p');
         expect(await page.evaluate(() => (window as any).disconnectFixture.keys)).toBe(0);
@@ -336,6 +341,15 @@ test('disconnect screen is opaque, centered and keyboard-modal in both modes on 
         await page.clock.fastForward(121000);
         await expect(dialog.locator('.session-reservation')).toContainText('RESERVATION ENDED');
         await expect(dialog.locator('.session-disconnect-message')).toContainText('expired');
+        await page.evaluate(() => (window as any).disconnectFixture.emit('connecting', 'reconnecting'));
+        await expect(dialog.locator('.session-disconnect-message')).toContainText('expired');
+        await expect(dialog.locator('.session-reservation')).toContainText('RESERVATION ENDED');
+        await page.evaluate(() => { (window as any).disconnectFixture.status.queuePosition = 2; (window as any).disconnectFixture.emit('connecting'); });
+        const queue = page.getByRole('alertdialog', { name: 'WAITING FOR A PLACE' });
+        await expect(queue).toContainText('2 in the queue');
+        await expect(queue.locator('.session-reservation')).toBeHidden();
+        await page.evaluate(() => { (window as any).disconnectFixture.status.queuePosition = 0; (window as any).disconnectFixture.emit('connecting'); });
+        await expect(dialog.locator('.session-disconnect-message')).toContainText('Your place is ready');
         await page.evaluate(() => (window as any).disconnectFixture.emit('connected'));
         await expect(dialog).toBeHidden();
         expect(await page.locator('#background-button').evaluate(element => (element as HTMLElement).inert)).toBe(false);
@@ -349,6 +363,55 @@ test('disconnect screen is opaque, centered and keyboard-modal in both modes on 
       await page.evaluate(() => (window as any).disconnectFixture.emit('connected'));
       await expect(idle).toBeVisible();
     } finally { await context.close(); }
+  }
+});
+
+test('a silently stalled queue reconnects with the same ticket and FIFO position before automatic entry', async ({ browser }) => {
+  admission.enabled = true; admission.capacity = 1;
+  const contexts = await Promise.all([0, 1, 2].map(() => browser.newContext({ permissions: ['local-network-access'] })));
+  const pages = await Promise.all(contexts.map(context => context.newPage()));
+  const errors: string[] = [];
+  try {
+    for (const [index, page] of pages.entries()) {
+      page.on('pageerror', error => errors.push(error.message));
+      await page.route('**/queue-recovery-fixture', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Queue recovery</title>' }));
+      await page.goto(`${url}/queue-recovery-fixture`);
+      await page.evaluate(async index => {
+        const path = '/src/network/ColyseusNetworkAdapter.ts';
+        const { ColyseusNetworkAdapter } = await import(path);
+        const network = (window as any).queueRecovery = new ColyseusNetworkAdapter();
+        network.setDisplayName(`Queue Recovery ${index}`);
+        void network.connect();
+      }, index);
+      await expect.poll(() => page.evaluate(() => (window as any).queueRecovery.status.state === 'connected' || (window as any).queueRecovery.status.queuePosition > 0)).toBe(true);
+    }
+    const second = pages[1], third = pages[2];
+    const original = await second.evaluate(() => {
+      const network = (window as any).queueRecovery;
+      return { token: network.admission.token, room: network.admission.waiting.roomId, id: network.admission.waiting.sessionId };
+    });
+    const waiting = fixture.room(original.room);
+    const stalled = waiting.clients.find(client => client.sessionId === original.id)!;
+    const send = stalled.send.bind(stalled);
+    stalled.send = ((type: string, ...args: unknown[]) => {
+      if (type === 'queue:status') return;
+      return (send as (...args: unknown[]) => void)(type, ...args);
+    }) as typeof stalled.send;
+    await expect.poll(() => second.evaluate(() => (window as any).queueRecovery.admission.waiting?.sessionId), { timeout: 25000 }).not.toBe(original.id);
+    await expect.poll(() => second.evaluate(() => (window as any).queueRecovery.status.queuePosition)).toBe(1);
+    expect(await second.evaluate(() => (window as any).queueRecovery.admission.token)).toBe(original.token);
+    await expect.poll(() => third.evaluate(() => (window as any).queueRecovery.status.queuePosition)).toBe(2);
+    await expect.poll(() => waiting.clients.some(client => client.sessionId === original.id)).toBe(false);
+    await pages[0].evaluate(() => (window as any).queueRecovery.leaveRoom());
+    admission.tick(Date.now() + 30001);
+    await expect.poll(() => second.evaluate(() => (window as any).queueRecovery.status.state)).toBe('connected');
+    expect(await second.evaluate(() => (window as any).queueRecovery.admission.token)).toBe(original.token);
+    await expect.poll(() => third.evaluate(() => (window as any).queueRecovery.status.queuePosition)).toBe(1);
+    expect(errors).toEqual([]);
+  } finally {
+    for (const page of pages) await page.evaluate(() => (window as any).queueRecovery?.disconnect()).catch(() => {});
+    for (const context of contexts) await context.close();
+    admission.enabled = false; admission.capacity = 25; admission.tick(Date.now() + 121000);
   }
 });
 
