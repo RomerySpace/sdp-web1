@@ -96,6 +96,11 @@ export class App {
       visitor: () => this.openVisitorOptions(this.focusedVisitor?.id),
       seat: () => this.interactSeat(),
     }, this.limited, this.network.displayName);
+    this.ui.connection.setRegion(this.network.region.id);
+    this.ui.intro.configureRegions(this.network.regions, this.network.region.id, id => {
+      this.network.selectRegion(id); this.ui.connection.setRegion(this.network.region.id);
+      this.ui.connection.update(this.network.status);
+    });
     this.audio.attach(this.ui.element);
     this.scene.environment.gallery.film.attach(this.ui.element, async listening => {
       try { return listening ? await this.synchronizeInteraction(() => this.network.sendGalleryListening(true)) : await this.network.sendGalleryListening(false); }

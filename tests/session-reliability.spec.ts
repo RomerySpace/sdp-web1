@@ -195,7 +195,7 @@ test('expired and malformed reconnect reservations fall back to admission withou
       await (window as any).reconnectTest.connect();
     });
     await expect.poll(() => page.evaluate(() => (window as any).reconnectTest.status.state)).toBe('connected');
-    const original = await page.evaluate(() => ({ room: (window as any).reconnectTest.snapshot.roomId, visit: sessionStorage.getItem('sdp:admission') }));
+    const original = await page.evaluate(() => ({ room: (window as any).reconnectTest.snapshot.roomId, visit: sessionStorage.getItem((window as any).reconnectTest.sessionKeys.admission) }));
     const room = fixture.room(original.room) as unknown as SDPLobby;
     room.autoDispose = false;
     try {
@@ -203,11 +203,11 @@ test('expired and malformed reconnect reservations fall back to admission withou
         await page.evaluate(async token => {
           const network = (window as any).reconnectTest;
           await network.leaveRoom();
-          sessionStorage.setItem('sdp:reconnect', JSON.stringify({ token, type: network.roomType, expires: Date.now() + 120000 }));
+          sessionStorage.setItem(network.sessionKeys.reconnect, JSON.stringify({ token, type: network.roomType, expires: Date.now() + 120000 }));
           await network.connect();
         }, token);
         await expect.poll(() => page.evaluate(() => (window as any).reconnectTest.status.state), { timeout: 6000 }).toBe('connected');
-        expect(await page.evaluate(() => sessionStorage.getItem('sdp:admission'))).toBe(original.visit);
+        expect(await page.evaluate(() => sessionStorage.getItem((window as any).reconnectTest.sessionKeys.admission))).toBe(original.visit);
         expect(await page.evaluate(() => (window as any).reconnectTest.snapshot.players.filter((p: any) => p.connected).length)).toBe(1);
       }
     } finally {

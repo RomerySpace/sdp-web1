@@ -104,6 +104,10 @@ servidor; no se necesita compartir el directorio entre Frankfurt y Virginia.
 La prueba actual sigue usando solo Frankfurt, sin provisionar USA ni cambiar el
 plan de Render. Un reinicio del backend borra este registro temporal.
 
+El selector regional aparece junto al nombre antes de entrar. USA permanece
+deshabilitado hasta configurar un backend distinto. Configuracion, aislamiento
+de reservas y pruebas: [SERVER-REGIONS.md](docs/SERVER-REGIONS.md).
+
 Pruebas: `server/tests/social.test.ts`, `server/tests/admission.test.ts` y
 `npm run test:session -- --grep 'invitation controls|duplicate global|all four Limbo'`.
 Las pruebas multicliente comprueban los cuatro recorridos entre modos y distintas
@@ -172,7 +176,7 @@ El generador del servidor agrupa la misma geometria en trimeshes por zonas, redu
 
 **Limites del prototipo:** el historial permite correccion con prediccion, pero no replay completo de entradas/fisica pendientes. La compensacion es un rebobinado limitado de objetivos sobre el mapa estatico, no un sistema competitivo completo con validacion historica de puertas moviles. No hay equipos, rondas, anticheat avanzado ni estadisticas persistentes; match sigue siendo practice.
 Las animaciones procedimentales no se transmiten fotograma a fotograma.
-No se han implementado Redis, seleccion regional, matchmaking competitivo ni limite global/cola de 300. No se ha validado capacidad para 300 ni latencia intercontinental de 40-60 ms.
+No se han implementado Redis, matchmaking competitivo ni limite global/cola de 300. La seleccion regional esta preparada, pero USA no esta provisionado. No se ha validado capacidad para 300 ni latencia intercontinental de 40-60 ms.
 
 ## Voz solo en Limbo
 

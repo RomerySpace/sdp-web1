@@ -6,8 +6,8 @@ export class AdmissionClient {
   private cancel?: () => void;
   private generation = 0;
   token = '';
-  constructor(private readonly client: Client) {
-    try { this.token = sessionStorage.getItem('sdp:admission') || ''; } catch {}
+  constructor(private readonly client: Client, private readonly storageKey = 'sdp:admission') {
+    try { this.token = sessionStorage.getItem(this.storageKey) || ''; } catch {}
   }
   async enter(update: (position: number) => void, displayName?: string): Promise<string> {
     const generation = this.generation;
@@ -20,7 +20,7 @@ export class AdmissionClient {
         room.onMessage<AdmissionUpdate>('queue:status', status => {
           if (typeof status.token !== 'string' || !Number.isInteger(status.position)) return;
           this.token = status.token;
-          try { sessionStorage.setItem('sdp:admission', this.token); } catch {}
+          try { sessionStorage.setItem(this.storageKey, this.token); } catch {}
           update(status.position);
           if (status.ready) resolve(this.token);
         });

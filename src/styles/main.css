@@ -89,6 +89,11 @@ button { border: 0; background: none; }
 .intro.is-leaving { opacity: 0; visibility: hidden; }
 .intro-name-form { width: 100%; margin: 0; text-align: left; animation: intro-name-in 350ms ease both; }
 .intro-name-form label { display: block; margin-bottom: 10px; font-size: 9px; letter-spacing: 0; color: var(--muted); }
+.intro-region-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; margin-bottom: 16px; border-bottom: 1px solid rgba(130,148,157,.25); }
+.intro-name-form .intro-region-row label { flex: 0 0 auto; margin: 0; }
+.intro-region-row select { min-width: 0; max-width: 100%; height: 44px; padding: 6px 0 6px 8px; color: #526875; background: transparent; border: 0; border-radius: 0; font: inherit; font-size: 11px; cursor: pointer; }
+.intro-region-row select:focus-visible { outline: 1px solid #728590; outline-offset: 2px; }
+#app[data-input="touch"] .intro-region-row select { font-size: 16px; }
 .intro-name-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border-bottom: 1px solid #aab2b0; transition: border-color 200ms; }
 .intro-name-row:focus-within { border-color: #303637; }
 .intro-name-row input { width: 100%; min-width: 0; height: 44px; border: 0; border-radius: 0; background: transparent; color: #262b2d; padding: 8px 0; font-size: 16px; user-select: text; }

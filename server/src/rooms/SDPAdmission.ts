@@ -3,6 +3,10 @@ import { admission } from '../communication/Admission';
 import { socialDirectory } from '../communication/SocialDirectory';
 
 export class SDPAdmission extends Room {
+  static async onAuth(_token: string, options: { admissionToken?: unknown; displayName?: unknown } = {}): Promise<boolean> {
+    socialDirectory.checkName(options.displayName, options.admissionToken);
+    return true;
+  }
   private readonly tickets = new Map<string, string>();
   private readonly previous = new Map<string, string>();
   onCreate(): void {

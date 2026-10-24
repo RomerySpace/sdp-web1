@@ -63,6 +63,11 @@ test('production matchmaking and WebSocket upgrades enforce the same allowed ori
       if (!ready) await new Promise((resolve) => setTimeout(resolve, 100));
     }
     assert.ok(ready, output);
+    const regionalHealth = await fetch(`${url}/health`, { headers: { Origin: 'https://sdp.example' } });
+    assert.equal(regionalHealth.headers.get('access-control-allow-origin'), 'https://sdp.example');
+    assert.equal((await regionalHealth.json() as { region: string }).region, 'eu');
+    const rejectedHealth = await fetch(`${url}/health`, { headers: { Origin: 'https://untrusted.example' } });
+    assert.equal(rejectedHealth.status, 403);
     const headers = { Origin: 'https://sdp.example', 'Content-Type': 'application/json' };
     const preflight = await fetch(`${url}/matchmake/joinOrCreate/SDPLobby`, { method: 'OPTIONS', headers: {
       Origin: 'https://sdp.example', 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'content-type',

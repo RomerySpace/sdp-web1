@@ -15,17 +15,8 @@ import { sessionPolicy } from '../../shared/SessionPolicy';
 import type { GalleryListenResult } from '../../shared/LowerGallery';
 import { AdmissionClient } from './AdmissionClient';
 import { admissionConfig } from '../../shared/Admission';
-
-function serverEndpoint(): string {
-  const configured = import.meta.env.VITE_SDP_SERVER_URL;
-  if (configured) {
-    const url = new URL(configured, location.origin);
-    if (location.protocol === 'https:' && ['http:', 'ws:'].includes(url.protocol)) {
-      console.warn('[SDP] Ignoring an insecure server URL on HTTPS; using the same-origin secure proxy.');
-    } else return url.toString();
-  }
-  return `${location.origin}/multiplayer`;
-}
+import { createServerRegions, migrateLegacySession, normalizeServerEndpoint, selectServerRegion, serverSessionKeys,
+  ServerRegionError, verifyServerRegion, type ServerRegion, type ServerRegionId } from './ServerRegions';
 
 interface DecodedLobby {
   interactionVersion?: number;
@@ -44,8 +35,12 @@ interface LobbyRoomType { state: DecodedLobby; onJoin(client: unknown, options?:
 type LobbyRoom = Room<LobbyRoomType, DecodedLobby>;
 
 export class ColyseusNetworkAdapter implements MultiplayerConnection {
-  private readonly client: Client;
-  private readonly admission: AdmissionClient;
+  private client: Client;
+  private admission: AdmissionClient;
+  readonly regions = createServerRegions(import.meta.env, location.origin);
+  private selectedRegion: ServerRegion;
+  private regionVerified = false;
+  sessionKeys: { admission: string; reconnect: string };
   private lastReservationSave = 0;
   private profileName = '';
   private room: LobbyRoom | undefined;
@@ -81,12 +76,32 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
   private readonly invitations = new Set<(invitation: RoomInvitation) => void>();
   private readonly socialRequests = new Map<string, { resolve: (result: SocialResult) => void; reject: (error: Error) => void; timer: number }>();
 
-  constructor(endpoint = serverEndpoint()) {
-    this.client = new Client(endpoint);
-    this.admission = new AdmissionClient(this.client);
+  constructor(endpoint?: string) {
+    let saved: string | null = null;
+    try { saved = localStorage.getItem('sdp:region'); } catch {}
+    this.selectedRegion = selectServerRegion(this.regions, saved);
+    if (endpoint) this.selectedRegion = { ...this.selectedRegion, endpoint: normalizeServerEndpoint(endpoint, location.origin), verifyIdentity: false, legacySession: false };
+    this.sessionKeys = serverSessionKeys(this.selectedRegion.endpoint!);
+    try { migrateLegacySession(sessionStorage, this.selectedRegion); } catch {}
+    this.client = new Client(this.selectedRegion.endpoint!);
+    this.admission = new AdmissionClient(this.client, this.sessionKeys.admission);
     try { this.profileName = validateDisplayName(localStorage.getItem('sdp:displayName')) ?? ''; } catch {}
   }
   get displayName(): string { return this.profileName; }
+  get region(): ServerRegion { return this.selectedRegion; }
+  selectRegion(id: ServerRegionId): void {
+    const region = this.regions.find(region => region.id === id && region.available);
+    if (!region?.endpoint) throw new Error('This server is not available yet.');
+    if (region.id === this.selectedRegion.id && region.endpoint === this.selectedRegion.endpoint) return;
+    if (this.room || this.joining || this.joinTask || this.retryTimer || this.inactive || this.disposed)
+      throw new Error('Choose your region before entering the exhibition.');
+    this.admission.stop();
+    this.selectedRegion = region; this.regionVerified = false;
+    this.sessionKeys = serverSessionKeys(region.endpoint);
+    try { migrateLegacySession(sessionStorage, region); localStorage.setItem('sdp:region', region.id); } catch {}
+    this.client = new Client(region.endpoint); this.admission = new AdmissionClient(this.client, this.sessionKeys.admission);
+    this.lastReservationSave = 0;
+  }
   setDisplayName(raw: string): void {
     const name = validateDisplayName(raw); if (!name) throw new Error('Choose a name of 2-20 letters, numbers or spaces.');
     this.profileName = name;
@@ -109,6 +124,8 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
     this.joining = true;
     this.setStatus('connecting');
     try {
+      if (!this.regionVerified) { await verifyServerRegion(this.selectedRegion); this.regionVerified = true; }
+      if (this.disposed || generation !== this.generation) return;
       const preferredRoom = import.meta.env.DEV && this.roomType === LOBBY_NAME ? new URLSearchParams(location.search).get('room') : null;
       let room: LobbyRoom | undefined;
       const prepared = this.preparedSeat; this.preparedSeat = undefined;
@@ -245,7 +262,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
     } catch (error) {
       if (!this.disposed && generation === this.generation) {
         this.setStatus('disconnected');
-        if ((error as { code?: number }).code === socialConfig.nameConflictCode) throw error;
+        if (error instanceof ServerRegionError || (error as { code?: number }).code === socialConfig.nameConflictCode) throw error;
         this.scheduleRetry();
       }
     } finally { this.joining = false; }
@@ -508,11 +525,11 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
 
   private saveReconnect(room: LobbyRoom): void {
     this.lastReservationSave = Date.now();
-    try { sessionStorage.setItem('sdp:reconnect', JSON.stringify({ token: room.reconnectionToken, type: this.roomType, expires: Date.now() + admissionConfig.reservationSeconds * 1000 })); } catch {}
+    try { sessionStorage.setItem(this.sessionKeys.reconnect, JSON.stringify({ token: room.reconnectionToken, type: this.roomType, expires: Date.now() + admissionConfig.reservationSeconds * 1000 })); } catch {}
   }
   private savedReconnect(): { token: string; type: string } | undefined {
     try {
-      const saved = JSON.parse(sessionStorage.getItem('sdp:reconnect') || 'null');
+      const saved = JSON.parse(sessionStorage.getItem(this.sessionKeys.reconnect) || 'null');
       if ((saved?.type === LOBBY_NAME || saved?.type === SHOOTER_ROOM) && typeof saved.token === 'string' &&
         /^[^:\s]+:[^:\s]+$/.test(saved.token) && Number.isFinite(saved.expires) && saved.expires > Date.now()) return saved;
     } catch {}
@@ -521,5 +538,5 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
   private isExpiredReservation(code: number | undefined): boolean {
     return code === ErrorCode.MATCHMAKE_INVALID_ROOM_ID || code === ErrorCode.MATCHMAKE_EXPIRED;
   }
-  private clearReconnect(): void { try { sessionStorage.removeItem('sdp:reconnect'); } catch {} }
+  private clearReconnect(): void { try { sessionStorage.removeItem(this.sessionKeys.reconnect); } catch {} }
 }

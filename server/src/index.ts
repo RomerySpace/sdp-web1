@@ -11,6 +11,7 @@ import { admission } from './communication/Admission';
 import { SDPAdmission } from './rooms/SDPAdmission';
 import { admissionConfig } from '../../shared/Admission';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
+import { serverRegion } from './config/ServerRegion';
 
 process.on('uncaughtExceptionMonitor', error => console.error('[SDP] Fatal process error', error));
 process.on('exit', code => console.error('[SDP] Process exit', code));
@@ -27,6 +28,7 @@ const host = process.env.HOST || '0.0.0.0';
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT must be between 1 and 65535.');
 
 const origins = new OriginPolicy();
+const region = serverRegion();
 const capacity = Number(process.env.SDP_VISITOR_CAPACITY || MAX_PLAYERS);
 if (!Number.isInteger(capacity) || capacity < 1 || capacity > 1000) throw new Error('SDP_VISITOR_CAPACITY must be between 1 and 1000.');
 admission.enabled = true; admission.capacity = capacity;
@@ -40,10 +42,11 @@ const transport = new WebSocketTransport({
   pingInterval: 2000, pingMaxRetries: 2, maxPayload: 4096,
   verifyClient: (info: { origin: string }) => origins.allows(info.origin),
 });
-transport.getExpressApp().get('/health', (_request: IncomingMessage, response: ServerResponse) => {
-  response.writeHead(200, { 'Content-Type': 'application/json' });
+transport.getExpressApp().get('/health', (request: IncomingMessage, response: ServerResponse) => {
+  if (!origins.allows(request.headers.origin)) { response.writeHead(403); response.end(); return; }
+  response.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': origins.corsOrigin(request.headers.origin || null), 'Vary': 'Origin', 'Cache-Control': 'no-store' });
   response.end(JSON.stringify({ status: 'ok', room: LOBBY_NAME, capacity: MAX_PLAYERS, simulationHz: SIMULATION_HZ,
-    voice: voiceConfigured ? 'configured' : 'unconfigured' }));
+    region, voice: voiceConfigured ? 'configured' : 'unconfigured' }));
 });
 const server = new Server({
   transport,
