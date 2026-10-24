@@ -3,12 +3,11 @@ import { rankRound, type RoundScore } from '../../../shared/ShooterProtocol';
 
 export class ShooterMatch {
   phase: 'waiting' | 'playing' | 'results' = 'waiting';
-  lighting: 'day' | 'night' = 'day';
+  readonly lighting = 'day' as const;
   round = 0; endsAt = 0; nextRoundAt = 0;
   private readonly departed = new Map<string, RoundScore>();
   constructor(private readonly config = gameplayConfig.match) {}
   start(now: number): void {
-    this.lighting = Math.random() < .5 ? 'day' : 'night';
     this.phase = 'playing'; this.round++; this.endsAt = now + this.config.duration * 1000; this.nextRoundAt = 0; this.departed.clear();
   }
   active(now: number): boolean { return this.phase === 'playing' && now < this.endsAt; }

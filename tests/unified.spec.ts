@@ -27,10 +27,10 @@ declare global { interface Window {
   remoteTrailProbe?: { origin: number[]; muzzle: number[]; headDistance: number };
 } }
 const shooterRequest = (url: string): boolean => /\/shooter\/|\/modes\/shooter\/|ShooterMode-|shooter-physics-|rapier3d/.test(url);
-async function enterLimbo(page: Page): Promise<void> {
+async function enterLimbo(page: Page, name?: string): Promise<void> {
   await page.goto('/?debugMode=limbo');
   await expect(page.locator('.ui')).toHaveAttribute('data-sculpture', 'loaded');
-  await enterExhibition(page);
+  await enterExhibition(page, name);
 }
 async function openProtocol(page: Page): Promise<void> {
   await page.bringToFront();
@@ -900,7 +900,7 @@ test('Limbo sprint is immediate, smooth and visible in authoritative movement', 
     return Math.abs(server.z - app.player.camera.position.z);
   }), { timeout: 2500 }).toBeLessThan(.5);
 });
-test('night flashlights, 30-round automatic clips, POV flash, traces and clean return work with two clients', async ({ browser }, info) => {
+test('day-only Shooter, 30-round automatic clips, POV flash, traces and clean return work with two clients', async ({ browser }, info) => {
   test.setTimeout(240000);
   const contexts = await Promise.all([browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }), browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })]);
   const [first, second] = await Promise.all(contexts.map(context => context.newPage()));
@@ -908,35 +908,19 @@ test('night flashlights, 30-round automatic clips, POV flash, traces and clean r
   try {
     for (const page of [first, second]) {
       page.on('pageerror', error => errors.push(error.message));
-      await enterLimbo(page);
+      await enterLimbo(page, `Day ${page === first ? 'A' : 'B'} ${String(Date.now()).slice(-7)}`);
       await page.evaluate(() => window.sdpUnified.modes.joinShooter());
       await expect(page.locator('#app')).toHaveAttribute('data-mode', 'SHOOTER');
       await page.getByRole('button', { name: 'ENTER SIMULATION' }).tap();
       await expect.poll(() => page.evaluate(() => window.sdpUnified.modes.shooter!.player!.grounded)).toBe(true);
-      await page.evaluate(() => {
-        const s = window.sdpUnified.modes.shooter!, set = s.environment.setLighting.bind(s.environment);
-        s.environment.setLighting = () => set('night'); set('night'); s.input.pitch = -.35;
-      });
+      expect(await page.evaluate(() => window.sdpUnified.modes.shooter!.scene.userData.lighting)).toBe('day');
+      await expect(page.getByRole('button', { name: 'Toggle flashlight' })).toHaveCount(0);
+      await expect(page.locator('.shooter-flashlight-hint')).toHaveCount(0);
     }
     await expect.poll(() => first.evaluate(() => window.sdpUnified.modes.shooter!.remotes.count)).toBe(1);
-    const brightness = () => first.evaluate(() => {
-      const s = window.sdpUnified.modes.shooter!, r = window.sdpUnified.scene.renderer;
-      s.update(0); const gl = r.getContext(), width = gl.drawingBufferWidth, height = gl.drawingBufferHeight;
-      const data = new Uint8Array(width * height * 4); gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, data);
-      let sum = 0; for (let n = 0; n < data.length; n += 4) sum += (data[n] + data[n + 1] + data[n + 2]) / 3;
-      return sum / (width * height);
-    });
-    const dark = await brightness(); await first.screenshot({ path: info.outputPath('night-light-off.png') });
-    await first.getByRole('button', { name: 'Toggle flashlight' }).tap();
-    await expect.poll(() => second.evaluate(() => window.sdpUnified.network.snapshot!.players.some(p => p.playerId !== window.sdpUnified.network.snapshot!.localPlayerId && p.flashlight))).toBe(true);
-    await expect.poll(brightness).toBeGreaterThan(dark + 1);
-    await first.screenshot({ path: info.outputPath('night-light-on.png') });
-    await expect.poll(() => second.evaluate(() => {
-      const lights = window.sdpUnified.modes.shooter!.scene.children.filter(o => o.type === 'SpotLight');
-      return lights.some(o => 'intensity' in o && typeof o.intensity === 'number' && o.intensity > 0);
-    })).toBe(true);
-    await first.getByRole('button', { name: 'Toggle flashlight' }).tap();
-    await expect.poll(() => second.evaluate(() => window.sdpUnified.network.snapshot!.players.some(p => p.playerId !== window.sdpUnified.network.snapshot!.localPlayerId && p.flashlight))).toBe(false);
+    await first.keyboard.press('KeyZ');
+    expect(await first.evaluate(() => window.sdpUnified.modes.shooter!.scene.children.some(o => o.type === 'SpotLight'))).toBe(false);
+    expect(await first.evaluate(() => window.sdpUnified.modes.shooter!.scene.userData.lighting)).toBe('day');
     await first.evaluate(() => {
       const s = window.sdpUnified.modes.shooter!; s.input.pitch = -1;
       const w = s.weapon;
@@ -976,7 +960,7 @@ test('night flashlights, 30-round automatic clips, POV flash, traces and clean r
     });
     expect(effects.flash).toBe(true); expect(effects.traces).toBeGreaterThan(0);
     expect(effects.flashPixels).toBeGreaterThan(2); expect(effects.tracePixels).toBeGreaterThan(2);
-    await first.screenshot({ path: info.outputPath('night-firing.png') });
+    await first.screenshot({ path: info.outputPath('day-firing.png') });
     await expect(first.locator('.shooter-magazine')).toHaveText('00');
     const fired = await first.evaluate(() => window.sdpUnified.modes.shooter!.shooting!.shotsFired);
     await first.waitForTimeout(700); expect(await first.evaluate(() => window.sdpUnified.modes.shooter!.shooting!.shotsFired)).toBe(fired);
@@ -1002,7 +986,7 @@ test('night flashlights, 30-round automatic clips, POV flash, traces and clean r
 test('actual requests stay lazy; both scenes render; controls and repeated return work', async ({ page }, info) => {
   const requests: string[] = [], errors: string[] = [];
   page.on('request', request => requests.push(request.url())); page.on('pageerror', error => errors.push(error.message));
-  await enterLimbo(page); await page.screenshot({ path: info.outputPath('limbo-desktop.png') });
+  await enterLimbo(page, `Lazy ${String(Date.now()).slice(-7)}`); await page.screenshot({ path: info.outputPath('limbo-desktop.png') });
   const baselineMemory = await page.evaluate(() => ({ ...window.sdpUnified.scene.renderer.info.memory }));
   expect(await visiblePixels(page)).toBeGreaterThan(300);
   expect(requests.filter(shooterRequest)).toEqual([]);

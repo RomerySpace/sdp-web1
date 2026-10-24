@@ -24,8 +24,8 @@ test('liminal update: lobby, jump, chat, inspection, shader compilation, media w
  await page.keyboard.up('KeyQ');await page.waitForTimeout(400);
  expect(Math.abs(await page.evaluate(()=>window.sdpUnified.modes.shooter!.camera.motion.rotation.z))).toBeLessThan(.03);
  const placements=await page.evaluate(()=>window.sdpUnified.modes.shooter!.media.placements);console.log('MEDIA PLACEMENTS',JSON.stringify(placements));expect(placements.length).toBeGreaterThan(0);
- await page.evaluate(()=>{const environment=window.sdpUnified.modes.shooter!.environment;Object.assign(window,{testLighting:environment.setLighting.bind(environment)});environment.setLighting('day');environment.setLighting=()=>{};});await page.screenshot({path:'test-results/liminal-day.png'});
- await page.evaluate(()=>{(window as unknown as {testLighting:(lighting:'day'|'night')=>void}).testLighting('night');});await page.screenshot({path:'test-results/liminal-night.png'});
+ expect(await page.evaluate(()=>window.sdpUnified.modes.shooter!.scene.userData.lighting)).toBe('day');
+ await page.screenshot({path:'test-results/liminal-day.png'});
  const timer=await page.locator('.shooter-round').boundingBox();expect(Math.abs(timer!.x+timer!.width/2-720)).toBeLessThan(2);
  expect(errors).toEqual([]);
 });

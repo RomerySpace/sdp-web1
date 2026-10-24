@@ -6,7 +6,7 @@ import type { LobbySnapshot } from '../shared/MultiplayerProtocol';
 
 declare global { interface Window { mobileLayout: { controls: TouchControls; hud: ShooterHUD; snapshot: LobbySnapshot; moves: number[][]; activeAtDown: boolean[]; events: string[] } } }
 async function fixture(page: Page): Promise<void> {
-  await page.route('**/__touch-layout', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>body { background: #46535e; }</style><div id="app" data-input="touch" data-mode="SHOOTER" data-lighting="night"><div class="ui" data-state="EXPLORING"><div class="top-controls"></div></div></div>' }));
+  await page.route('**/__touch-layout', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>body { background: #46535e; }</style><div id="app" data-input="touch" data-mode="SHOOTER"><div class="ui" data-state="EXPLORING"><div class="top-controls"></div></div></div>' }));
   await page.goto('/__touch-layout');
   await page.evaluate(async () => {
     for (const file of ['/src/styles/main.css', '/src/styles/modes.css', '/src/modes/shooter/styles/shooter.css']) await import(/* @vite-ignore */ file);

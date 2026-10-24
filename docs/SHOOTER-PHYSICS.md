@@ -1,5 +1,8 @@
 # Shooter rooms and collision optimization
 
+For the later movement-query optimization, day-only Shooter and the mixed-load
+comparison, see [SHOOTER-OPTIMIZATION-2026-10-24.md](SHOOTER-OPTIMIZATION-2026-10-24.md).
+
 ## Room limits
 
 `SHOOTER_MAX_PLAYERS` in `shared/ShooterProtocol.ts` is 15. Both the authoritative

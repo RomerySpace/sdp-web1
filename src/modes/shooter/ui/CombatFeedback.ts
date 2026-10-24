@@ -3,6 +3,9 @@ export class CombatFeedback {
   readonly element = document.createElement('div');
   private readonly vignette = document.createElement('img');
   private readonly death = document.createElement('div');
+  private readonly confirmation = document.createElement('div');
+  private readonly targetName = document.createElement('span');
+  private confirmedFor = 0;
   private impact = 0; private haze = 0;
   constructor(container: HTMLElement) {
     this.element.className = 'combat-feedback'; this.vignette.className = 'damage-vignette';
@@ -10,7 +13,11 @@ export class CombatFeedback {
     this.vignette.alt = ''; this.vignette.setAttribute('aria-hidden', 'true');
     this.death.className = 'desynchronization-state'; this.death.textContent = 'DESYNCHRONIZED'; this.death.hidden = true;
     this.death.setAttribute('role', 'status');
-    this.element.append(this.vignette, this.death); container.append(this.element);
+    this.confirmation.className = 'combat-confirmation'; this.confirmation.hidden = true;
+    this.confirmation.setAttribute('role', 'status'); this.confirmation.setAttribute('aria-live', 'polite');
+    const label = document.createElement('span'); label.textContent = 'TARGET DESYNCHRONIZED';
+    this.targetName.className = 'combat-target-name'; this.confirmation.append(label, this.targetName);
+    this.element.append(this.vignette, this.death, this.confirmation); container.append(this.element);
     const ctx = bitmap.getContext('2d')!;
     // One cached bitmap of broken edge facets; the aiming area stays completely clear.
     let seed = 73; const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
@@ -28,8 +35,23 @@ export class CombatFeedback {
     this.vignette.src = bitmap.toDataURL();
   }
   hit(): void { this.impact = gameplayConfig.damage.vignetteDuration; }
-  reset(): void { this.impact = this.haze = 0; this.vignette.style.opacity = '0'; this.death.hidden = true; }
+  confirmElimination(name: string): void {
+    this.targetName.textContent = name;
+    this.confirmedFor = gameplayConfig.combat.eliminationNoticeDuration;
+    this.confirmation.hidden = false;
+  }
+  reset(): void {
+    this.impact = this.haze = this.confirmedFor = 0;
+    this.vignette.style.opacity = '0'; this.death.hidden = this.confirmation.hidden = true;
+    this.targetName.textContent = '';
+  }
   update(dt: number, health: number, dead: boolean): void {
+    this.confirmedFor = Math.max(0, this.confirmedFor - dt);
+    const age = gameplayConfig.combat.eliminationNoticeDuration - this.confirmedFor;
+    const visibility = Math.max(0, Math.min(1, age / .1, this.confirmedFor / .35));
+    this.confirmation.hidden = dead || this.confirmedFor <= 0;
+    this.confirmation.style.opacity = String(visibility);
+    this.confirmation.style.marginTop = `${(1 - visibility) * 5}px`;
     this.impact = Math.max(0, this.impact - dt);
     const pulse = Math.pow(this.impact / gameplayConfig.damage.vignetteDuration, .7);
     const persistent = !dead && health < gameplayConfig.combat.maxHealth ? .08 * (1 - health / gameplayConfig.combat.maxHealth) : 0;

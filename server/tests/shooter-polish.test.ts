@@ -32,11 +32,11 @@ test('shooter jump has a short grounded flight and preserves the configured clea
     assert.equal(player.grounded, true);
   } finally { player.dispose(); physics.dispose(); }
 });
-test('real server caps an automatic magazine, preserves infinite reserve, traces walls and isolates flashlight state', { timeout: 20000 }, async () => {
+test('real server caps an automatic magazine, preserves infinite reserve, traces walls and ignores retired flashlight inputs', { timeout: 20000 }, async () => {
   const fixture = await shooterFixture(), client = new Client(`http://127.0.0.1:${fixture.port}`);
   const a = await client.joinOrCreate<ShooterState>('SDPShooterRoom'), b = await client.joinById<ShooterState>(a.roomId);
   const shots: WeaponEvent[] = [];
-  let timer: ReturnType<typeof setInterval> | undefined, seq = 0, action = 0, light = true;
+  let timer: ReturnType<typeof setInterval> | undefined, seq = 0, action = 0;
   for (const room of [a, b]) {
     room.onMessage('combat:ping', nonce => room.send('combat:pong', nonce)); room.onMessage('combat:event', () => {});
     room.onMessage('weapon:event', (event: WeaponEvent) => { if (room === b && event.action === 'fire') shots.push(event); });
@@ -44,12 +44,13 @@ test('real server caps an automatic magazine, preserves infinite reserve, traces
   try {
     await waitFor(() => !!a.state.players?.get(a.sessionId));
     const own = () => a.state.players.get(a.sessionId)!;
-    const input = () => ({ seq: ++seq, life: own().life, f: 0, r: 0, y: 0, p: -1, s: false, c: false, j: false, a: false, t: light, active: true });
+    const input = () => ({ seq: ++seq, life: own().life, f: 0, r: 0, y: 0, p: -1, s: false, c: false, j: false, a: false, t: true, active: true });
     assert.ok(validateShooterInput(input())); assert.equal(validateShooterInput({ ...input(), t: 123 }), null);
     timer = setInterval(() => a.send('shooter:input', input()), 33);
-    await waitFor(() => !!b.state.players?.get(a.sessionId)?.flashlight);
+    await waitFor(() => own().lastProcessedInput > 0);
+    assert.equal('t' in validateShooterInput(input())!, false);
+    assert.equal(b.state.players.get(a.sessionId)!.flashlight, false);
     assert.equal(b.state.players.get(b.sessionId)!.flashlight, false);
-    light = false; await waitFor(() => !b.state.players.get(a.sessionId)!.flashlight);
     a.send('weapon:action', { seq: ++action, life: own().life, action: 'mode' });
     await waitFor(() => own().automatic);
     for (let i = 0; i < 34; i++) { a.send('weapon:action', { seq: ++action, life: own().life, action: 'fire' }); await sleep(120); }
@@ -65,8 +66,8 @@ test('real server caps an automatic magazine, preserves infinite reserve, traces
     await waitFor(() => own().reloading); assert.equal(own().ammo, 0);
     await waitFor(() => !own().reloading); assert.equal(own().ammo, 30); assert.equal(own().reserve, reserve);
     assert.ok(a.state.matchEndsAt - a.state.serverTime > 400000);
-    light = true; await waitFor(() => !!b.state.players.get(a.sessionId)!.flashlight);
+    assert.equal(a.state.lighting, 'day'); assert.equal(b.state.lighting, 'day');
     clearInterval(timer); timer = undefined;
-    await waitFor(() => !b.state.players.get(a.sessionId)!.flashlight);
+    assert.equal(b.state.players.get(a.sessionId)!.flashlight, false);
   } finally { if (timer) clearInterval(timer); await a.leave(); await b.leave(); await fixture.server.gracefullyShutdown(false); }
 });

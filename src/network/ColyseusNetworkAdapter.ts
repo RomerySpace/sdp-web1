@@ -37,7 +37,7 @@ interface DecodedLobby {
   wallTime?: number;
   serverTime?: number;
   shooterEnabled?: boolean;
-  lighting?: 'day' | 'night';
+  lighting?: string;
   match?: ShooterMatchSnapshot['phase']; round?: number; matchEndsAt?: number; nextRoundAt?: number; results?: Iterable<RoundScore>;
 }
 interface LobbyRoomType { state: DecodedLobby; onJoin(client: unknown, options?: { displayName?: string }): void }
@@ -263,7 +263,6 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
       lastProcessedInput: player.lastProcessedInput,
       seatIndex: player.seatIndex, crouching: player.crouching, sprinting: player.sprinting, grounded: player.grounded, height: player.height, lean: player.lean,
       gaitPhase: player.gaitPhase, gaitX: player.gaitX, gaitZ: player.gaitZ,
-      flashlight: player.flashlight,
       ammo: player.ammo, reserve: player.reserve, reloading: player.reloading, weaponSeq: player.weaponSeq, health: player.health,
       dead: player.dead, life: player.life, diedAt: player.diedAt, respawnAt: player.respawnAt, bornAt: player.bornAt, protectedUntil: player.protectedUntil,
       spawnX: player.spawnX, spawnY: player.spawnY, spawnZ: player.spawnZ,
@@ -279,7 +278,7 @@ export class ColyseusNetworkAdapter implements MultiplayerConnection {
       roomId: room.roomId, localPlayerId: room.sessionId,
       tick: state.tick, receivedAt: performance.now(), players,
       wallTime: state.wallTime, serverTime: state.serverTime, shooterEnabled: state.shooterEnabled,
-      match: state.match ? { lighting: state.lighting, phase: state.match, round: state.round ?? 0, endsAt: state.matchEndsAt ?? 0, nextRoundAt: state.nextRoundAt ?? 0,
+      match: state.match ? { lighting: 'day', phase: state.match, round: state.round ?? 0, endsAt: state.matchEndsAt ?? 0, nextRoundAt: state.nextRoundAt ?? 0,
         results: Array.from(state.results ?? [], score => ({ playerId: score.playerId, displayName: score.displayName, kills: score.kills, deaths: score.deaths })) } : undefined,
       killFeed: Array.from(state.killFeed ?? [], entry => ({ id: entry.id, attackerId: entry.attackerId, victimId: entry.victimId,
         attackerName: entry.attackerName, victimName: entry.victimName, region: entry.region, timestamp: entry.timestamp })),

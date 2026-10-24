@@ -45,7 +45,7 @@ test('two real WebSocket clients receive authoritative results, blocked inputs a
     const endsAt = a.state.matchEndsAt;
     assert.equal(a.state.match, 'playing'); assert.equal(a.state.round, 1);
     await waitFor(() => Boolean(b.state.lighting));
-    assert.ok(['day', 'night'].includes(a.state.lighting));
+    assert.equal(a.state.lighting, 'day');
     assert.equal(a.state.lighting, b.state.lighting);
     const firstLighting = a.state.lighting;
     assert.ok(Math.abs(a.state.wallTime - Date.now()) < 1000);
@@ -80,6 +80,7 @@ test('two real WebSocket clients receive authoritative results, blocked inputs a
     local.clock.elapsedTime = a.state.nextRoundAt;
     await waitFor(() => a.state.round === 2 && b.state.round === 2 && c.state.round === 2);
     assert.equal(a.state.lighting, b.state.lighting); assert.equal(a.state.lighting, c.state.lighting);
+    assert.equal(a.state.lighting, 'day');
     assert.equal(a.state.match, 'playing'); assert.equal(a.state.results.length, 0); assert.equal(a.state.killFeed.length, 0);
     for (const p of a.state.players.values()) {
       assert.equal(p.kills, 0); assert.equal(p.deaths, 0); assert.equal(p.health, 100);

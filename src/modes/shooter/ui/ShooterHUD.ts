@@ -20,7 +20,6 @@ export class ShooterHUD {
       <div class="shooter-crosshair" aria-hidden="true"></div>
       <button class="shooter-menu-button" type="button" aria-label="Open session menu" title="P: session menu"><kbd>P</kbd><span>MENU</span></button>
       <div class="shooter-movement"></div><div class="shooter-health" aria-label="Health"></div><div class="shooter-ammo" aria-label="Ammunition"><div class="shooter-fire-control"><span class="shooter-fire-mode">SDP / SEMI-AUTO</span><span class="shooter-fire-hint" title="B: switch fire mode"><kbd>B</kbd> CHANGE</span></div>
-      <span class="shooter-flashlight-hint"><kbd>Z</kbd> LIGHT</span>
       <strong class="shooter-magazine">30</strong><span class="shooter-reserve">/ 120</span><span class="shooter-action"></span></div>`;
     container.append(this.element);
     this.score = this.element.querySelector('.shooter-record')!;

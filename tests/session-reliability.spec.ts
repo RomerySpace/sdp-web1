@@ -23,6 +23,54 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => { await vite?.close(); await fixture?.server.gracefullyShutdown(false); });
 
+test('server-confirmed elimination shows target name only to the attacker and fades without duplicate notices', async ({ browser }) => {
+  test.setTimeout(180000);
+  const contexts = [await browser.newContext(), await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })];
+  const first = await contexts[0].newPage(), second = await contexts[1].newPage(), errors: string[] = [];
+  try {
+    for (const [index, page] of [first, second].entries()) {
+      page.on('pageerror', error => errors.push(error.message));
+      await page.goto(`${url}/?debugMode=limbo`); await enterExhibition(page, index ? 'Feedback Target' : 'Feedback Artist');
+      await page.evaluate(() => window.sdpUnified.modes.joinShooter());
+      await expect(page.locator('#app')).toHaveAttribute('data-mode', 'SHOOTER', { timeout: 90000 });
+    }
+    await first.bringToFront();
+    await first.getByRole('button', { name: /^(RESUME|ENTER SIMULATION)$/ }).click();
+    await expect(first.locator('.mode-overlay')).toBeHidden();
+    const own = await first.evaluate(() => ({ room: window.sdpUnified.network.snapshot!.roomId, id: window.sdpUnified.network.snapshot!.localPlayerId! }));
+    const targetId = await second.evaluate(() => window.sdpUnified.network.snapshot!.localPlayerId!);
+    expect(await second.evaluate(() => window.sdpUnified.network.snapshot!.roomId)).toBe(own.room);
+    const room = fixture.room(own.room), damage = room as unknown as { applyDamage(id: string, attacker: string, damage: number, region: 'torso', now: number): void };
+    await expect.poll(() => room.clock.elapsedTime >= room.state.players.get(targetId)!.protectedUntil).toBe(true);
+    damage.applyDamage(targetId, own.id, 50, 'torso', room.clock.elapsedTime);
+    await expect.poll(() => first.evaluate(id => window.sdpUnified.network.snapshot!.players.find(p => p.playerId === id)?.health, targetId)).toBe(50);
+    await expect(first.locator('.combat-confirmation')).toBeHidden();
+    const life = room.state.players.get(targetId)!.life, timestamp = room.clock.elapsedTime;
+    damage.applyDamage(targetId, own.id, 50, 'torso', timestamp);
+    await expect(first.locator('.combat-confirmation')).toBeVisible();
+    await expect(first.locator('.combat-confirmation')).toContainText('TARGET DESYNCHRONIZED');
+    await expect(first.locator('.combat-target-name')).toHaveText('Feedback Target');
+    await expect(second.locator('.combat-confirmation')).toBeHidden();
+    await expect.poll(() => first.locator('.combat-confirmation').evaluate(node => Number(getComputedStyle(node).opacity))).toBeGreaterThan(.4);
+    await first.screenshot({ path: '/private/tmp/sdp-confirmed-elimination.png' });
+    await expect(first.locator('.combat-confirmation')).toBeHidden({ timeout: 5000 });
+    room.broadcast('combat:event', { type: 'death', playerId: targetId, attackerId: own.id, health: 0, life, roomId: own.room, timestamp });
+    await first.waitForTimeout(150); await expect(first.locator('.combat-confirmation')).toBeHidden();
+    for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
+      await first.setViewportSize(viewport);
+      await first.evaluate(() => window.sdpUnified.modes.shooter!.feedback.confirmElimination('<A LONG VISITOR NAME>'));
+      const notice = first.locator('.combat-confirmation'), box = await notice.boundingBox();
+      expect(box!.x).toBeGreaterThanOrEqual(0); expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
+      expect(await notice.locator('img,script').count()).toBe(0);
+      await first.evaluate(() => window.sdpUnified.modes.shooter!.feedback.reset()); await expect(notice).toBeHidden();
+    }
+    expect(errors).toEqual([]);
+  } finally {
+    for (const page of [first, second]) await page.evaluate(() => window.sdpUnified?.network.disconnect()).catch(() => {});
+    for (const context of contexts) await context.close();
+  }
+});
+
 test('invitation controls and slash completion fit desktop and mobile without loading Shooter', async ({ browser }) => {
   for (const viewport of [{ width: 1200, height: 800 }, { width: 390, height: 844 }, { width: 844, height: 390 }]) {
     const mobile = viewport.width < 900, context = await browser.newContext({ viewport, isMobile: mobile, hasTouch: mobile }), page = await context.newPage();

@@ -23,6 +23,7 @@
     "typecheck:all": "npm run typecheck && npm --prefix server run typecheck",
     "test:server": "npm --prefix server test",
     "test:load": "npm --prefix server run test:load --",
+    "test:stability": "node scripts/stability-multiplayer.mjs",
     "test": "npm run test:regression && npm run test:unified && npm run test:session",
     "process:graphics": "node scripts/process-graphics.mjs",
     "test:graphics": "node --test scripts/process-graphics.test.mjs"

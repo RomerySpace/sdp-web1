@@ -181,12 +181,10 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     for (const [id, entry] of this.entries) {
       const player = this.state.players.get(id)!;
       if (player.dead) {
-        player.flashlight = false;
         if (now >= player.respawnAt) this.respawn(id, now);
         continue;
       }
       if (!player.connected || now - entry.received > shooterNetworkConfig.inputTimeoutMs) { entry.input.active = false; this.world.input(id, entry.input); }
-      player.flashlight = player.connected && entry.input.active && !!entry.input.t;
       if (player.reloading && now >= entry.reloadUntil) {
         const transfer = Math.min(gameConfig.weapon.magazineSize - player.ammo, gameplayConfig.combat.infiniteReserve ? gameConfig.weapon.magazineSize : player.reserve);
         player.ammo += transfer;
@@ -227,7 +225,7 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
     this.state.results.clear(); for (const score of scores) this.state.results.push(Object.assign(new RoundScoreState(), score));
     for (const [id, entry] of this.entries) {
       entry.input.active = false; entry.reloadUntil = 0; entry.recovery.interrupt();
-      const player = this.state.players.get(id)!; player.reloading = false; player.sprinting = false; player.flashlight = false;
+      const player = this.state.players.get(id)!; player.reloading = false; player.sprinting = false;
       this.world.freeze(id);
     }
     this.syncMatch();
@@ -277,9 +275,9 @@ export class SDPShooterRoom extends Room<{ state: ShooterState }> {
       dead: false, life: p.life + 1, diedAt: 0, respawnAt: 0, bornAt: now,
       protectedUntil: now + gameplayConfig.combat.spawnProtection * 1000,
       health: gameplayConfig.combat.maxHealth, lastDamageAt: now, ammo: gameConfig.weapon.magazineSize, reserve: gameConfig.weapon.reserveAmmo,
-      reloading: false, crouching: false, sprinting: false, grounded: false, flashlight: false, height: gameConfig.player.height, lean: 0,
+      reloading: false, crouching: false, sprinting: false, grounded: false, height: gameConfig.player.height, lean: 0,
       gaitPhase: 0, gaitX: 0, gaitZ: 0 });
-    entry.input = { ...entry.input, life: p.life, f: 0, r: 0, s: false, c: false, j: false, a: false, t: false, active: false, y: p.yaw, p: 0 };
+    entry.input = { ...entry.input, life: p.life, f: 0, r: 0, s: false, c: false, j: false, a: false, active: false, y: p.yaw, p: 0 };
     entry.received = now; entry.lastShot = entry.nextShotAt = -1000; entry.reloadUntil = 0; entry.burstShots = 0; entry.recovery.interrupt();
     this.broadcast('combat:event', { type: 'respawn', playerId: id, health: p.health, life: p.life, roomId: this.roomId, timestamp: now });
   }

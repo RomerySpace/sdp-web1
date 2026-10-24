@@ -23,7 +23,6 @@ import { CombatFeedback } from './ui/CombatFeedback';
 import { gameplayConfig } from '../../../shared/GameplayConfig';
 import { PredictionHistory } from './network/PredictionHistory';
 import './styles/shooter.css';
-import { Flashlights } from './effects/Flashlights';
 
 export class ShooterMode {
   readonly scene = new Scene(); readonly input: InputManager; readonly camera: FirstPersonCamera;
@@ -33,8 +32,6 @@ export class ShooterMode {
   readonly remotes: RemoteShooterPlayers;
   readonly feedback: CombatFeedback;
   readonly menu: ShooterMenu;
-  readonly flashlights: Flashlights;
-  flashlightEnabled = false;
   health = gameplayConfig.combat.maxHealth; dead = false; life = 0;
   physics?: PhysicsWorld; player?: CharacterController; shooting?: ShootingSystem;
   paused = true; active = false; colliderCount = 0; fixedSteps = 0;
@@ -49,6 +46,7 @@ export class ShooterMode {
   private lastInput?: ShooterInput;
   private lastInputSent = 0;
   private viewFrozen = false;
+  private readonly confirmedEliminations = new Set<string>();
   constructor(container: HTMLElement, private readonly renderer: WebGLRenderer, private readonly network: ColyseusNetworkAdapter,
     private readonly onPaused: () => void, private readonly onResumed: () => void, settings = new PlayerSettings(), readonly touch = false) {
     this.previousRenderer = { toneMapping: renderer.toneMapping, exposure: renderer.toneMappingExposure,
@@ -57,7 +55,6 @@ export class ShooterMode {
     this.input = new InputManager(renderer.domElement, touch); this.camera = new FirstPersonCamera(this.input);
     this.scene.add(this.camera.root); this.camera.camera.add(this.weapon.root);
     this.environment = new Environment(this.scene, renderer); this.contactShading = new ContactShading(this.scene, this.camera.camera);
-    this.flashlights = new Flashlights(this.scene, renderer);
     this.scene.traverse(object => { if ('isLight' in object) object.layers.enable(1); });
     this.remotes = new RemoteShooterPlayers(this.scene, this.weapon.modelRoot); this.hud = new ShooterHUD(container, () => this.pause());
     this.menu = new ShooterMenu(settings);
@@ -77,7 +74,6 @@ export class ShooterMode {
         if (network.roomType !== SHOOTER_ROOM) return;
         this.remotes.receive(snapshot);
         this.hud.receive(snapshot);
-        this.environment.setLighting(snapshot.match?.lighting ?? 'day');
         const finished = snapshot.match?.phase === 'results';
         const nextRound = this.roundComplete && snapshot.match?.phase === 'playing';
         if (finished !== this.roundComplete) { this.roundComplete = finished; if (this.active) this.pause(); }
@@ -106,7 +102,16 @@ export class ShooterMode {
         }
       }),
       network.subscribeToCombat(event => {
-
+        const localId = network.snapshot?.localPlayerId;
+        if (this.active && event.type === 'death' && event.attackerId === localId && event.playerId !== localId) {
+          const key = `${event.playerId}:${event.life}:${event.timestamp}`;
+          if (!this.confirmedEliminations.has(key)) {
+            this.confirmedEliminations.add(key);
+            if (this.confirmedEliminations.size > 8) this.confirmedEliminations.delete(this.confirmedEliminations.values().next().value!);
+            const target = network.snapshot?.players.find(player => player.playerId === event.playerId);
+            this.feedback.confirmElimination(target?.displayName || 'PLAYER');
+          }
+        }
         if (event.playerId !== network.snapshot?.localPlayerId || event.life !== this.life) return;
         if (event.type === 'damage') this.applyHealth(event.health);
         if (event.type === 'death') this.die();
@@ -134,8 +139,8 @@ export class ShooterMode {
     this.player?.respawn(); this.camera.reset(); this.weapon.reset(player.ammo, player.reserve, player.automatic); this.feedback.reset();
     this.shooting?.recoilRecovery.reset(); this.viewFrozen = false;
     this.health = player.health ?? gameplayConfig.combat.maxHealth; this.life = player.life ?? 1; this.dead = false;
-    this.flashlightEnabled = false;
     this.prediction.reset(this.life); this.viewCorrection.set(0, 0, 0); this.lastInput = undefined; this.lastInputSent = 0;
+    this.confirmedEliminations.clear();
     this.accumulator = this.stepDistance = 0;
     this.player?.correct(player); this.input.yaw = player.yaw; this.input.pitch = player.pitch; this.input.clear();
     if (this.player) { this.camera.update(0, this.player, 1, 0); this.weapon.update(0, this.player, this.input); }
@@ -163,7 +168,6 @@ export class ShooterMode {
     this.resize(); this.hud.element.hidden = false;
     const local = this.network.snapshot?.players.find(p => p.playerId === this.network.snapshot?.localPlayerId);
     this.environment.update();
-    this.environment.setLighting(this.network.snapshot?.match?.lighting ?? 'day');
     this.roundComplete = this.network.snapshot?.match?.phase === 'results';
     if (local) this.spawn(local);
   }
@@ -187,10 +191,10 @@ export class ShooterMode {
     const now = performance.now(), input: ShooterInput = { seq: this.sequence + 1, life: this.life, f: active ? this.input.forward : 0, r: active ? this.input.sideways : 0,
       y: Math.atan2(Math.sin(this.input.yaw), Math.cos(this.input.yaw)), p: this.input.pitch,
       s: active && this.input.keys.has('ShiftLeft'), c: active && (this.input.keys.has('ControlLeft') || this.input.keys.has('ControlRight')),
-      l: active ? Number(this.input.keys.has('KeyE')) - Number(this.input.keys.has('KeyQ')) : 0, t: active && this.flashlightEnabled,
+      l: active ? Number(this.input.keys.has('KeyE')) - Number(this.input.keys.has('KeyQ')) : 0,
       j: active && this.input.pending('Space'), a: active && this.input.aiming, active };
     const previous = this.lastInput;
-    const changed = !previous || ['f', 'r', 's', 'c', 'j', 'a', 'l', 't', 'active'].some(key => input[key as keyof ShooterInput] !== previous[key as keyof ShooterInput]);
+    const changed = !previous || ['f', 'r', 's', 'c', 'j', 'a', 'l', 'active'].some(key => input[key as keyof ShooterInput] !== previous[key as keyof ShooterInput]);
     if (!force && !changed && now - this.lastInputSent < 1000 / shooterNetworkConfig.inputHz) return;
     this.sequence = input.seq; this.lastInput = input; this.lastInputSent = now;
     this.network.sendShooterInput(input);
@@ -206,9 +210,6 @@ export class ShooterMode {
     if (!this.active || this.disposed || !this.player || !this.physics) return;
     const p = this.player;
     this.input.enabled=!this.paused&&!this.dead&&this.input.controlling;
-    if (this.input.enabled && this.input.consume('KeyZ')) this.flashlightEnabled = !this.flashlightEnabled;
-    this.hud.element.dataset.flashlight = String(this.flashlightEnabled);
-    this.hud.element.parentElement!.dataset.lighting = this.scene.userData.lighting;
     if (!this.paused && !this.dead) {
       this.accumulator = Math.min(this.accumulator + dt, gameConfig.physics.timestep * gameConfig.physics.maxSubsteps);
       while (this.accumulator >= gameConfig.physics.timestep) {
@@ -251,7 +252,6 @@ export class ShooterMode {
     this.shooting?.update(activeDt); this.input.lookX = this.input.lookY = 0;
     this.remotes.update(performance.now()); this.hud.update(p, this.weapon, this.health, this.dead); this.menu.update(this.network.snapshot);
     this.feedback.update(dt, this.health, this.dead); this.environment.follow(this.camera.root.position);
-    this.flashlights.update(this.camera.camera, this.flashlightEnabled && !this.dead && !this.paused, this.network.snapshot);
     const camera = this.camera.camera, renderer = this.renderer;
     renderer.info.reset(); renderer.clear(); camera.layers.set(0); renderer.render(this.scene, camera); this.contactShading.render(renderer);
     const background = this.scene.background; this.scene.background = null; renderer.clearDepth(); camera.layers.set(1);
@@ -273,7 +273,7 @@ export class ShooterMode {
     if (this.disposed) return;
     this.active = false; this.disposed = true; this.events.abort(); this.unsubscribers.forEach(fn => fn());
     this.media.dispose(); this.input.dispose(); this.audio.dispose(); this.hud.dispose(); this.menu.dispose(); this.feedback.dispose(); this.shooting?.dispose(); this.remotes.dispose();
-    this.contactShading.dispose(); this.flashlights.dispose(); this.weapon.dispose(); this.map.dispose(); this.environment.dispose(); this.physics?.dispose(); this.scene.clear();
+    this.contactShading.dispose(); this.weapon.dispose(); this.map.dispose(); this.environment.dispose(); this.physics?.dispose(); this.scene.clear();
     const r = this.renderer, previous = this.previousRenderer;
     r.toneMapping = previous.toneMapping; r.toneMappingExposure = previous.exposure; r.autoClear = previous.autoClear;
     r.info.autoReset = previous.autoReset; r.shadowMap.type = previous.shadowType; r.shadowMap.autoUpdate = previous.shadowAutoUpdate;

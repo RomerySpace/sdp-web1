@@ -6,7 +6,8 @@ export class ShooterPlayer extends Schema {
   displayName = ''; automatic = false; kills = 0; deaths = 0; lastDamageAt = 0;
   x = 0; y = 0; z = 0; yaw = 0; pitch = 0; connected = true;
   gaitPhase = 0; gaitX = 0; gaitZ = 0;
-  flashlight = false;
+  // Retired wire field: permanently false for compatibility with cached clients.
+  readonly flashlight = false;
   lastProcessedInput = 0; crouching = false; sprinting = false; grounded = false; height = 1.8; lean = 0;
   ammo = gameplayConfig.combat.magazineSize; reserve = gameplayConfig.combat.reserveAmmo;
   reloading = false; weaponSeq = 0; health = gameplayConfig.combat.maxHealth;
@@ -28,7 +29,7 @@ export class ShooterState extends Schema {
   wallTime = Date.now();
   killFeed = new ArraySchema<KillState>();
   players = new MapSchema<ShooterPlayer>(); online = 0; capacity = SHOOTER_MAX_PLAYERS; tick = 0;
-  lighting = 'day';
+  lighting: 'day' = 'day';
   match = 'waiting'; round = 0; matchEndsAt = 0; nextRoundAt = 0; results = new ArraySchema<RoundScoreState>();
   serverTime = 0; shooterEnabled = shooterEnabled;
 }

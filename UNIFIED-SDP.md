@@ -72,6 +72,9 @@ Cerrar una ventana elimina su avatar. Volver a Limbo reconecta su voz correspond
 
 ## Nombres e invitaciones entre salas
 
+Diagnostico local del bloque 2 y limites observados:
+[STABILITY-2026-10-24.md](docs/STABILITY-2026-10-24.md).
+
 El nombre se valida en el servidor y es unico entre las salas de Limbo y Shooter
 del mismo proceso, sin distinguir mayusculas y normalizando espacios. Si ya existe,
 el formulario permite corregirlo sin recargar. La identidad se conserva al cambiar

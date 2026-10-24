@@ -14,9 +14,6 @@
 .shooter-ammo { position: absolute; bottom: 30px; right: 30px; display: grid; grid-template-columns: auto auto; align-items: baseline; gap: 8px; text-align: right; }
 .shooter-fire-control, .shooter-action { grid-column: 1 / -1; font-size: 9px; min-height: 16px; }
 .shooter-fire-control { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
-.shooter-flashlight-hint { grid-column: 1 / -1; font-size: 9px; min-height: 12px; opacity: .7; }
-.shooter-hud[data-flashlight="true"] .shooter-flashlight-hint { opacity: 1; }
-#app[data-input="touch"] .shooter-flashlight-hint { display: none; }
 .shooter-fire-hint { color: #637986; font-size: 9px; white-space: nowrap; }
 .shooter-fire-hint kbd, .shooter-menu-button kbd { font: inherit; color: #354b58; }
 .shooter-menu-button { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); min-height: 44px; padding: 10px 12px; display: flex; align-items: center; gap: 8px; color: #506674; font: inherit; font-size: 9px; background: transparent; cursor: pointer; pointer-events: auto; }
@@ -51,7 +48,9 @@
 .combat-feedback { position: fixed; inset: 0; z-index: 45; pointer-events: none; }
 .damage-vignette { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; pointer-events: none; }
 .desynchronization-state { position: absolute; top: 46%; left: 50%; transform: translate(-50%, -50%); max-width: calc(100% - 40px); font-size: 12px; letter-spacing: 0; color: #687b86; text-align: center; }
-.combat-confirmation { position: absolute; top: 55%; left: 50%; transform: translateX(-50%); max-width: calc(100% - 40px); font-size: 9px; letter-spacing: 0; color: #596f7e; text-align: center; }
+.combat-confirmation { position: absolute; top: 60%; left: 50%; transform: translateX(-50%); width: min(300px, calc(100% - 40px)); display: grid; gap: 6px; font-size: 11px; line-height: 16px; color: #edf4f8; text-shadow: 0 1px 5px rgba(18,30,39,.8); text-align: center; pointer-events: none; }
+.combat-target-name { font-size: 10px; line-height: 14px; overflow-wrap: anywhere; color: #d0dce4; }
+@media (max-width: 600px) { .combat-confirmation { top: 48%; font-size: 10px; width: min(240px, calc(100% - 48px)); } }
 .desynchronization-state[hidden], .combat-confirmation[hidden] { display: none; }
 .shooter-health { position: absolute; bottom: 50px; left: 30px; font-size: 9px; color: #627783; }
 .shooter-hud[data-dead="true"] .shooter-crosshair { display: none; }
@@ -60,9 +59,6 @@
 @media (max-width: 600px) {
   .shooter-round { top: 52px; left: 18px; transform: none; font-size: 11px; letter-spacing: 0; }
 }
-#app[data-mode="SHOOTER"][data-lighting="night"] .touch-button { color: #dae5ec; background: rgba(15,22,28,.6); border-color: rgba(206,225,237,.4); }
-#app[data-mode="SHOOTER"][data-lighting="night"] .touch-stick { border-color: rgba(206,225,237,.4); background: rgba(15,22,28,.3); }
-#app[data-mode="SHOOTER"][data-lighting="night"] .touch-stick-thumb { background: rgba(210,225,234,.4); }
 .shooter-hud { color: #d4dfe6; text-shadow: 0 1px 6px #17222c99; }
 .shooter-score, .shooter-record, .shooter-health, .shooter-movement, .shooter-fire-mode, .shooter-reserve, .shooter-menu-button { color: #c5d3dd; }
 .shooter-crosshair { background: #e9f4fa; box-shadow: 0 0 3px #101c25; }

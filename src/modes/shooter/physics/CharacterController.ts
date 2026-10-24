@@ -43,7 +43,8 @@ export class CharacterController {
       .setSensor(true).setDensity(0), this.body);
     this.motor = physics.world.createCharacterController(0.015);
     this.motor.setSlideEnabled(true);
-    this.motor.enableAutostep(p.stepHeight, 0.08, false);
+    // Only enable recursive autostep when a nearby tread needs it.
+    this.motor.disableAutostep();
     this.motor.setMaxSlopeClimbAngle(MathUtils.degToRad(p.maxSlope));
     this.motor.setMinSlopeSlideAngle(MathUtils.degToRad(p.maxSlope + 3));
     this.current.copy(this.body.translation()); this.previous.copy(this.current);
@@ -95,13 +96,34 @@ export class CharacterController {
       const factor = Math.min(1, amount / Math.max(0.0001, Math.hypot(dx, dz)));
       this.drive.x += dx * factor; this.drive.z += dz * factor;
     }
-    this.motor.enableAutostep(p.stepHeight, 0.08, false);
     const canStep = (this.grounded || this.time - this.lastGrounded < .14) && live.y <= 2 && this.time - this.lastJump > .18;
-    if (!canStep) this.motor.disableAutostep();
-    this.motor.computeColliderMovement(this.motorCollider, {
-      x: this.drive.x * dt, y: canStep ? -0.035 : 0, z: this.drive.z * dt,
-    }, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, c => c.handle !== this.collider.handle);
-    const move = this.motor.computedMovement();
+    const horizontal = { x: this.drive.x * dt, y: 0, z: this.drive.z * dt };
+    // In open space a single sweep is sufficient; retain the full motor near
+    // walls, slopes and stairs. Gravity/contact still use the rigid-body solver.
+    const obstructed = (horizontal.x || horizontal.z) && this.physics.world.castShape(
+      this.body.translation(), identityRotation, horizontal, this.motorCollider.shape,
+      1, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, this.collider, this.body);
+    let move = horizontal;
+    if (obstructed) {
+      let treadAhead = false;
+      const length = Math.hypot(horizontal.x, horizontal.z);
+      if (canStep && length > .001) {
+        const origin = this.body.translation(), sample = {
+          x: origin.x + horizontal.x / length * (p.radius + .08),
+          y: origin.y - this.height / 2 + p.stepHeight + .025,
+          z: origin.z + horizontal.z / length * (p.radius + .08),
+        };
+        const tread = this.physics.world.castRayAndGetNormal(new RAPIER.Ray(sample, { x: 0, y: -1, z: 0 }),
+          p.stepHeight + .05, false, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, this.collider, this.body);
+        const rise = tread ? sample.y - tread.toi + this.height / 2 - origin.y : 0;
+        treadAhead = !!tread && tread.normal.y > Math.cos(MathUtils.degToRad(p.maxSlope)) && rise > .005;
+      }
+      if (treadAhead) this.motor.enableAutostep(p.stepHeight, .08, false);
+      else this.motor.disableAutostep();
+      this.motor.computeColliderMovement(this.motorCollider, { ...horizontal, y: treadAhead ? -.035 : 0 },
+        RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, c => c.handle !== this.collider.handle);
+      move = this.motor.computedMovement();
+    }
     const desiredLength = Math.hypot(this.drive.x, this.drive.z) * dt;
     const actualLength = Math.hypot(live.x, live.z) * dt;
     if (canStep && desiredLength > .001 && (Math.hypot(move.x, move.z) < desiredLength * .95 || actualLength < desiredLength * .9)) {
@@ -129,7 +151,7 @@ export class CharacterController {
     }
     this.velocity.x = move.x / dt; this.velocity.z = move.z / dt;
     if (canStep && move.y > 0.001) {
-      // Rapier's motor resolves the full stepped path before lifting the dynamic body.
+      // The motor or bounded tread check resolves clearance before lifting the body.
       // Vertical falling/jumping remains the rigid-body solver's responsibility.
       const position = this.body.translation();
       this.body.setTranslation({ x: position.x, y: position.y + move.y, z: position.z }, true);
@@ -170,6 +192,7 @@ export class CharacterController {
   private updateLean(dt: number): void {
     const target = (Number(this.input.keys.has('KeyE')) - Number(this.input.keys.has('KeyQ'))) * leanConfig.distance;
     const desired = MathUtils.damp(this.lean, target, leanConfig.response, dt);
+    if (Math.abs(desired) < 1e-6) { this.lean = 0; return; }
     const offset = leanOffset(desired, this.input.yaw);
     const origin = { x: this.current.x, y: this.current.y + this.height / 2 - .1, z: this.current.z };
     const hit = this.physics.world.castShape(origin, identityRotation, offset, new RAPIER.Ball(leanConfig.radius),

@@ -40,7 +40,6 @@ export interface NetworkPlayer {
   gaitX?: number;
   gaitZ?: number;
   ammo?: number;
-  flashlight?: boolean;
   reserve?: number;
   reloading?: boolean;
   weaponSeq?: number;
